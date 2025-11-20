@@ -41,6 +41,9 @@ func main() {
 	r.POST("/send", transactionHandler.Send)
 	r.GET("/balance/:address", balanceHandler.GetBalance)
 	r.POST("/generate-block", blockHandler.GenerateBlock)
+	r.GET("/blocks", blockHandler.GetBlocks)
+	r.GET("/blocks/:id", blockHandler.GetBlockByID)
+	r.GET("/blocks/integrity", blockHandler.CheckBlockchainIntegrity)
 
 	r.Run(":3010")
 

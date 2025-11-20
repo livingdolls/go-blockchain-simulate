@@ -24,3 +24,12 @@ GET http://localhost:3010/balance/FAKE-80a7e7b6d48b7f314ac5c57a5b2a0904
 
 ### generate blocks
 POST http://localhost:3010/generate-block
+
+### get blocks
+GET http://localhost:3010/blocks?limit=10&offset=0
+
+### get block by ID
+GET http://localhost:3010/blocks/1
+
+### check blockchain integrity
+GET http://localhost:3010/blocks/integrity

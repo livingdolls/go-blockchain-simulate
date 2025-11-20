@@ -10,6 +10,9 @@ type BlockRepository interface {
 	CreateWithTx(tx *sqlx.Tx, block models.Block) (int64, error)
 	GetLastBlock(tx *sqlx.Tx) (models.Block, error)
 	InsertBlockTransactionWithTx(tx *sqlx.Tx, blockID, txID int64) error
+	GetBlocks(limit, offset int) ([]models.Block, error)
+	GetBlockByID(id int64) (models.Block, error)
+	GetAllBlocks() ([]models.Block, error)
 }
 
 type blockRepository struct {
@@ -56,4 +59,59 @@ func (b *blockRepository) InsertBlockTransactionWithTx(tx *sqlx.Tx, blockID, txI
 	`, blockID, txID)
 
 	return err
+}
+
+func (b *blockRepository) GetBlocks(limit, offset int) ([]models.Block, error) {
+	var blocks []models.Block
+
+	err := b.db.Select(&blocks, `
+		SELECT * FROM blocks
+		ORDER BY id DESC
+		LIMIT ? OFFSET ?
+	`, limit, offset)
+
+	return blocks, err
+}
+
+func (b *blockRepository) GetBlockByID(id int64) (models.Block, error) {
+	var block models.Block
+
+	err := b.db.Get(&block, `
+		SELECT * FROM blocks
+		WHERE id = ?
+	`, id)
+
+	return block, err
+}
+
+func (b *blockRepository) GetAllBlocks() ([]models.Block, error) {
+	var blocks []models.Block
+
+	err := b.db.Select(&blocks, `
+		SELECT * FROM blocks
+		ORDER BY block_number ASC
+	`)
+
+	if err != nil {
+		return nil, err
+	}
+
+	// Populate transactions for each block
+	for i := range blocks {
+		var txs []models.Transaction
+		query := `
+			SELECT t.id, t.from_address, t.to_address, t.amount, t.signature, t.status
+			FROM transactions t
+			INNER JOIN block_transactions bt ON t.id = bt.transaction_id
+			WHERE bt.block_id = ?
+			ORDER BY t.id ASC
+		`
+		err := b.db.Select(&txs, query, blocks[i].ID)
+		if err != nil {
+			return nil, err
+		}
+		blocks[i].Transactions = txs
+	}
+
+	return blocks, nil
 }

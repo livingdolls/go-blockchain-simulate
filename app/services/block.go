@@ -11,6 +11,9 @@ import (
 
 type BlockService interface {
 	GenerateBlock() (models.Block, error)
+	GetBlocks(limit, offset int) ([]models.Block, error)
+	GetBlockByID(id int64) (models.Block, error)
+	CheckBlockchainIntegrity() error
 }
 
 type blockService struct {
@@ -97,4 +100,24 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 	block.CreatedAt = time.Now().String()
 
 	return block, nil
+}
+
+func (s *blockService) GetBlocks(limit, offset int) ([]models.Block, error) {
+	return s.blockRepo.GetBlocks(limit, offset)
+}
+
+func (s *blockService) GetBlockByID(id int64) (models.Block, error) {
+	return s.blockRepo.GetBlockByID(id)
+}
+
+func (s *blockService) CheckBlockchainIntegrity() error {
+	blocks, err := s.blockRepo.GetAllBlocks() // ambil semua block
+
+	if err != nil {
+		return err
+	}
+
+	err = utils.CheckBlockchainIntegrity(blocks)
+
+	return err
 }

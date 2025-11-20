@@ -1,0 +1,26 @@
+### Register a new user
+
+POST http://localhost:3010/register
+Content-Type: application/json
+
+{
+  "name": "yurina"
+}
+
+### Send a transaction
+
+POST http://localhost:3010/send
+Content-Type: application/json
+
+{
+  "from_address": "FAKE-26ae0ededb163e79a89eb0e605cc39f7",
+  "to_address": "FAKE-80a7e7b6d48b7f314ac5c57a5b2a0904",
+  "amount": 5,
+  "private_key": "970b85212c4a8280167d8352f9f7468e17500ee2904661132220cda0f851827c"
+}
+
+### get balance by address
+GET http://localhost:3010/balance/FAKE-80a7e7b6d48b7f314ac5c57a5b2a0904
+
+### generate blocks
+POST http://localhost:3010/generate-block

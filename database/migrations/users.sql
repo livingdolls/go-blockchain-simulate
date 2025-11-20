@@ -1,0 +1,9 @@
+CREATE TABLE users (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    address VARCHAR(255) UNIQUE NOT NULL,
+    public_key TEXT NOT NULL,
+    private_key TEXT NOT NULL,
+    balance DECIMAL(18,2) DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);

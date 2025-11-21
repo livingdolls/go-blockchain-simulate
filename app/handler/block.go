@@ -19,6 +19,7 @@ func NewBlockHandler(blockService services.BlockService) *BlockHandler {
 }
 
 func (h *BlockHandler) GenerateBlock(c *gin.Context) {
+	// Use retry logic to handle lock timeouts
 	block, err := h.blockService.GenerateBlock()
 
 	if err != nil {

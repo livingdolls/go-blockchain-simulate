@@ -32,7 +32,7 @@ func main() {
 	balanceHandler := handler.NewBalanceHandler(balanceService)
 
 	blockRepo := repository.NewBlockRepository(db.GetDB())
-	blockService := services.NewBlockService(blockRepo, txRepo)
+	blockService := services.NewBlockService(blockRepo, txRepo, userRepo, ledgerRepo)
 	blockHandler := handler.NewBlockHandler(blockService)
 
 	r := gin.Default()

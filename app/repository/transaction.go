@@ -9,9 +9,12 @@ import (
 
 type TransactionRepository interface {
 	CreateWithTx(dbTx *sqlx.Tx, transaction models.Transaction) (int64, error)
+	Create(transaction models.Transaction) (int64, error)
 	UpdateStatusWithTx(dbTx *sqlx.Tx, id int64, status string) error
-	GetPendingTransactions() ([]models.Transaction, error)
-	MarkConfirmedWithTx(dbTx *sqlx.Tx, txIDs []int64) error
+	GetPendingTransactionsWithTx(dbTx *sqlx.Tx) ([]models.Transaction, error)
+	GetPendingTransactions(limit int) ([]models.Transaction, error)
+	MarkConfirmedWithTx(dbTx *sqlx.Tx, txID int64) error
+	BulkMarkConfirmedWithTx(dbTx *sqlx.Tx, txIDs []int64) error
 }
 
 type transactionRepository struct {
@@ -43,6 +46,25 @@ func (r *transactionRepository) CreateWithTx(dbTx *sqlx.Tx, transaction models.T
 	return id, nil
 }
 
+func (r *transactionRepository) Create(transaction models.Transaction) (int64, error) {
+	query := `
+		INSERT INTO transactions (from_address, to_address, amount, signature, status)
+		VALUES (?, ?, ?, ?, ?)
+	`
+
+	result, err := r.db.Exec(query, transaction.FromAddress, transaction.ToAddress, transaction.Amount, transaction.Signature, transaction.Status)
+	if err != nil {
+		return 0, err
+	}
+
+	id, err := result.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+
+	return id, nil
+}
+
 func (r *transactionRepository) UpdateStatusWithTx(dbTx *sqlx.Tx, id int64, status string) error {
 	query := `
 		UPDATE transactions
@@ -54,7 +76,7 @@ func (r *transactionRepository) UpdateStatusWithTx(dbTx *sqlx.Tx, id int64, stat
 	return err
 }
 
-func (r *transactionRepository) GetPendingTransactions() ([]models.Transaction, error) {
+func (r *transactionRepository) GetPendingTransactionsWithTx(dbTx *sqlx.Tx) ([]models.Transaction, error) {
 	var list []models.Transaction
 
 	query := `
@@ -62,9 +84,10 @@ func (r *transactionRepository) GetPendingTransactions() ([]models.Transaction, 
         FROM transactions 
         WHERE TRIM(status) = 'PENDING'
         ORDER BY id ASC
+		FOR UPDATE
     `
 
-	err := r.db.Select(&list, query)
+	err := dbTx.Select(&list, query)
 
 	if err != nil {
 		// Log error detail
@@ -81,10 +104,51 @@ func (r *transactionRepository) GetPendingTransactions() ([]models.Transaction, 
 	return list, nil
 }
 
-func (r *transactionRepository) MarkConfirmedWithTx(dbTx *sqlx.Tx, txIDs []int64) error {
-	query, args, _ := sqlx.In(`UPDATE transactions SET status = 'CONFIRMED' WHERE id IN (?)`, txIDs)
+func (r *transactionRepository) MarkConfirmedWithTx(dbTx *sqlx.Tx, txID int64) error {
+	query := `UPDATE transactions SET status = 'CONFIRMED' WHERE id = ?`
 
-	_, err := dbTx.Exec(query, args...)
+	_, err := dbTx.Exec(query, txID)
 
+	return err
+}
+
+// GetPendingTransactions retrieves pending transactions without locking (for read-only validation)
+func (r *transactionRepository) GetPendingTransactions(limit int) ([]models.Transaction, error) {
+	var list []models.Transaction
+
+	query := `
+        SELECT id, from_address, to_address, amount, signature, status 
+        FROM transactions 
+        WHERE TRIM(status) = 'PENDING'
+        ORDER BY id ASC
+        LIMIT ?
+    `
+
+	err := r.db.Select(&list, query, limit)
+
+	if err != nil {
+		fmt.Printf("GetPendingTransactions error: %v\n", err)
+		return nil, err
+	}
+
+	if len(list) == 0 {
+		return []models.Transaction{}, nil
+	}
+
+	return list, nil
+}
+
+// BulkMarkConfirmedWithTx marks multiple transactions as confirmed in a single query
+func (r *transactionRepository) BulkMarkConfirmedWithTx(dbTx *sqlx.Tx, txIDs []int64) error {
+	if len(txIDs) == 0 {
+		return nil
+	}
+
+	query, args, err := sqlx.In(`UPDATE transactions SET status = 'CONFIRMED' WHERE id IN (?)`, txIDs)
+	if err != nil {
+		return err
+	}
+
+	_, err = dbTx.Exec(dbTx.Rebind(query), args...)
 	return err
 }

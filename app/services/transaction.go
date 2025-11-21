@@ -53,13 +53,6 @@ func (s *transactionService) Send(fromAddress, toAddress, privateKey string, amo
 		return models.Transaction{}, fmt.Errorf("insufficient balance for address %s", fromAddress)
 	}
 
-	// start database transaction
-	trx, err := s.users.BeginTx()
-	if err != nil {
-		return models.Transaction{}, fmt.Errorf("failed to begin transaction: %w", err)
-	}
-	defer trx.Rollback()
-
 	// create digital signature
 	signature := utils.SignFake(privateKey, receiver.Address, amount)
 	// create transaction
@@ -71,45 +64,13 @@ func (s *transactionService) Send(fromAddress, toAddress, privateKey string, amo
 		Status:      "PENDING",
 	}
 
-	txID, err := s.txs.CreateWithTx(trx, tx)
+	txID, err := s.txs.Create(tx)
 
 	if err != nil {
 		return models.Transaction{}, err
-	}
-
-	// update balances
-	newSenderBalance := sender.Balance - amount
-	newReceiverBalance := receiver.Balance + amount
-
-	err = s.users.UpdateBalanceWithTx(trx, sender.Address, newSenderBalance)
-	if err != nil {
-		return models.Transaction{}, err
-	}
-
-	err = s.users.UpdateBalanceWithTx(trx, receiver.Address, newReceiverBalance)
-	if err != nil {
-		return models.Transaction{}, err
-	}
-
-	// create ledger entries
-	err = s.ledgers.CreateWithTx(trx, txID, sender.Address, -amount, newSenderBalance)
-	if err != nil {
-		return models.Transaction{}, err
-	}
-
-	err = s.ledgers.CreateWithTx(trx, txID, receiver.Address, amount, newReceiverBalance)
-	if err != nil {
-		return models.Transaction{}, err
-	}
-
-	// commit transaction
-	err = trx.Commit()
-	if err != nil {
-		return models.Transaction{}, fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
 	tx.ID = txID
-	tx.Status = "PENDING"
 
 	return tx, nil
 }

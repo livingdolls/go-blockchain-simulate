@@ -8,8 +8,10 @@ import (
 type BlockRepository interface {
 	BeginTx() (*sqlx.Tx, error)
 	CreateWithTx(tx *sqlx.Tx, block models.Block) (int64, error)
-	GetLastBlock(tx *sqlx.Tx) (models.Block, error)
+	GetLastBlock() (models.Block, error)
+	GetLastBlockForUpdateWithTx(tx *sqlx.Tx) (models.Block, error)
 	InsertBlockTransactionWithTx(tx *sqlx.Tx, blockID, txID int64) error
+	BulkInsertBlockTransactionsWithTx(tx *sqlx.Tx, blockID int64, txIDs []int64) error
 	GetBlocks(limit, offset int) ([]models.Block, error)
 	GetBlockByID(id int64) (models.Block, error)
 	GetAllBlocks() ([]models.Block, error)
@@ -34,7 +36,7 @@ func (b *blockRepository) CreateWithTx(tx *sqlx.Tx, block models.Block) (int64, 
 		VALUES (?, ?, ?)
 	`
 
-	result, err := b.db.Exec(query, block.BlockNumber, block.PreviousHash, block.CurrentHash)
+	result, err := tx.Exec(query, block.BlockNumber, block.PreviousHash, block.CurrentHash)
 
 	if err != nil {
 		return 0, err
@@ -43,11 +45,19 @@ func (b *blockRepository) CreateWithTx(tx *sqlx.Tx, block models.Block) (int64, 
 	return result.LastInsertId()
 }
 
-// GetLastBlock implements BlockRepository.
-func (b *blockRepository) GetLastBlock(tx *sqlx.Tx) (models.Block, error) {
+// GetLastBlock implements BlockRepository (non-locking read-only).
+func (b *blockRepository) GetLastBlock() (models.Block, error) {
 	var block models.Block
 
-	err := tx.Get(&block, `SELECT * FROM blocks ORDER BY id DESC LIMIT 1`)
+	err := b.db.Get(&block, `SELECT * FROM blocks ORDER BY id DESC LIMIT 1`)
+	return block, err
+}
+
+// GetLastBlockForUpdateWithTx implements BlockRepository (locking).
+func (b *blockRepository) GetLastBlockForUpdateWithTx(tx *sqlx.Tx) (models.Block, error) {
+	var block models.Block
+
+	err := tx.Get(&block, `SELECT * FROM blocks ORDER BY id DESC LIMIT 1 FOR UPDATE`)
 	return block, err
 }
 
@@ -58,6 +68,27 @@ func (b *blockRepository) InsertBlockTransactionWithTx(tx *sqlx.Tx, blockID, txI
 		VALUES (?, ?)
 	`, blockID, txID)
 
+	return err
+}
+
+// BulkInsertBlockTransactionsWithTx inserts multiple block-transaction links in a single query
+func (b *blockRepository) BulkInsertBlockTransactionsWithTx(tx *sqlx.Tx, blockID int64, txIDs []int64) error {
+	if len(txIDs) == 0 {
+		return nil
+	}
+
+	query := `INSERT INTO block_transactions (block_id, transaction_id) VALUES `
+	var values []interface{}
+
+	for i, txID := range txIDs {
+		if i > 0 {
+			query += ","
+		}
+		query += "(?, ?)"
+		values = append(values, blockID, txID)
+	}
+
+	_, err := tx.Exec(query, values...)
 	return err
 }
 

@@ -2,6 +2,7 @@ package services
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/livingdolls/go-blockchain-simulate/app/models"
 	"github.com/livingdolls/go-blockchain-simulate/app/repository"
@@ -96,8 +97,30 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 		balances[t.ToAddress] += t.Amount
 	}
 
-	// Calculate block hash (in-memory)
-	newHash := utils.HashBlock(lastBlock.CurrentHash, pendingTxs)
+	// MINING PHASE : Prof of Work
+
+	// Get all blocks to calculate next difficulty
+	allBlocks, err := s.blockRepo.GetAllBlocks()
+	if err != nil {
+		return models.Block{}, fmt.Errorf("get all blocks: %w", err)
+	}
+
+	// calculate difficulty for next block
+	difficulty := utils.CalculateNextDifficulty(allBlocks)
+
+	// calculate merkle root
+	merkleRoot := utils.CalculateMerkleRoot(pendingTxs)
+	fmt.Printf("Calculated Merkle Root: %s\n", merkleRoot)
+
+	// Perform mining (this can take 5-60 seconds depending on difficulty)
+
+	fmt.Printf("Starting mining process...\n")
+	miningResult := utils.MineBlock(lastBlock.BlockNumber+1, lastBlock.CurrentHash, pendingTxs, difficulty)
+
+	// check if mining was successful
+	if miningResult.Hash == "" {
+		return models.Block{}, fmt.Errorf("mining failed to find a valid nonce")
+	}
 
 	// ========================================
 	// PHASE 2: Write operations (SHORT TRANSACTION)
@@ -123,7 +146,11 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 	newBlock := models.Block{
 		BlockNumber:  lastBlock.BlockNumber + 1,
 		PreviousHash: lastBlock.CurrentHash,
-		CurrentHash:  newHash,
+		CurrentHash:  miningResult.Hash,
+		Nonce:        miningResult.Nonce,
+		Difficulty:   miningResult.Difficulty,
+		Timestamp:    time.Now().Unix(),
+		MerkleRoot:   merkleRoot,
 	}
 
 	blockID, err := s.blockRepo.CreateWithTx(tx, newBlock)
@@ -199,6 +226,13 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 	if err := tx.Commit(); err != nil {
 		return models.Block{}, fmt.Errorf("commit transaction: %w", err)
 	}
+
+	fmt.Printf("\n✅ Block #%d added to blockchain!\n", newBlock.BlockNumber)
+	fmt.Printf("   Hash: %s\n", newBlock.CurrentHash)
+	fmt.Printf("   Nonce: %d\n", newBlock.Nonce)
+	fmt.Printf("   Difficulty: %d\n", newBlock.Difficulty)
+	fmt.Printf("   Transactions: %d\n", len(pendingTxs))
+	fmt.Printf("   Mining time: %v\n\n", miningResult.Duration)
 
 	return newBlock, nil
 }

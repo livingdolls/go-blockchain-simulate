@@ -13,3 +13,21 @@ CREATE TABLE block_transactions (
     FOREIGN KEY (block_id) REFERENCES blocks(id),
     FOREIGN KEY (transaction_id) REFERENCES transactions(id)
 );
+
+-- Add PoW fields to block
+ALTER TABLE blocks
+ADD COLUMN nonce BIGINT DEFAULT 0 AFTER current_hash,
+ADD COLUMN difficulty INT DEFAULT 4 AFTER nonce,
+ADD COLUMN timestamp BIGINT AFTER difficulty,
+ADD COLUMN merkle_root VARCHAR(64) AFTER timestamp;
+
+-- update existing blocks to have timestamp and merkle_root
+UPDATE blocks
+SET timestamp = UNIX_TIMESTAMP(created_at),
+    difficulty = 4,
+    nonce = 0
+WHERE timestamp IS NULL;
+
+-- Add index
+CREATE INDEX idx_blocks_timestamp on blocks (timestamp);
+CREATE INDEX idx_blocks_difficulty on blocks (difficulty);

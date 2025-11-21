@@ -32,12 +32,11 @@ func (b *blockRepository) BeginTx() (*sqlx.Tx, error) {
 // CreateWithTx implements BlockRepository.
 func (b *blockRepository) CreateWithTx(tx *sqlx.Tx, block models.Block) (int64, error) {
 	query := `
-		INSERT INTO blocks (block_number, previous_hash, current_hash)
-		VALUES (?, ?, ?)
+		INSERT INTO blocks (block_number, previous_hash, current_hash, nonce, difficulty, timestamp, merkle_root)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
 	`
 
-	result, err := tx.Exec(query, block.BlockNumber, block.PreviousHash, block.CurrentHash)
-
+	result, err := tx.Exec(query, block.BlockNumber, block.PreviousHash, block.CurrentHash, block.Nonce, block.Difficulty, block.Timestamp, block.MerkleRoot)
 	if err != nil {
 		return 0, err
 	}

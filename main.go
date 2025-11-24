@@ -28,7 +28,7 @@ func main() {
 	transactionService := services.NewTransactionService(userRepo, txRepo, ledgerRepo)
 	transactionHandler := handler.NewTransactionHandler(transactionService)
 
-	balanceService := services.NewBalanceService(userRepo)
+	balanceService := services.NewBalanceService(userRepo, txRepo)
 	balanceHandler := handler.NewBalanceHandler(balanceService)
 
 	blockRepo := repository.NewBlockRepository(db.GetDB())
@@ -42,10 +42,13 @@ func main() {
 
 	r.POST("/register", userHandler.Register)
 	r.POST("/send", transactionHandler.Send)
+	r.GET("/transaction/:id", transactionHandler.GetTransaction)
 	r.GET("/balance/:address", balanceHandler.GetBalance)
+	r.GET("/wallet/:address", balanceHandler.GetWalletBalance)
 	r.POST("/generate-block", blockHandler.GenerateBlock)
 	r.GET("/blocks", blockHandler.GetBlocks)
 	r.GET("/blocks/:id", blockHandler.GetBlockByID)
+	r.GET("/blocks/detail/:number", blockHandler.GetBlockByBlockNumber)
 	r.GET("/blocks/integrity", blockHandler.CheckBlockchainIntegrity)
 	r.GET("/reward/schedule/:number", rewardHandler.GetRewardSchedule)
 	r.GET("/reward/block/:number", rewardHandler.GetBlockReward)

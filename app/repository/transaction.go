@@ -17,6 +17,8 @@ type TransactionRepository interface {
 	BulkMarkConfirmedWithTx(dbTx *sqlx.Tx, txIDs []int64) error
 	GetPendingTransactionsByAddress(address string) (float64, error)
 	GetTransactionsByBlockID(blockID int64) ([]models.Transaction, error)
+	GetTransactionByID(id int64) (models.Transaction, error)
+	GetTransactionByAddress(address string) ([]models.Transaction, error)
 }
 
 type transactionRepository struct {
@@ -180,4 +182,36 @@ func (r *transactionRepository) GetTransactionsByBlockID(blockID int64) ([]model
 
 	err := r.db.Select(&transaction, query, blockID)
 	return transaction, err
+}
+
+func (r *transactionRepository) GetTransactionByID(id int64) (models.Transaction, error) {
+	var transaction models.Transaction
+
+	query := `
+		SELECT id, from_address, to_address, amount, fee, signature, status
+		FROM transactions
+		WHERE id = ?
+	`
+
+	err := r.db.Get(&transaction, query, id)
+
+	if err != nil {
+		return models.Transaction{}, fmt.Errorf("error get transaction %w", err)
+	}
+
+	return transaction, err
+}
+
+func (r *transactionRepository) GetTransactionByAddress(address string) ([]models.Transaction, error) {
+	var transactions []models.Transaction
+
+	query := `
+		SELECT id, from_address, to_address, amount, fee, signature, status
+		FROM transactions
+		WHERE from_address = ? OR to_address = ?
+		ORDER BY id ASC`
+
+	err := r.db.Select(&transactions, query, address, address)
+
+	return transactions, err
 }

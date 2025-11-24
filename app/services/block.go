@@ -15,6 +15,7 @@ type BlockService interface {
 	GetBlocks(limit, offset int) ([]models.Block, error)
 	GetBlockByID(id int64) (models.Block, error)
 	GetBlockByBlockNumber(id int64) (models.Block, error)
+	GetDetailsByBlockNumber(id int64) (models.Block, error)
 	CheckBlockchainIntegrity() error
 }
 
@@ -62,15 +63,12 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 		uniqueAddresses[t.ToAddress] = true
 	}
 
-	uniqueAddresses["FEE_POOL"] = true
-
-	addresses := make([]string, 0, len(uniqueAddresses)+2) // +2 MINER Address and FEE_POOL
+	addresses := make([]string, 0, len(uniqueAddresses)+1) // +1 MINER Address
 	for addr := range uniqueAddresses {
 		addresses = append(addresses, addr)
 	}
 
-	// Added fee pool
-	addresses = append(addresses, "FEE_POOL")
+	// Added miner acount
 	addresses = append(addresses, "MINER_ACCOUNT")
 
 	// Get all users at once (read-only)
@@ -167,11 +165,6 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 	currentBalances := make(map[string]float64)
 	for _, u := range users {
 		currentBalances[u.Address] = u.Balance
-	}
-
-	// verify fee
-	if _, exists := currentBalances["FEE_POOL"]; !exists {
-		return models.Block{}, fmt.Errorf("FEE_POOL not found in locked users")
 	}
 
 	// verify miner address
@@ -339,4 +332,24 @@ func (s *blockService) CheckBlockchainIntegrity() error {
 	err = utils.CheckBlockchainIntegrity(blocks)
 
 	return err
+}
+
+func (s *blockService) GetDetailsByBlockNumber(id int64) (models.Block, error) {
+	var block models.Block
+
+	block, err := s.blockRepo.GetBlockByBlockNumber(id)
+	if err != nil {
+		return models.Block{}, err
+	}
+
+	// Populate transactions for the block
+	tx, err := s.txRepo.GetTransactionsByBlockID(block.ID)
+
+	if err != nil {
+		return models.Block{}, err
+	}
+
+	block.Transactions = tx
+
+	return block, nil
 }

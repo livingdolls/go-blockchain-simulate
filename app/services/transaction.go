@@ -10,6 +10,7 @@ import (
 
 type TransactionService interface {
 	Send(fromAddress, toAddress, privateKey string, amount float64) (models.Transaction, error)
+	GetTransactionByID(id int64) (models.Transaction, error)
 }
 
 type transactionService struct {
@@ -99,4 +100,8 @@ func (s *transactionService) Send(fromAddress, toAddress, privateKey string, amo
 	tx.ID = txID
 
 	return tx, nil
+}
+
+func (s *transactionService) GetTransactionByID(id int64) (models.Transaction, error) {
+	return s.txs.GetTransactionByID(id)
 }

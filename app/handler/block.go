@@ -95,3 +95,22 @@ func (h *BlockHandler) CheckBlockchainIntegrity(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"status": "valid"})
 }
+
+func (h *BlockHandler) GetBlockByBlockNumber(c *gin.Context) {
+	numberParam := c.Param("number")
+
+	var blockNumber int64
+	_, err := fmt.Sscan(numberParam, &blockNumber)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid block number"})
+		return
+	}
+
+	block, err := h.blockService.GetDetailsByBlockNumber(blockNumber)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"block": block})
+}

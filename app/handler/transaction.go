@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"fmt"
+
 	"github.com/gin-gonic/gin"
 	"github.com/livingdolls/go-blockchain-simulate/app/services"
 )
@@ -48,4 +50,23 @@ func (h *TransactionHandler) Send(c *gin.Context) {
 		"status": "PENDING",
 		"note":   "Transaction will be confirmed when included a block",
 	})
+}
+
+func (h *TransactionHandler) GetTransaction(c *gin.Context) {
+	idStr := c.Param("id")
+
+	var id int64
+	_, err := fmt.Sscan(idStr, &id)
+	if err != nil {
+		c.JSON(400, gin.H{"error": "invalid transaction ID"})
+		return
+	}
+
+	tx, err := h.transactionService.GetTransactionByID(id)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(200, gin.H{"transaction": tx})
 }

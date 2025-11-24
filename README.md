@@ -7,6 +7,10 @@ A simplified blockchain implementation in Go with REST API for learning cryptocu
 - **Digital Wallet** - Generate RSA key pairs for wallet creation
 - **Digital Signatures** - Sign and verify transactions using RSA encryption
 - **Transaction Management** - Create, validate, and track transactions
+- **Transaction Fees** - Each transaction includes a fee, paid to the miner
+- **Block Rewards** - Miner receives a block reward (coinbase transaction) for each mined block
+- **Miner Account** - All transaction fees and block rewards go directly to the miner's wallet
+- **Ledger Improvements** - Accurate recording of all balance changes, including coinbase/reward entries (with nullable `tx_id`)
 - **Proof of Work Mining** - SHA256-based mining with configurable difficulty (default: 4 leading zeros)
 - **Dynamic Difficulty Adjustment** - Automatically adjusts every 10 blocks targeting 10s block time
 - **Merkle Tree Verification** - Transaction integrity using Merkle roots for SPV support
@@ -14,10 +18,28 @@ A simplified blockchain implementation in Go with REST API for learning cryptocu
 - **Balance Tracking** - Calculate balances from transaction history via ledger
 - **Optimized Database Operations** - Bulk operations achieving 95% performance improvement (<2s transaction time)
 - **Blockchain Integrity Validation** - Complete chain verification with PoW and Merkle proof validation
-- **REST API** - HTTP endpoints for wallet registration, transactions, and block generation
+- **REST API** - HTTP endpoints for wallet registration, transactions, block generation, and explorer endpoints
 - **Database Persistence** - Store users, transactions, blocks, and ledger entries in MySQL
 
-## 📋 Prerequisites
+## 🆕 Recent Improvements
+
+- **Transaction fees and block rewards** are now implemented and paid directly to the miner
+- **FEE_POOL logic removed**: all fees go to the miner, matching modern blockchain standards
+- **Ledger entries**: coinbase/reward entries use `NULL` for `tx_id` (no foreign key error)
+- **Decimal precision**: amounts and fees now use `DECIMAL(32,8)` for accuracy
+- **Bug fixes**: transaction repository, balance service, and panic fixes
+
+## �️ Roadmap
+
+1. **Block Explorer API**: Endpoints for querying blocks, transactions, and addresses
+2. **Block Explorer Web UI**: Simple web interface for browsing blockchain data
+3. Wallet management improvements
+4. Analytics dashboard (block/tx stats)
+5. Websocket for real-time updates
+
+See the bottom of this file for more details on planned features.
+
+## �📋 Prerequisites
 
 - Go 1.23.0 or higher
 - MySQL 8.0 or higher
@@ -544,7 +566,7 @@ make clean    # Remove build artifacts
 - Private keys are stored in plain text in the database
 - Simplified RSA signatures (real blockchains use ECDSA)
 - Single-node implementation (no network/peer-to-peer)
-- No transaction fees or block rewards implemented
+- Transaction fees and block rewards are implemented, but consensus and distributed mining are not
 - Centralized mining (no consensus between multiple nodes)
 
 ### Performance
@@ -595,6 +617,9 @@ The PoW implementation is simplified but demonstrates core concepts:
 - **Merkle Trees** (Transaction verification and SPV)
 - **Hash Functions** (SHA256 for blocks and Merkle nodes)
 - **Transaction Validation** (Balance checks, signature verification)
+- **Transaction Fees & Block Rewards** (Miner incentives, direct fee-to-miner logic)
+- **Miner Account** (All rewards and fees go to miner wallet)
+- **Ledger Improvements** (Coinbase/reward entries, nullable `tx_id`)
 - **Immutable Ledger** (Append-only transaction history)
 - **Database Transactions** (ACID compliance with bulk operations)
 - **Blockchain Integrity** (Chain validation with PoW verification)
@@ -792,3 +817,15 @@ Contributions, issues, and feature requests are welcome!
 ---
 
 **Note:** This is a simplified blockchain implementation for educational purposes. It demonstrates core blockchain concepts but lacks many features required for a production cryptocurrency system (consensus mechanisms, network layer, advanced cryptography, etc.).
+
+---
+
+## 🧭 Planned Features
+
+- **Block Explorer API**: Query blocks, transactions, and addresses (coming soon)
+- **Block Explorer Web UI**: Browse blockchain data in a web interface
+- **Wallet Management**: Improved wallet features and security
+- **Analytics Dashboard**: Block and transaction statistics
+- **Websocket Support**: Real-time updates for new blocks and transactions
+
+See the [Roadmap](#-roadmap) section above for priorities.

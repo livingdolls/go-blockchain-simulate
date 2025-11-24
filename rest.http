@@ -19,6 +19,22 @@ Content-Type: application/json
   "private_key": "970b85212c4a8280167d8352f9f7468e17500ee2904661132220cda0f851827c"
 }
 
+### Send a transaction 2
+
+POST http://localhost:3010/send
+Content-Type: application/json
+
+{
+  "from_address": "FAKE-80a7e7b6d48b7f314ac5c57a5b2a0904",
+  "to_address": "FAKE-26ae0ededb163e79a89eb0e605cc39f7",
+  "amount": 50,
+  "private_key": "08f2f7fc1f144cda46bfa0560ec0876aedf6a2c44b8e1c6dde4ae6a77471aa46"
+}
+
+
+### Get transaction by ID
+GET http://localhost:3010/transaction/122
+
 ### get balance by address
 GET http://localhost:3010/balance/FAKE-80a7e7b6d48b7f314ac5c57a5b2a0904
 
@@ -28,8 +44,11 @@ POST http://localhost:3010/generate-block
 ### get blocks
 GET http://localhost:3010/blocks?limit=10&offset=0
 
+### get detail blocks
+GET http://localhost:3010/blocks/detail/2
+
 ### get block by ID
-GET http://localhost:3010/blocks/1
+GET http://localhost:3010/blocks/2
 
 ### check blockchain integrity
 GET http://localhost:3010/blocks/integrity
@@ -42,3 +61,6 @@ GET http://localhost:3010/reward/block/2
 
 ### get schedule
 GET http://localhost:3010/reward/schedule/10
+
+### get wallet balance
+GET http://localhost:3010/wallet/FAKE-26ae0ededb163e79a89eb0e605cc39f7

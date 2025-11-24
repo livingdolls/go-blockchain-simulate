@@ -11,6 +11,7 @@ type UserRepository interface {
 	UpdateBalanceWithTx(dbTx *sqlx.Tx, address string, balance float64) error
 	BeginTx() (*sqlx.Tx, error)
 	GetMultipleByAddress(addresses []string) ([]models.User, error)
+	GetMultipleByAddressWithTx(tx *sqlx.Tx, addresses []string) ([]models.User, error)
 	LockMultipleUsersWithTx(tx *sqlx.Tx, addresses []string) error
 	BulkUpdateBalancesWithTx(tx *sqlx.Tx, balances map[string]float64) error
 }
@@ -64,6 +65,22 @@ func (r *userRepository) GetMultipleByAddress(addresses []string) ([]models.User
 	}
 
 	err = r.db.Select(&users, r.db.Rebind(query), args...)
+	return users, err
+}
+
+func (r *userRepository) GetMultipleByAddressWithTx(tx *sqlx.Tx, addresses []string) ([]models.User, error) {
+	if len(addresses) == 0 {
+		return []models.User{}, nil
+	}
+
+	var users []models.User
+	query, args, err := sqlx.In(`SELECT id, name, address, public_key, private_key, balance FROM users WHERE address in (?)`, addresses)
+
+	if err != nil {
+		return nil, err
+	}
+
+	err = tx.Select(&users, tx.Rebind(query), args...)
 	return users, err
 }
 

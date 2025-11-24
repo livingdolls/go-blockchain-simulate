@@ -60,10 +60,15 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 		uniqueAddresses[t.ToAddress] = true
 	}
 
+	uniqueAddresses["FEE_POOL"] = true
+
 	addresses := make([]string, 0, len(uniqueAddresses))
 	for addr := range uniqueAddresses {
 		addresses = append(addresses, addr)
 	}
+
+	// Added fee pool
+	addresses = append(addresses, "FEE_POOL")
 
 	// Get all users at once (read-only)
 	users, err := s.userRepo.GetMultipleByAddress(addresses)
@@ -89,11 +94,15 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 			return models.Block{}, fmt.Errorf("sender not found: %s", t.FromAddress)
 		}
 
-		if balances[sender.Address] < t.Amount {
-			return models.Block{}, fmt.Errorf("insufficient balance for address %s", sender.Address)
+		// calculato total deduction amount + fee
+		totalDeduction := t.Amount + t.Fee
+
+		if balances[sender.Address] < totalDeduction {
+			return models.Block{}, fmt.Errorf("insufficient balance for address %s: need %.8f (amount: %.8f + fee: %.8f), have %.8f",
+				sender.Address, totalDeduction, t.Amount, t.Fee, balances[sender.Address])
 		}
 
-		balances[t.FromAddress] -= t.Amount
+		balances[t.FromAddress] -= totalDeduction // - amount + fee
 		balances[t.ToAddress] += t.Amount
 	}
 
@@ -159,32 +168,36 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 	}
 	newBlock.ID = blockID
 
-	// Lock all users at once
-	err = s.userRepo.LockMultipleUsersWithTx(tx, addresses)
-	if err != nil {
-		return models.Block{}, fmt.Errorf("lock users: %w", err)
-	}
-
-	// Prepare bulk operations
-	var ledgerEntries []repository.LedgerEntry
-	var txIDs []int64
-
 	currentBalances := make(map[string]float64)
 	for _, u := range users {
 		currentBalances[u.Address] = u.Balance
 	}
 
+	// verify fee
+	if _, exists := currentBalances["FEE_POOL"]; !exists {
+		return models.Block{}, fmt.Errorf("FEE_POOL not found in locked users")
+	}
+
+	// Prepare bulk operations
+	var ledgerEntries []repository.LedgerEntry
+	var txIDs []int64
+	totalFees := 0.00000000
+
 	for _, t := range pendingTxs {
 		// Calculate balances
-		currentBalances[t.FromAddress] -= t.Amount
+		totalDeduction := t.Amount + t.Fee
 		currentBalances[t.ToAddress] += t.Amount
+		currentBalances[t.FromAddress] -= totalDeduction
+
+		currentBalances["FEE_POOL"] += t.Fee
+		totalFees += t.Fee
 
 		// Prepare ledger entries
 		ledgerEntries = append(ledgerEntries,
 			repository.LedgerEntry{
 				TxID:         t.ID,
 				Address:      t.FromAddress,
-				Amount:       -t.Amount,
+				Amount:       -totalDeduction,
 				BalanceAfter: currentBalances[t.FromAddress],
 			},
 			repository.LedgerEntry{
@@ -192,6 +205,12 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 				Address:      t.ToAddress,
 				Amount:       t.Amount,
 				BalanceAfter: currentBalances[t.ToAddress],
+			},
+			repository.LedgerEntry{
+				TxID:         t.ID,
+				Address:      "FEE_POOL",
+				Amount:       t.Fee,
+				BalanceAfter: currentBalances["FEE_POOL"],
 			},
 		)
 
@@ -227,11 +246,15 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 		return models.Block{}, fmt.Errorf("commit transaction: %w", err)
 	}
 
+	// load transactions
+	newBlock.Transactions, _ = s.txRepo.GetTransactionsByBlockID(blockID)
+
 	fmt.Printf("\n✅ Block #%d added to blockchain!\n", newBlock.BlockNumber)
 	fmt.Printf("   Hash: %s\n", newBlock.CurrentHash)
 	fmt.Printf("   Nonce: %d\n", newBlock.Nonce)
 	fmt.Printf("   Difficulty: %d\n", newBlock.Difficulty)
 	fmt.Printf("   Transactions: %d\n", len(pendingTxs))
+	fmt.Printf("   total fees collected: %.8f\n", totalFees)
 	fmt.Printf("   Mining time: %v\n\n", miningResult.Duration)
 
 	return newBlock, nil

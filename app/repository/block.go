@@ -15,6 +15,7 @@ type BlockRepository interface {
 	GetBlocks(limit, offset int) ([]models.Block, error)
 	GetBlockByID(id int64) (models.Block, error)
 	GetAllBlocks() ([]models.Block, error)
+	GetTotalFeesInBlock(blockID int64) (float64, error)
 }
 
 type blockRepository struct {
@@ -144,4 +145,17 @@ func (b *blockRepository) GetAllBlocks() ([]models.Block, error) {
 	}
 
 	return blocks, nil
+}
+
+func (b *blockRepository) GetTotalFeesInBlock(blockID int64) (float64, error) {
+	query := `
+		SELECT COALESCE(sum(t.fee), 0) as total_fees
+		FROM transactions t
+		JOIN block_transactions bt ON t.id = bt.transaction_id
+		WHERE bt.block_id = ?
+	`
+
+	var totalFees float64
+	err := b.db.Get(&totalFees, query, blockID)
+	return totalFees, err
 }

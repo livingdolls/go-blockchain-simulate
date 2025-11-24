@@ -7,3 +7,11 @@ CREATE TABLE users (
     balance DECIMAL(18,2) DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+
+-- Create special FEE_POOL account
+INSERT INTO users(address, balance, public_key, private_key)
+VALUES ('FEE_POOL', 0, 'SYSTEM_ACCOUNT', 'SYSTEM_ACCOUNT')
+ON DUPLICATE KEY UPDATE balance = balance;
+
+ALTER TABLE users MODIFY COLUMN balance DECIMAL(20, 8) NOT NULL;

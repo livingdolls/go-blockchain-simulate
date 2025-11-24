@@ -15,6 +15,8 @@ type TransactionRepository interface {
 	GetPendingTransactions(limit int) ([]models.Transaction, error)
 	MarkConfirmedWithTx(dbTx *sqlx.Tx, txID int64) error
 	BulkMarkConfirmedWithTx(dbTx *sqlx.Tx, txIDs []int64) error
+	GetPendingTransactionsByAddress(address string) (float64, error)
+	GetTransactionsByBlockID(blockID int64) ([]models.Transaction, error)
 }
 
 type transactionRepository struct {
@@ -29,11 +31,11 @@ func NewTransactionRepository(db *sqlx.DB) TransactionRepository {
 
 func (r *transactionRepository) CreateWithTx(dbTx *sqlx.Tx, transaction models.Transaction) (int64, error) {
 	query := `
-		INSERT INTO transactions (from_address, to_address, amount, signature, status)
-		VALUES (?, ?, ?, ?, ?)
+		INSERT INTO transactions (from_address, to_address, amount, fee, signature, status)
+		VALUES (?, ?, ?, ?, ?, ?)
 	`
 
-	result, err := dbTx.Exec(query, transaction.FromAddress, transaction.ToAddress, transaction.Amount, transaction.Signature, transaction.Status)
+	result, err := dbTx.Exec(query, transaction.FromAddress, transaction.ToAddress, transaction.Amount, transaction.Fee, transaction.Signature, transaction.Status)
 	if err != nil {
 		return 0, err
 	}
@@ -48,11 +50,11 @@ func (r *transactionRepository) CreateWithTx(dbTx *sqlx.Tx, transaction models.T
 
 func (r *transactionRepository) Create(transaction models.Transaction) (int64, error) {
 	query := `
-		INSERT INTO transactions (from_address, to_address, amount, signature, status)
-		VALUES (?, ?, ?, ?, ?)
+		INSERT INTO transactions (from_address, to_address, amount, fee, signature, status)
+		VALUES (?, ?, ?, ?, ?, ?)
 	`
 
-	result, err := r.db.Exec(query, transaction.FromAddress, transaction.ToAddress, transaction.Amount, transaction.Signature, transaction.Status)
+	result, err := r.db.Exec(query, transaction.FromAddress, transaction.ToAddress, transaction.Amount, transaction.Fee, transaction.Signature, transaction.Status)
 	if err != nil {
 		return 0, err
 	}
@@ -80,7 +82,7 @@ func (r *transactionRepository) GetPendingTransactionsWithTx(dbTx *sqlx.Tx) ([]m
 	var list []models.Transaction
 
 	query := `
-        SELECT id, from_address, to_address, amount, signature, status 
+        SELECT id, from_address, to_address, amount, fee, signature, status 
         FROM transactions 
         WHERE TRIM(status) = 'PENDING'
         ORDER BY id ASC
@@ -117,7 +119,7 @@ func (r *transactionRepository) GetPendingTransactions(limit int) ([]models.Tran
 	var list []models.Transaction
 
 	query := `
-        SELECT id, from_address, to_address, amount, signature, status 
+        SELECT id, from_address, to_address, amount, fee, signature, status 
         FROM transactions 
         WHERE TRIM(status) = 'PENDING'
         ORDER BY id ASC
@@ -151,4 +153,31 @@ func (r *transactionRepository) BulkMarkConfirmedWithTx(dbTx *sqlx.Tx, txIDs []i
 
 	_, err = dbTx.Exec(dbTx.Rebind(query), args...)
 	return err
+}
+
+func (r *transactionRepository) GetPendingTransactionsByAddress(address string) (float64, error) {
+	query := `
+		SELECT COALESCE(SUM(amount + fee), 0) as pending_amount
+		FROM transactions
+		WHERE from_address = ? AND status = 'PENDING'
+	`
+
+	var pendingAmount float64
+
+	err := r.db.Get(&pendingAmount, query, address)
+	return pendingAmount, err
+}
+
+func (r *transactionRepository) GetTransactionsByBlockID(blockID int64) ([]models.Transaction, error) {
+	var transaction []models.Transaction
+
+	query := `
+		SELECT tx.id, tx.from_address, tx.to_address, tx.amount, tx.fee, tx.signature, tx.status
+		FROM transactions as tx
+		JOIN block_transactions as bt ON tx.id = bt.transaction_id
+		WHERE bt.block_id = ?
+	`
+
+	err := r.db.Select(&transaction, query, blockID)
+	return transaction, err
 }

@@ -1,6 +1,8 @@
 package repository
 
-import "github.com/jmoiron/sqlx"
+import (
+	"github.com/jmoiron/sqlx"
+)
 
 type LedgerEntry struct {
 	TxID         int64
@@ -39,7 +41,6 @@ func (l *ledgerRepository) BulkCreateWithTx(dbTx *sqlx.Tx, entries []LedgerEntry
 		query += "(?, ?, ?, ?)"
 		values = append(values, entry.TxID, entry.Address, entry.Amount, entry.BalanceAfter)
 	}
-
 	_, err := dbTx.Exec(query, values...)
 	return err
 }

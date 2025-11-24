@@ -8,3 +8,6 @@ CREATE TABLE ledger (
 
     FOREIGN KEY (tx_id) REFERENCES transactions(id)
 );
+
+ALTER TABLE ledger MODIFY COLUMN balance_after DECIMAL(20, 8) NOT NULL;
+ALTER TABLE ledger MODIFY COLUMN change_amount DECIMAL(20, 8) NOT NULL;

@@ -36,5 +36,16 @@ func (h *TransactionHandler) Send(c *gin.Context) {
 		return
 	}
 
-	c.JSON(200, tx)
+	c.JSON(200, gin.H{
+		"message":     "Transaction created successfully",
+		"transaction": tx,
+		"breakdown": gin.H{
+			"amount":             tx.Amount,
+			"fee":                tx.Fee,
+			"total_cost":         tx.Amount + tx.Fee,
+			"recipient_receives": tx.Amount,
+		},
+		"status": "PENDING",
+		"note":   "Transaction will be confirmed when included a block",
+	})
 }

@@ -16,6 +16,7 @@ type BlockRepository interface {
 	GetBlockByID(id int64) (models.Block, error)
 	GetAllBlocks() ([]models.Block, error)
 	GetTotalFeesInBlock(blockID int64) (float64, error)
+	GetBlockByBlockNumber(blockNumber int64) (models.Block, error)
 }
 
 type blockRepository struct {
@@ -33,11 +34,11 @@ func (b *blockRepository) BeginTx() (*sqlx.Tx, error) {
 // CreateWithTx implements BlockRepository.
 func (b *blockRepository) CreateWithTx(tx *sqlx.Tx, block models.Block) (int64, error) {
 	query := `
-		INSERT INTO blocks (block_number, previous_hash, current_hash, nonce, difficulty, timestamp, merkle_root)
-		VALUES (?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO blocks (block_number, previous_hash, current_hash, nonce, difficulty, timestamp, merkle_root, miner_address, block_reward, total_fees)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
-	result, err := tx.Exec(query, block.BlockNumber, block.PreviousHash, block.CurrentHash, block.Nonce, block.Difficulty, block.Timestamp, block.MerkleRoot)
+	result, err := tx.Exec(query, block.BlockNumber, block.PreviousHash, block.CurrentHash, block.Nonce, block.Difficulty, block.Timestamp, block.MerkleRoot, block.MinerAddress, block.BlockReward, block.TotalFees)
 	if err != nil {
 		return 0, err
 	}
@@ -158,4 +159,15 @@ func (b *blockRepository) GetTotalFeesInBlock(blockID int64) (float64, error) {
 	var totalFees float64
 	err := b.db.Get(&totalFees, query, blockID)
 	return totalFees, err
+}
+
+func (b *blockRepository) GetBlockByBlockNumber(blockNumber int64) (models.Block, error) {
+	var block models.Block
+
+	err := b.db.Get(&block, `
+		SELECT * FROM blocks
+		WHERE block_number = ?
+	`, blockNumber)
+
+	return block, err
 }

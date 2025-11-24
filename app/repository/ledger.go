@@ -5,7 +5,7 @@ import (
 )
 
 type LedgerEntry struct {
-	TxID         int64
+	TxID         *int64
 	Address      string
 	Amount       float64
 	BalanceAfter float64

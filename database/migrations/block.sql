@@ -31,3 +31,10 @@ WHERE timestamp IS NULL;
 -- Add index
 CREATE INDEX idx_blocks_timestamp on blocks (timestamp);
 CREATE INDEX idx_blocks_difficulty on blocks (difficulty);
+
+-- add miner_address to blocks
+ALTER TABLE blocks
+ADD COLUMN miner_address VARCHAR(255) AFTER merkle_root,
+ADD COLUMN block_reward DECIMAL(20, 8) NOT NULL DEFAULT 0.00000000 AFTER miner_address,
+ADD COLUMN total_fees DECIMAL(20, 8) NOT NULL DEFAULT 0.00000000 AFTER block_reward,
+ADD INDEX idx_miner_address (miner_address);

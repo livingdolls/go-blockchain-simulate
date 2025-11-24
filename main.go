@@ -35,6 +35,9 @@ func main() {
 	blockService := services.NewBlockService(blockRepo, txRepo, userRepo, ledgerRepo)
 	blockHandler := handler.NewBlockHandler(blockService)
 
+	rewardService := services.NewRewardHandler(blockRepo)
+	rewardHandler := handler.NewRewardHandler(rewardService, blockService)
+
 	r := gin.Default()
 
 	r.POST("/register", userHandler.Register)
@@ -44,7 +47,9 @@ func main() {
 	r.GET("/blocks", blockHandler.GetBlocks)
 	r.GET("/blocks/:id", blockHandler.GetBlockByID)
 	r.GET("/blocks/integrity", blockHandler.CheckBlockchainIntegrity)
+	r.GET("/reward/schedule/:number", rewardHandler.GetRewardSchedule)
+	r.GET("/reward/block/:number", rewardHandler.GetBlockReward)
+	r.GET("/reward/info", rewardHandler.GetRewardInfo)
 
 	r.Run(":3010")
-
 }

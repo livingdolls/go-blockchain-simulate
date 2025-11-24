@@ -9,6 +9,9 @@ type Block struct {
 	Difficulty   int           `db:"difficulty" json:"difficulty"`
 	Timestamp    int64         `db:"timestamp" json:"timestamp"`
 	MerkleRoot   string        `db:"merkle_root" json:"merkle_root"`
+	MinerAddress string        `db:"miner_address" json:"miner_address"`
+	BlockReward  float64       `db:"block_reward" json:"block_reward"`
+	TotalFees    float64       `db:"total_fees" json:"total_fees"`
 	CreatedAt    string        `db:"created_at" json:"created_at"`
 	Transactions []Transaction `db:"-" json:"transactions,omitempty"`
 }

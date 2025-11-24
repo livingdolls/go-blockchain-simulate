@@ -33,3 +33,12 @@ GET http://localhost:3010/blocks/1
 
 ### check blockchain integrity
 GET http://localhost:3010/blocks/integrity
+
+### get reward info
+GET http://localhost:3010/reward/info
+
+### get block reward
+GET http://localhost:3010/reward/block/2
+
+### get schedule
+GET http://localhost:3010/reward/schedule/10

@@ -10,8 +10,13 @@ CREATE TABLE users (
 
 
 -- Create special FEE_POOL account
-INSERT INTO users(address, balance, public_key, private_key)
-VALUES ('FEE_POOL', 0, 'SYSTEM_ACCOUNT', 'SYSTEM_ACCOUNT')
+INSERT INTO users(name, address, balance, public_key, private_key)
+VALUES ('FEE_POOL', 'FEE_POOL', 0, 'SYSTEM_ACCOUNT', 'SYSTEM_ACCOUNT')
 ON DUPLICATE KEY UPDATE balance = balance;
+
+-- Create Minner Account
+INSERT INTO users (name, address, balance, public_key, private_key)
+VALUES ('MINER_ACCOUNT', 'MINER_ACCOUNT', 0.00000000, 'SYSTEM_MINER', 'SYSTEM_MINER')
+ON DUPLICATE KEY UPDATE address = address;
 
 ALTER TABLE users MODIFY COLUMN balance DECIMAL(20, 8) NOT NULL;

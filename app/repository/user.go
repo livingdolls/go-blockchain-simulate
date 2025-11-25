@@ -32,18 +32,18 @@ func (r *userRepository) BeginTx() (*sqlx.Tx, error) {
 
 func (r *userRepository) Create(user models.User) error {
 	query := `
-		INSERT INTO users (name, address, public_key, private_key, balance)
-		VALUES (?, ?, ?, ?, ?)
+		INSERT INTO users (name, address, public_key, balance)
+		VALUES (?, ?, ?, ?)
 	`
 
-	_, err := r.db.Exec(query, user.Name, user.Address, user.PublicKey, user.PrivateKey, user.Balance)
+	_, err := r.db.Exec(query, user.Name, user.Address, user.PublicKey, user.Balance)
 	return err
 }
 
 func (r *userRepository) GetByAddress(address string) (models.User, error) {
 	var user models.User
 
-	err := r.db.Get(&user, "SELECT id, name, address, public_key, private_key, balance FROM users WHERE address = ?", address)
+	err := r.db.Get(&user, "SELECT id, name, address, public_key, balance FROM users WHERE address = ?", address)
 	return user, err
 }
 
@@ -59,7 +59,7 @@ func (r *userRepository) GetMultipleByAddress(addresses []string) ([]models.User
 	}
 
 	var users []models.User
-	query, args, err := sqlx.In(`SELECT id, name, address, public_key, private_key, balance FROM users WHERE address IN (?)`, addresses)
+	query, args, err := sqlx.In(`SELECT id, name, address, public_key, balance FROM users WHERE address IN (?)`, addresses)
 	if err != nil {
 		return nil, err
 	}
@@ -74,7 +74,7 @@ func (r *userRepository) GetMultipleByAddressWithTx(tx *sqlx.Tx, addresses []str
 	}
 
 	var users []models.User
-	query, args, err := sqlx.In(`SELECT id, name, address, public_key, private_key, balance FROM users WHERE address in (?)`, addresses)
+	query, args, err := sqlx.In(`SELECT id, name, address, public_key, balance FROM users WHERE address in (?)`, addresses)
 
 	if err != nil {
 		return nil, err

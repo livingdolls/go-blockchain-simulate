@@ -75,8 +75,10 @@ func (s *transactionService) Send(fromAddress, toAddress, privateKey string, amo
 	}
 
 	// validate private key
-	if sender.PrivateKey != privateKey {
-		return models.Transaction{}, fmt.Errorf("invalid private key for address %s", fromAddress)
+	isValid, err := utils.ValidatePrivateKeyMatchesAddress(privateKey, fromAddress)
+
+	if err != nil && !isValid {
+		return models.Transaction{}, fmt.Errorf("invalid private key for the given from address")
 	}
 
 	// create digital signature

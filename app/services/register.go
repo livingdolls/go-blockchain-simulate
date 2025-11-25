@@ -7,7 +7,7 @@ import (
 )
 
 type RegisterService interface {
-	Registr(name string) (models.User, error)
+	Register(name string) (models.UserRegisterResponse, error)
 }
 
 type registerService struct {
@@ -19,19 +19,39 @@ func NewRegisterService(repo repository.UserRepository) RegisterService {
 }
 
 // Registr implements RegisterService.
-func (r *registerService) Registr(name string) (models.User, error) {
-	privateKey, publicKey := utils.GenerateFakeKey()
-	address := utils.GenerateAddressFromPublicKey(publicKey)
-
-	user := models.User{
-		Name:       name,
-		PrivateKey: privateKey,
-		PublicKey:  publicKey,
-		Address:    address,
-		Balance:    1000000,
+func (r *registerService) Register(name string) (models.UserRegisterResponse, error) {
+	// create mnemonic
+	mnemonic, err := utils.GenerateMnemonic()
+	if err != nil {
+		return models.UserRegisterResponse{}, err
 	}
 
-	err := r.repo.Create(user)
+	// derive wallet
+	_, privHex, pubHex, addr, err := utils.GenerateWalletFromMnemonic(mnemonic, "")
+	if err != nil {
+		return models.UserRegisterResponse{}, err
+	}
 
-	return user, err
+	// save to db
+	user := models.User{
+		Name:      name,
+		Address:   addr,
+		PublicKey: pubHex,
+		Balance:   1000,
+	}
+
+	err = r.repo.Create(user)
+	if err != nil {
+		return models.UserRegisterResponse{}, err
+	}
+
+	userResponse := models.UserRegisterResponse{
+		Username:   name,
+		Mnemonic:   mnemonic,
+		Address:    addr,
+		PublicKey:  pubHex,
+		PrivateKey: privHex,
+	}
+
+	return userResponse, nil
 }

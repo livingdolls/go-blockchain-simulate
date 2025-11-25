@@ -2,6 +2,7 @@ package handler
 
 import (
 	"github.com/gin-gonic/gin"
+	"github.com/livingdolls/go-blockchain-simulate/app/models"
 	"github.com/livingdolls/go-blockchain-simulate/app/services"
 )
 
@@ -24,17 +25,18 @@ func (h *RegisterHandler) Register(c *gin.Context) {
 		return
 	}
 
-	user, err := h.service.Registr(req.Name)
+	user, err := h.service.Register(req.Name)
 	if err != nil {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
 
-	resp := map[string]interface{}{
-		"address":     user.Address,
-		"public_key":  user.PublicKey,
-		"private_key": user.PrivateKey,
-		"balance":     user.Balance,
+	resp := &models.UserRegisterResponse{
+		Address:    user.Address,
+		PublicKey:  user.PublicKey,
+		PrivateKey: user.PrivateKey,
+		Mnemonic:   user.Mnemonic,
+		Username:   user.Username,
 	}
 
 	c.JSON(200, resp)

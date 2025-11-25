@@ -13,10 +13,10 @@ POST http://localhost:3010/send
 Content-Type: application/json
 
 {
-  "from_address": "FAKE-26ae0ededb163e79a89eb0e605cc39f7",
-  "to_address": "FAKE-80a7e7b6d48b7f314ac5c57a5b2a0904",
+  "from_address": "0xce4b0c6afb4a5c27922557f5cb3d3e1b6ef496b0",
+  "to_address": "0xc1d158bfd476156099bfc1b701fb021d543fdb82",
   "amount": 5,
-  "private_key": "970b85212c4a8280167d8352f9f7468e17500ee2904661132220cda0f851827c"
+  "private_key": "d1fc08820e7cb02c289acbc99d92a11a79a649b1a941a590b1de6ee5a3f54712"
 }
 
 ### Send a transaction 2
@@ -36,7 +36,7 @@ Content-Type: application/json
 GET http://localhost:3010/transaction/122
 
 ### get balance by address
-GET http://localhost:3010/balance/FAKE-80a7e7b6d48b7f314ac5c57a5b2a0904
+GET http://localhost:3010/balance/0xc1d158bfd476156099bfc1b701fb021d543fdb82
 
 ### generate blocks
 POST http://localhost:3010/generate-block
@@ -63,4 +63,4 @@ GET http://localhost:3010/reward/block/2
 GET http://localhost:3010/reward/schedule/10
 
 ### get wallet balance
-GET http://localhost:3010/wallet/FAKE-26ae0ededb163e79a89eb0e605cc39f7
+GET http://localhost:3010/wallet/0xc1d158bfd476156099bfc1b701fb021d543fdb82

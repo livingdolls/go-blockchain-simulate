@@ -1,3 +1,5 @@
+"use client";
+
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -9,16 +11,58 @@ import {
   FieldSeparator,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { ethers } from "ethers";
+import { useState } from "react";
+import { WalletFromMnemonic } from "@/lib/crypto";
+import { api } from "@/lib/axios";
 
 export function LoginForm({
   className,
   ...props
 }: React.ComponentProps<"div">) {
+  const [mnemonic, setMnemonic] = useState(
+    "way focus resist come truly raccoon industry local vicious fade helmet knee"
+  );
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!mnemonic) {
+      alert("Please enter your mnemonic.");
+      return;
+    }
+
+    const wallet = WalletFromMnemonic(mnemonic);
+    const addr = wallet.address.toLocaleLowerCase();
+
+    const ch = await api.post(`/challenge/${addr}`);
+    const nonce = ch.data.challenge;
+    if (!nonce) {
+      alert("Failed to get challenge from server.");
+      return;
+    }
+
+    // sign cannonical message
+    const message = `Login to YuteBlockchain\nnonce:${nonce}`;
+    const signature = await wallet.signMessage(message);
+
+    const payload = {
+      address: addr,
+      message,
+      signature,
+    };
+
+    // send signature to server for verification
+    const res = await api.post(`/challenge/verify`, payload);
+
+    console.log(res);
+  };
+
   return (
     <div className={cn("flex flex-col gap-6", className)} {...props}>
       <Card className="overflow-hidden p-0">
         <CardContent className="grid p-0 md:grid-cols-2">
-          <form className="p-6 md:p-8">
+          <form className="p-6 md:p-8" onSubmit={handleLogin}>
             <FieldGroup>
               <div className="flex flex-col items-center gap-2 text-center">
                 <h1 className="text-2xl font-bold">Welcome back</h1>
@@ -26,27 +70,6 @@ export function LoginForm({
                   Login to your Wallet Account
                 </p>
               </div>
-              <Field>
-                <FieldLabel htmlFor="email">Email</FieldLabel>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="m@example.com"
-                  required
-                />
-              </Field>
-              <Field>
-                <div className="flex items-center">
-                  <FieldLabel htmlFor="password">Password</FieldLabel>
-                  <a
-                    href="#"
-                    className="ml-auto text-sm underline-offset-2 hover:underline"
-                  >
-                    Forgot your password?
-                  </a>
-                </div>
-                <Input id="password" type="password" required />
-              </Field>
               <Field>
                 <Button type="submit">Login</Button>
               </Field>

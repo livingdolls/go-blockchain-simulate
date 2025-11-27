@@ -5,13 +5,16 @@ import { create } from "zustand";
 
 type AuthState = {
   user: TUser | null;
+  loading: boolean;
   fetchUser: () => Promise<void>;
   logout: () => void;
 };
 
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
+  loading: false,
   fetchUser: async () => {
+    set({ loading: true });
     try {
       const res = await api.get<TUser>("/profile");
       set({
@@ -27,6 +30,8 @@ export const useAuthStore = create<AuthState>((set) => ({
       console.error("Failed to fetch user:", error);
       set({ user: null });
       redirect("/login");
+    } finally {
+      set({ loading: false });
     }
   },
   logout: () => {

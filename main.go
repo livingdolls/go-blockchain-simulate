@@ -1,11 +1,15 @@
 package main
 
 import (
+	"time"
+
 	"github.com/gin-gonic/gin"
 	"github.com/livingdolls/go-blockchain-simulate/app/handler"
 	"github.com/livingdolls/go-blockchain-simulate/app/repository"
 	"github.com/livingdolls/go-blockchain-simulate/app/services"
 	"github.com/livingdolls/go-blockchain-simulate/database"
+	"github.com/livingdolls/go-blockchain-simulate/redis"
+	"github.com/livingdolls/go-blockchain-simulate/security"
 )
 
 func main() {
@@ -18,8 +22,22 @@ func main() {
 	}
 	defer db.Close()
 
+	jwt := security.NewJWTAdapter("yurinahirate-verysecret", 24*time.Hour)
+
+	redisClient, err := redis.NewRedisMemory()
+	if err != nil {
+		panic(err)
+	}
+	defer redisClient.Close()
+
+	redisServices, err := redis.NewMemoryAdapter(redisClient, 1024)
+
+	if err != nil {
+		panic(err)
+	}
+
 	userRepo := repository.NewUserRepository(db.GetDB())
-	userService := services.NewRegisterService(userRepo)
+	userService := services.NewRegisterService(userRepo, jwt, redisServices)
 	userHandler := handler.NewRegisterHandler(userService)
 
 	txRepo := repository.NewTransactionRepository(db.GetDB())
@@ -38,9 +56,38 @@ func main() {
 	rewardService := services.NewRewardHandler(blockRepo)
 	rewardHandler := handler.NewRewardHandler(rewardService, blockService)
 
+	profileService := services.NewProfileService(userRepo)
+	profileHandler := handler.NewUserHandler(profileService, jwt)
+
 	r := gin.Default()
 
+	allowedOrigins := map[string]bool{
+		"http://192.168.88.178:3001": true,
+		"http://localhost:3001":      true,
+	}
+
+	r.Use(func(c *gin.Context) {
+		origin := c.GetHeader("Origin")
+		if origin != "" && allowedOrigins[origin] {
+			c.Header("Access-Control-Allow-Origin", origin)
+			c.Header("Vary", "Origin")
+		}
+
+		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+		c.Header("Access-Control-Allow-Headers", "Origin, Content-Type, Accept, Authorization")
+		c.Header("Access-Control-Allow-Credentials", "true")
+
+		if c.Request.Method == "OPTIONS" {
+			c.AbortWithStatus(204)
+			return
+		}
+
+		c.Next()
+	})
+
 	r.POST("/register", userHandler.Register)
+	r.POST("/challenge/:address", userHandler.Challenge)
+	r.POST("/challenge/verify", userHandler.Verify)
 	r.POST("/send", transactionHandler.Send)
 	r.GET("/transaction/:id", transactionHandler.GetTransaction)
 	r.GET("/balance/:address", balanceHandler.GetBalance)
@@ -53,6 +100,12 @@ func main() {
 	r.GET("/reward/schedule/:number", rewardHandler.GetRewardSchedule)
 	r.GET("/reward/block/:number", rewardHandler.GetBlockReward)
 	r.GET("/reward/info", rewardHandler.GetRewardInfo)
+
+	protected := r.Group("/profile")
+	protected.Use(handler.JWTMiddleware(jwt))
+	{
+		protected.GET("", profileHandler.Me)
+	}
 
 	r.Run(":3010")
 }

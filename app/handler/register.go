@@ -1,14 +1,12 @@
 package handler
 
 import (
+	"time"
+
 	"github.com/gin-gonic/gin"
 	"github.com/livingdolls/go-blockchain-simulate/app/models"
 	"github.com/livingdolls/go-blockchain-simulate/app/services"
 )
-
-type RegisterRequest struct {
-	Name string `json:"name" binding:"required"`
-}
 
 type RegisterHandler struct {
 	service services.RegisterService
@@ -19,25 +17,59 @@ func NewRegisterHandler(service services.RegisterService) *RegisterHandler {
 }
 
 func (h *RegisterHandler) Register(c *gin.Context) {
-	var req RegisterRequest
+	var req models.UserRegister
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
 
-	user, err := h.service.Register(req.Name)
+	user, err := h.service.Register(req)
 	if err != nil {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
 
 	resp := &models.UserRegisterResponse{
-		Address:    user.Address,
-		PublicKey:  user.PublicKey,
-		PrivateKey: user.PrivateKey,
-		Mnemonic:   user.Mnemonic,
-		Username:   user.Username,
+		Address:  user.Address,
+		Username: user.Username,
+		Balance:  1000,
 	}
 
+	c.SetCookie("auth_token", user.Token, int(24*time.Hour.Seconds()), "/", "", false, true)
+
 	c.JSON(200, resp)
+}
+
+func (h *RegisterHandler) Challenge(c *gin.Context) {
+	address := c.Param("address")
+
+	challenge, err := h.service.Challenge(c.Request.Context(), address)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(200, gin.H{"challenge": challenge})
+}
+
+func (h *RegisterHandler) Verify(c *gin.Context) {
+	var req struct {
+		Address   string `json:"address"`
+		Signature string `json:"signature"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+
+	valid, err := h.service.Verify(c.Request.Context(), req.Address, req.Signature)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.SetCookie("auth_token", valid, int(24*time.Hour.Seconds()), "/", "", false, true)
+
+	c.JSON(200, gin.H{"valid": true})
 }

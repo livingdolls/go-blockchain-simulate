@@ -9,9 +9,8 @@ type User struct {
 }
 
 type UserRegisterResponse struct {
-	Mnemonic   string `json:"mnemonic"`
-	Address    string `json:"address"`
-	PublicKey  string `json:"public_key"`
-	PrivateKey string `json:"private_key"`
-	Username   string `json:"username"`
+	Address  string  `json:"address"`
+	Username string  `json:"username"`
+	Balance  float64 `json:"balance,omitempty"`
+	Token    string  `json:"token,omitempty"`
 }

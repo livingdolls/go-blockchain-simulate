@@ -64,3 +64,15 @@ GET http://localhost:3010/reward/schedule/10
 
 ### get wallet balance
 GET http://localhost:3010/wallet/0xc1d158bfd476156099bfc1b701fb021d543fdb82
+
+## challenge request
+POST http://localhost:3010/challenge/0xce4b0c6afb4a5c27922557f5cb3d3e1b6ef496b0
+
+## challenge verify request
+POST http://localhost:3010/challenge/verify
+Content-Type: application/json
+
+{
+  "address": "0xce4b0c6afb4a5c27922557f5cb3d3e1b6ef496b0",
+  "signature": "0x2c6404e5f3cf3f2a4d5f7c6b4c8e2f3a4b5c6d7e8f9a0b1c2d3e4f506172839405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20"
+}

@@ -43,7 +43,9 @@ func main() {
 	txRepo := repository.NewTransactionRepository(db.GetDB())
 	ledgerRepo := repository.NewLedgerRepository(db.GetDB())
 
-	transactionService := services.NewTransactionService(userRepo, txRepo, ledgerRepo)
+	txVerify := services.NewVerifyTxService(redisServices)
+
+	transactionService := services.NewTransactionService(userRepo, txRepo, ledgerRepo, redisServices, txVerify)
 	transactionHandler := handler.NewTransactionHandler(transactionService)
 
 	balanceService := services.NewBalanceService(userRepo, txRepo)
@@ -89,6 +91,7 @@ func main() {
 	r.POST("/challenge/:address", userHandler.Challenge)
 	r.POST("/challenge/verify", userHandler.Verify)
 	r.POST("/send", transactionHandler.Send)
+	r.GET("/generate-tx-nonce/:address", transactionHandler.GenerateNonce)
 	r.GET("/transaction/:id", transactionHandler.GetTransaction)
 	r.GET("/balance/:address", balanceHandler.GetBalance)
 	r.GET("/wallet/:address", balanceHandler.GetWalletBalance)

@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"log"
+	"math/big"
 	"strings"
 	"time"
 
@@ -18,7 +20,7 @@ import (
 type RegisterService interface {
 	Register(req models.UserRegister) (models.UserRegisterResponse, error)
 	Challenge(ctx context.Context, address string) (string, error)
-	Verify(ctx context.Context, address, signature string) (string, error)
+	Verify(ctx context.Context, address, nonce, signature string) (string, error)
 }
 
 type registerService struct {
@@ -63,80 +65,100 @@ func (r *registerService) Register(req models.UserRegister) (models.UserRegister
 
 func (r *registerService) Challenge(contex context.Context, address string) (string, error) {
 	addr := strings.ToLower(address)
-	nonce := uuid.NewString()
 
+	nonce := uuid.NewString()
 	r.redis.Set(contex, addr, []byte(nonce), 10*time.Minute)
+	log.Printf("Challenge created : address=%s, nonce=%s", addr, nonce)
 
 	return nonce, nil
 }
 
-func (r *registerService) Verify(ctx context.Context, address, signature string) (string, error) {
-	addr := strings.ToLower(address)
-	nonce, ok := r.redis.Get(ctx, addr)
+func (r *registerService) Verify(ctx context.Context, address, nonce, signature string) (string, error) {
+	addr := strings.ToLower(strings.TrimSpace(address))
 
-	if !ok {
+	stored, ok := r.redis.Get(ctx, addr)
+	if !ok || len(stored) == 0 {
 		return "", fmt.Errorf("missing or expired challenge")
 	}
+	if nonce != string(stored) {
+		return "", fmt.Errorf("stale challenge: request a new nonce")
+	}
 
-	// cannonical message (must match exactly what was signed on client side)
-	msg := fmt.Sprintf("Login to YuteBlockchain\nnonce:%s", nonce)
-	sig, err := r.parseSignature(signature)
+	msg := fmt.Sprintf("Login to YuteBlockchain nonce:%s", nonce)
+
+	// parse signature
+	sigHex := strings.TrimPrefix(strings.TrimSpace(signature), "0x")
+	raw, err := hex.DecodeString(sigHex)
 	if err != nil {
-		return "", fmt.Errorf("signature not valid %w", err)
+		return "", fmt.Errorf("invalid signature hex: %w", err)
+	}
+	if len(raw) != 65 {
+		return "", fmt.Errorf("invalid signature length: %d", len(raw))
 	}
 
-	hash := prefixedHash([]byte(msg))
-	pub, err := crypto.SigToPub(hash, sig)
+	// r,s,v
+	sPart := new(big.Int).SetBytes(raw[32:64])
+	v := raw[64]
 
-	if err != nil {
-		return "", fmt.Errorf("failed to sig to pub %w", err)
-	}
-
-	recovered := crypto.PubkeyToAddress(*pub).Hex()
-
-	if !strings.EqualFold(recovered, address) {
-		return "", fmt.Errorf("address missmatch")
-	}
-
-	// delete nonce after verification attempt
-	r.redis.Del(ctx, addr)
-
-	// generate jwt token
-	token, err := r.jwt.GenerateToken(addr)
-
-	if err != nil {
-		return "", fmt.Errorf("failed to generate jwt web token %w", err)
-	}
-
-	return token, nil
-}
-
-func (r *registerService) parseSignature(sigHex string) ([]byte, error) {
-	s := strings.TrimPrefix(sigHex, "0x")
-	b, err := hex.DecodeString(s)
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to hex decode to string %w", err)
-	}
-
-	if len(b) != 65 {
-		return nil, fmt.Errorf("invalid signature length: %d", len(b))
-	}
-
-	v := int(b[64])
+	// normalize v to 27/28
 	if v == 0 || v == 1 {
 		v += 27
 	} else if v >= 35 {
-		v = (v-35)%2 + 27
+		v = byte(((int(v) - 35) % 2) + 27)
 	}
-
 	if v != 27 && v != 28 {
-		return nil, fmt.Errorf("invalid signature recovery id: %d", v)
+		return "", fmt.Errorf("invalid signature recovery id: %d", v)
+	}
+	raw[64] = v
+
+	// low-s check (EIP-2)
+	halfN := new(big.Int).Rsh(crypto.S256().Params().N, 1)
+	if sPart.Cmp(halfN) == 1 {
+		return "", fmt.Errorf("signature s too high (non-canonical)")
 	}
 
-	b[64] = byte(v)
+	// hash
+	hash := prefixedHash([]byte(msg))
 
-	return b, nil
+	// recover with Ecrecover using the given parity; toggle only if primary fails
+	var pubBytes []byte
+	for _, vTry := range []byte{v, toggleV(v)} {
+		test := make([]byte, 65)
+		copy(test, raw[:64])
+		test[64] = vTry - 27 // Ecrecover expects 0/1
+		if rec, er := crypto.Ecrecover(hash, test); er == nil {
+			pubBytes = rec
+			break
+		}
+	}
+	if pubBytes == nil {
+		return "", fmt.Errorf("failed to recover public key")
+	}
+
+	pubKey, err := crypto.UnmarshalPubkey(pubBytes)
+	if err != nil {
+		return "", fmt.Errorf("failed to unmarshal public key: %w", err)
+	}
+	recovered := strings.ToLower(crypto.PubkeyToAddress(*pubKey).Hex())
+	if recovered != addr {
+		return "", fmt.Errorf("address mismatch recovered=%s expected=%s", recovered, addr)
+	}
+
+	// success: delete nonce
+	r.redis.Del(ctx, addr)
+
+	token, err := r.jwt.GenerateToken(addr)
+	if err != nil {
+		return "", fmt.Errorf("failed to generate jwt: %w", err)
+	}
+	return token, nil
+}
+
+func toggleV(v byte) byte {
+	if v == 27 {
+		return 28
+	}
+	return 27
 }
 
 func prefixedHash(data []byte) []byte {

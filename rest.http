@@ -13,7 +13,7 @@ POST http://localhost:3010/send
 Content-Type: application/json
 
 {
-  "from_address": "0xce4b0c6afb4a5c27922557f5cb3d3e1b6ef496b0",
+  "from_address": "0xc92e12f3a0df04e081cd2c6410c8e554b695b0dd",
   "to_address": "0xc1d158bfd476156099bfc1b701fb021d543fdb82",
   "amount": 5,
   "private_key": "d1fc08820e7cb02c289acbc99d92a11a79a649b1a941a590b1de6ee5a3f54712"
@@ -63,7 +63,7 @@ GET http://localhost:3010/reward/block/2
 GET http://localhost:3010/reward/schedule/10
 
 ### get wallet balance
-GET http://localhost:3010/wallet/0xc1d158bfd476156099bfc1b701fb021d543fdb82
+GET http://localhost:3010/wallet/0xc92e12f3a0df04e081cd2c6410c8e554b695b0dd?page=1&limit=5&type=received&status=confirmed&order=desc
 
 ## challenge request
 POST http://localhost:3010/challenge/0xce4b0c6afb4a5c27922557f5cb3d3e1b6ef496b0

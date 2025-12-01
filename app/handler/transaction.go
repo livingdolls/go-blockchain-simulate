@@ -14,6 +14,14 @@ type SendTransactionRequest struct {
 	PrivateKey  string  `json:"private_key"`
 }
 
+type SendTransactionWithSignatureRequest struct {
+	FromAddress string  `json:"from_address"`
+	ToAddress   string  `json:"to_address"`
+	Amount      float64 `json:"amount"`
+	Nonce       string  `json:"nonce"`
+	Signature   string  `json:"signature"`
+}
+
 type TransactionHandler struct {
 	transactionService services.TransactionService
 }
@@ -25,13 +33,13 @@ func NewTransactionHandler(transactionService services.TransactionService) *Tran
 }
 
 func (h *TransactionHandler) Send(c *gin.Context) {
-	var req SendTransactionRequest
+	var req SendTransactionWithSignatureRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
 
-	tx, err := h.transactionService.Send(req.FromAddress, req.ToAddress, req.PrivateKey, req.Amount)
+	tx, err := h.transactionService.SendWithSignature(c.Request.Context(), req.FromAddress, req.ToAddress, req.Amount, req.Nonce, req.Signature)
 
 	if err != nil {
 		c.JSON(500, gin.H{"error": err.Error()})
@@ -69,4 +77,19 @@ func (h *TransactionHandler) GetTransaction(c *gin.Context) {
 	}
 
 	c.JSON(200, gin.H{"transaction": tx})
+}
+
+func (h *TransactionHandler) GenerateNonce(c *gin.Context) {
+	address := c.Param("address")
+
+	if address == "" {
+		c.JSON(400, gin.H{"error": "address is required"})
+		return
+	}
+
+	nonce := h.transactionService.GenerateTransactionNonce(c.Request.Context(), address)
+
+	c.JSON(200, gin.H{
+		"nonce": nonce,
+	})
 }

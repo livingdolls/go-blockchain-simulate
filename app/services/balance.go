@@ -9,7 +9,7 @@ import (
 
 type BalanceService interface {
 	GetBalance(address string) (models.User, error)
-	GetWalletBalance(address string) (models.WalletResponse, error)
+	GetWalletBalance(filter models.TransactionFilter) (models.WalletResponse, error)
 }
 
 type balanceService struct {
@@ -32,41 +32,22 @@ func (s *balanceService) GetBalance(address string) (models.User, error) {
 	return user, nil
 }
 
-func (s *balanceService) GetWalletBalance(address string) (models.WalletResponse, error) {
-	user, err := s.users.GetByAddress(address)
+func (s *balanceService) GetWalletBalance(filter models.TransactionFilter) (models.WalletResponse, error) {
+	user, err := s.users.GetByAddress(filter.Address)
 	if err != nil {
 		return models.WalletResponse{}, errors.New("address not found")
 	}
 
-	transaction, err := s.tx.GetTransactionByAddress(address)
+	transaction, err := s.tx.GetTransactionByAddress(filter)
 
 	if err != nil {
 		return models.WalletResponse{}, errors.New("could not retrieve transactions")
 	}
 
-	var walletTxs []models.WalletTx
-
-	for _, wtx := range transaction {
-		txType := "receive"
-		if wtx.FromAddress == address {
-			txType = "send"
-		}
-
-		walletTxs = append(walletTxs, models.WalletTx{
-			ID:     wtx.ID,
-			From:   wtx.FromAddress,
-			To:     wtx.ToAddress,
-			Amount: wtx.Amount,
-			Fee:    wtx.Fee,
-			Status: wtx.Status,
-			Type:   txType,
-		})
-	}
-
 	walletResponse := models.WalletResponse{
 		Ballance:     user.Balance,
 		Address:      user.Address,
-		Transactions: walletTxs,
+		Transactions: transaction,
 	}
 
 	return walletResponse, nil

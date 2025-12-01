@@ -11,7 +11,7 @@ import {
   FieldSeparator,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { ethers } from "ethers";
+import { ethers, hashMessage, verifyMessage } from "ethers";
 import { useState } from "react";
 import { WalletFromMnemonic } from "@/lib/crypto";
 import { api } from "@/lib/axios";
@@ -22,7 +22,7 @@ export function LoginForm({
   ...props
 }: React.ComponentProps<"div">) {
   const [mnemonic, setMnemonic] = useState(
-    "way focus resist come truly raccoon industry local vicious fade helmet knee"
+    "spatial media crunch crop clump candy rotate hollow amount tissue total scene"
   );
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -34,7 +34,9 @@ export function LoginForm({
     }
 
     const wallet = WalletFromMnemonic(mnemonic);
-    const addr = wallet.address.toLocaleLowerCase();
+    const addr = wallet.address.toLowerCase();
+
+    console.log("Logging in with address:", addr);
 
     const ch = await api.post(`/challenge/${addr}`);
     const nonce = ch.data.challenge;
@@ -44,19 +46,37 @@ export function LoginForm({
     }
 
     // sign cannonical message
-    const message = `Login to YuteBlockchain\nnonce:${nonce}`;
+    const message = `Login to YuteBlockchain nonce:${nonce}`;
+
+    const hashedMessage = hashMessage(message);
+    console.log("Message to sign:", message);
+    console.log("Hashed message:", hashedMessage);
+
     const signature = await wallet.signMessage(message);
+    console.log("Signature:", signature);
+    console.log("Last byte of signature (v):", signature.slice(-2));
+
+    // verification of signed message
+    const recovered = verifyMessage(message, signature);
+
+    console.log("Recovered address:", recovered);
+    console.log("Derived address", addr);
+    console.log("Match", recovered.toLowerCase() === addr);
 
     const payload = {
       address: addr,
-      message,
       signature,
+      nonce,
     };
 
     // send signature to server for verification
     const res = await api.post(`/challenge/verify`, payload);
 
-    console.log(res);
+    console.log("Login response:", res);
+
+    if (res.data.valid) {
+      window.location.href = "/dashboard";
+    }
   };
 
   return (

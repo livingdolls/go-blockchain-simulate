@@ -22,6 +22,7 @@ import {
   Settings,
   WalletIcon,
 } from "lucide-react";
+import { useAuthStore } from "@/store/auth-store";
 
 const data = {
   user: {
@@ -61,6 +62,13 @@ const data = {
 };
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+  const userAuth = useAuthStore((state) => state.user);
+  const [user, setUser] = React.useState(userAuth);
+
+  React.useEffect(() => {
+    setUser(userAuth);
+  }, [userAuth]);
+
   return (
     <Sidebar collapsible="offcanvas" {...props}>
       <SidebarHeader>
@@ -83,7 +91,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <NavSecondary items={data.navSecondary} className="mt-auto" />
       </SidebarContent>
       <SidebarFooter>
-        <NavUser user={data.user} />
+        <NavUser user={user} />
       </SidebarFooter>
     </Sidebar>
   );

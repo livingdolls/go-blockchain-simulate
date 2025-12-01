@@ -2,6 +2,7 @@ package repository
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/jmoiron/sqlx"
 	"github.com/livingdolls/go-blockchain-simulate/app/models"
@@ -18,7 +19,7 @@ type TransactionRepository interface {
 	GetPendingTransactionsByAddress(address string) (float64, error)
 	GetTransactionsByBlockID(blockID int64) ([]models.Transaction, error)
 	GetTransactionByID(id int64) (models.Transaction, error)
-	GetTransactionByAddress(address string) ([]models.Transaction, error)
+	GetTransactionByAddress(filter models.TransactionFilter) (models.TransactionWithTypeResponse, error)
 }
 
 type transactionRepository struct {
@@ -202,16 +203,72 @@ func (r *transactionRepository) GetTransactionByID(id int64) (models.Transaction
 	return transaction, err
 }
 
-func (r *transactionRepository) GetTransactionByAddress(address string) ([]models.Transaction, error) {
-	var transactions []models.Transaction
+func (r *transactionRepository) GetTransactionByAddress(filter models.TransactionFilter) (models.TransactionWithTypeResponse, error) {
+	filter.Validate()
 
-	query := `
-		SELECT id, from_address, to_address, amount, fee, signature, status
+	var result models.TransactionWithTypeResponse
+
+	result.Page = filter.Page
+	result.Limit = filter.Limit
+
+	whereCondition := []string{}
+	args := []interface{}{}
+
+	// Address condition
+	whereCondition = append(whereCondition, "(LOWER(from_address) = LOWER(?) OR LOWER(to_address) = LOWER(?))")
+	args = append(args, filter.Address, filter.Address)
+
+	switch filter.Type {
+	case "send":
+		whereCondition = append(whereCondition, "LOWER(from_address) = LOWER(?)")
+		args = append(args, filter.Address)
+	case "receive":
+		whereCondition = append(whereCondition, "LOWER(to_address) = LOWER(?)")
+		args = append(args, filter.Address)
+	}
+
+	// status filter
+	if filter.Status != "ALL" {
+		whereCondition = append(whereCondition, "status = ?")
+		args = append(args, filter.Status)
+	}
+
+	whereClause := strings.Join(whereCondition, " AND ")
+
+	// Count total
+	countQuery := fmt.Sprintf(`SELECT COUNT(*) FROM transactions WHERE %s`, whereClause)
+	err := r.db.Get(&result.Total, countQuery, args...)
+	if err != nil {
+		return result, fmt.Errorf("failed to count transaction: %w", err)
+	}
+
+	// calculate total pages
+	if result.Total > 0 {
+		result.TotalPages = int((result.Total + int64(result.Limit) - 1) / int64(result.Limit))
+	}
+
+	//build main query with pagination and sorting
+	offset := (result.Page - 1) * result.Limit
+
+	query := fmt.Sprintf(`
+		SELECT id, from_address, to_address, amount, fee, signature, status, 
+		CASE 
+			WHEN LOWER(from_address) = LOWER(?) THEN 'send' 
+			ELSE 'received' 
+		END AS type
 		FROM transactions
-		WHERE from_address = ? OR to_address = ?
-		ORDER BY id ASC`
+		WHERE %s
+		ORDER BY %s %s
+		LIMIT ? OFFSET ?`, whereClause, filter.SortBy, filter.Order)
 
-	err := r.db.Select(&transactions, query, address, address)
+	// Append pagination args
+	args = append([]interface{}{filter.Address}, args...)
+	args = append(args, result.Limit, offset)
 
-	return transactions, err
+	err = r.db.Select(&result.Transactions, query, args...)
+	if err != nil {
+		return result, fmt.Errorf("failed to get transactions: %w", err)
+	}
+
+	return result, nil
 }

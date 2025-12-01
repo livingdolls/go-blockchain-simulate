@@ -2,6 +2,7 @@ package redis
 
 import (
 	"context"
+	"log"
 	"time"
 
 	lru "github.com/hashicorp/golang-lru/v2"
@@ -47,6 +48,8 @@ func (m *memoryAdapter) Del(ctx context.Context, key string) {
 	if m.redis != nil {
 		_ = m.redis.Del(ctx, key).Err()
 	}
+
+	log.Printf("MemoryAdapter Del key=%s", key)
 }
 
 // Get implements port.MemoryAdapter.

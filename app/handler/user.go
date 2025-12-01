@@ -2,6 +2,7 @@ package handler
 
 import (
 	"github.com/gin-gonic/gin"
+	"github.com/livingdolls/go-blockchain-simulate/app/models"
 	"github.com/livingdolls/go-blockchain-simulate/app/services"
 	"github.com/livingdolls/go-blockchain-simulate/security"
 )
@@ -33,5 +34,13 @@ func (h *UserHandler) Me(c *gin.Context) {
 		return
 	}
 
-	c.JSON(200, gin.H{"user": user})
+	res := models.UserLoginResponse{
+		ID:        user.ID,
+		Address:   user.Address,
+		Username:  user.Name,
+		Balance:   user.Balance,
+		PublicKey: user.PublicKey,
+	}
+
+	c.JSON(200, res)
 }

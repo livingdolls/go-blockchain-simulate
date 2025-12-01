@@ -14,3 +14,11 @@ type UserRegisterResponse struct {
 	Balance  float64 `json:"balance,omitempty"`
 	Token    string  `json:"token,omitempty"`
 }
+
+type UserLoginResponse struct {
+	ID        int     `json:"id"`
+	Address   string  `json:"address"`
+	Username  string  `json:"username"`
+	Balance   float64 `json:"balance,omitempty"`
+	PublicKey string  `json:"public_key,omitempty"`
+}

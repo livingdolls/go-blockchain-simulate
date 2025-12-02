@@ -1,33 +1,24 @@
 import { TransactionRepository } from "@/repository/transaction";
 import { useAuthStore } from "@/store/auth-store";
-import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
-
-export type TTransactionFilter = {
-  type: "all" | "send" | "receive";
-  status: "ALL" | "PENDING" | "CONFIRMED";
-  page: number;
-  limit: number;
-  sort_by: string;
-  order: "asc" | "desc";
-};
+import { useTransactionStore } from "@/store/transaction-store";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 export const useTransaction = () => {
   const user = useAuthStore((state) => state.user);
-  const [filter, setFilter] = useState<TTransactionFilter>({
-    type: "all",
-    status: "ALL",
-    page: 1,
-    limit: 10,
-    sort_by: "created_at",
-    order: "desc",
-  });
+  const filter = useTransactionStore((state) => state.filter);
+  const setFilter = useTransactionStore((state) => state.setFilter);
+  const updateFilter = useTransactionStore((state) => state.updateFilter);
+  const resetFilters = useTransactionStore((state) => state.resetFilters);
+  const goToPage = useTransactionStore((state) => state.goToPage);
+  const changeLimit = useTransactionStore((state) => state.changeLimit);
 
   const { data, isLoading, isError, refetch, isFetching } = useQuery({
     queryKey: ["transactions", filter],
     queryFn: async () => {
       if (!user) {
-        throw new Error("User not authenticated");
+        toast.error("User not authenticated");
+        return;
       }
 
       return await TransactionRepository.getTransactionByAddress(
@@ -40,6 +31,7 @@ export const useTransaction = () => {
         filter.sort_by
       );
     },
+    placeholderData: keepPreviousData,
   });
 
   return {
@@ -49,6 +41,10 @@ export const useTransaction = () => {
     refetch,
     filter,
     setFilter,
+    updateFilter,
+    resetFilters,
+    goToPage,
+    changeLimit,
     isFetching,
   };
 };

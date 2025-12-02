@@ -1,5 +1,5 @@
 import { api } from "@/lib/axios";
-import { TSendBalanceResponse, TTransaction } from "@/types/balance";
+import { TSendBalanceResponse } from "@/types/balance";
 import { TErrorAPI } from "@/types/error-api";
 import { TTransactionWalletResponse } from "@/types/transaction";
 
@@ -21,7 +21,7 @@ export const TransactionRepository = {
       const response = await api.post<TSendBalanceResponse>("/send", data);
       return response.data;
     } catch (error: any) {
-      return { error: error.response.data.error };
+      throw new Error(error.response.data.error || "Error sending balance");
     }
   },
   getTransactionByAddress: async (
@@ -46,7 +46,9 @@ export const TransactionRepository = {
       });
       return response.data;
     } catch (error: any) {
-      return { error: error.response.data.error };
+      throw new Error(
+        error.response.data.error || "Error fetching transactions"
+      );
     }
   },
 };

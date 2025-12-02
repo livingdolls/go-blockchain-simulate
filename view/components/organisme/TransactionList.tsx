@@ -8,14 +8,8 @@ export const TransactionList = () => {
     isLoading: transactionsLoading,
     isError,
     refetch,
-    filter,
-    setFilter,
     isFetching,
   } = useTransaction();
-
-  useEffect(() => {
-    setFilter({ ...filter, type: "send", status: "ALL" });
-  }, [filter]);
 
   if (transactions === undefined || isError) {
     return <div>Error loading transactions.</div>;

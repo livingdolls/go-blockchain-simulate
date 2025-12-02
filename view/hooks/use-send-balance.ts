@@ -1,47 +1,60 @@
 import { WalletFromMnemonic } from "@/lib/crypto";
 import { TransactionRepository } from "@/repository/transaction";
 import { useAuthStore } from "@/store/auth-store";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { verifyMessage } from "ethers/hash";
+import { useState } from "react";
+import { toast } from "sonner";
 
 export const useSendBalance = () => {
+  const qc = useQueryClient();
   const user = useAuthStore((state) => state.user);
+  const [form, setForm] = useState({
+    toAddress: "",
+    amount: 0,
+    mnemonic: "",
+  });
 
   const sendBalanceMutation = useMutation({
     mutationFn: TransactionRepository.sendBalance,
     onError: (error) => {
-      console.error("Error sending balance:", error);
+      toast.error(error.message || "Failed to send balance");
     },
-    onSuccess: (data) => {
-      console.log("Balance sent successfully:", data);
+    onSuccess: () => {
+      toast.success("Balance sent successfully");
       sendBalanceMutation.reset();
+      resetForm();
+      qc.invalidateQueries({ queryKey: ["transactions"] });
     },
   });
 
-  const sendTransaction = async (
-    toAddress: string,
-    amount: number,
-    nonce: string,
-    mnemonic: string
-  ) => {
+  const resetForm = () => {
+    setForm({
+      toAddress: "",
+      amount: 0,
+      mnemonic: "",
+    });
+  };
+
+  const sendTransaction = async (nonce: string) => {
     if (!user) {
-      throw new Error("User not authenticated");
+      toast.error("User not authenticated");
+      return;
     }
 
     // derive wallet from mnemonic
-    const wallet = WalletFromMnemonic(mnemonic);
+    const wallet = WalletFromMnemonic(form.mnemonic);
     const fromAddress = wallet.address.toLowerCase();
 
     // validasii user address
     if (fromAddress !== user.address.toLowerCase()) {
-      throw new Error(
-        "Derived address does not match authenticated user address"
-      );
+      toast.error("Derived address does not match authenticated user address");
+      return;
     }
 
-    const normalizedToAddress = toAddress.toLowerCase();
+    const normalizedToAddress = form.toAddress.toLowerCase();
 
-    const formattedAmount = amount.toFixed(2);
+    const formattedAmount = form.amount.toFixed(2);
     const message = `Send ${formattedAmount} to ${normalizedToAddress} nonce:${nonce}`;
 
     //sign message
@@ -51,7 +64,8 @@ export const useSendBalance = () => {
     const recovered = verifyMessage(message, signature).toLowerCase();
 
     if (recovered !== fromAddress) {
-      throw new Error("Signature verification failed");
+      toast.error("Signature verification failed");
+      return;
     }
 
     // send transaction
@@ -66,8 +80,20 @@ export const useSendBalance = () => {
     await sendBalanceMutation.mutateAsync(txData);
   };
 
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+  ) => {
+    const { name, value } = e.target;
+    setForm((prev) => ({
+      ...prev,
+      [name]: name === "amount" ? Number(value) : value,
+    }));
+  };
+
   return {
     sendTransaction,
     isLoading: sendBalanceMutation.isPending,
+    form,
+    handleChange,
   };
 };

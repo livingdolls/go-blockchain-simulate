@@ -17,5 +17,6 @@ export const useTransactionNonce = () => {
     staleTime: 0,
     gcTime: 0,
     refetchOnMount: "always",
+    refetchInterval: 120000, // 2 minutes
   });
 };

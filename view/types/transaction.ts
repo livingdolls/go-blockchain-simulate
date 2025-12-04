@@ -5,7 +5,7 @@ export type TTransactionWalletResponse = {
 };
 
 export type TTransactionsPaginate = {
-  transactions: TTransactionInfo[];
+  transactions: TTransactionInfo[] | null;
   total: number;
   page: number;
   limit: number;

@@ -24,7 +24,8 @@ export const TransactionTablesIndex = ({
     <Table>
       <TransactionTableHead headData={headTable} />
       <TableBody>
-        {data.transactions.transactions.length === 0 ? (
+        {data.transactions.transactions === null ||
+        data.transactions.transactions.length === 0 ? (
           <TransactionTableCellNotFound colspan={headTable.length} />
         ) : (
           <TransactionTableCell data={data.transactions.transactions} />

@@ -4,13 +4,14 @@ import { Input } from "@/components/ui/input";
 import { FC } from "react";
 
 type SecondStepProps = {
-  onNext: () => void;
   username: string;
-  onChangeUsername: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onChangeUsername: (
+    e: React.ChangeEvent<HTMLInputElement>,
+    field: string
+  ) => void;
 };
 
 export const SecondStep: FC<SecondStepProps> = ({
-  onNext,
   username,
   onChangeUsername,
 }) => {
@@ -25,7 +26,7 @@ export const SecondStep: FC<SecondStepProps> = ({
             placeholder="John Doe"
             required
             value={username}
-            onChange={onChangeUsername}
+            onChange={(e) => onChangeUsername(e, "username")}
           />
         </Field>
 

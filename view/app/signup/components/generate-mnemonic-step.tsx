@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { CardDescription } from "@/components/ui/card";
 import { MnemonicWallet } from "@/hooks/use-registration";
+import { ArrowLeft, ArrowRight, Download } from "lucide-react";
 import { FC } from "react";
 
 type GenerateMnemonicStepProps = {
@@ -8,6 +9,7 @@ type GenerateMnemonicStepProps = {
   onPrev: () => void;
   generateWallet: () => void;
   wallet: MnemonicWallet;
+  handleDownloadBackup: () => void;
 };
 
 export const GenerateMnemonicStep: FC<GenerateMnemonicStepProps> = ({
@@ -15,10 +17,11 @@ export const GenerateMnemonicStep: FC<GenerateMnemonicStepProps> = ({
   onPrev,
   generateWallet,
   wallet,
+  handleDownloadBackup,
 }) => {
   return (
     <div>
-      <CardDescription className="mb-4">
+      <CardDescription className="mb-4 text-red-600">
         Please back up your mnemonic phrase securely. It is essential for wallet
         recovery.
       </CardDescription>
@@ -36,20 +39,30 @@ export const GenerateMnemonicStep: FC<GenerateMnemonicStepProps> = ({
       )}
 
       {wallet.mnemonic !== "" && (
-        <Button
-          type="button"
-          onClick={onNext}
-          className="w-full mt-2 capitalize"
-        >
-          I have backed up
-        </Button>
+        <div className="flex flex-col gap-2 mt-4">
+          <Button
+            type="button"
+            onClick={handleDownloadBackup}
+            className="w-full"
+            variant={"outline"}
+          >
+            Download Wallet Backup
+            <Download className="ml-2" />
+          </Button>
+
+          <Button type="button" onClick={onNext} className="w-full capitalize">
+            I have backed up
+            <ArrowRight className="ml-2" />
+          </Button>
+        </div>
       )}
 
       <button
         type="button"
         onClick={onPrev}
-        className="underline text-sm text-gray-500"
+        className="underline text-sm text-gray-500 mt-2 flex justify-center items-center gap-1 w-full cursor-pointer"
       >
+        <ArrowLeft size={12} />
         Prev
       </button>
     </div>

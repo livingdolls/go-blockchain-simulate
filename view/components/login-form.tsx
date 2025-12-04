@@ -49,19 +49,16 @@ export function LoginForm({
     const message = `Login to YuteBlockchain nonce:${nonce}`;
 
     const hashedMessage = hashMessage(message);
-    console.log("Message to sign:", message);
-    console.log("Hashed message:", hashedMessage);
 
     const signature = await wallet.signMessage(message);
-    console.log("Signature:", signature);
-    console.log("Last byte of signature (v):", signature.slice(-2));
 
     // verification of signed message
     const recovered = verifyMessage(message, signature);
 
-    console.log("Recovered address:", recovered);
-    console.log("Derived address", addr);
-    console.log("Match", recovered.toLowerCase() === addr);
+    if (recovered.toLowerCase() !== addr) {
+      alert("Signature verification failed.");
+      return;
+    }
 
     const payload = {
       address: addr,
@@ -71,8 +68,6 @@ export function LoginForm({
 
     // send signature to server for verification
     const res = await api.post(`/challenge/verify`, payload);
-
-    console.log("Login response:", res);
 
     if (res.data.valid) {
       window.location.href = "/dashboard";

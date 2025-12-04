@@ -15,8 +15,11 @@ export default function SignupPage() {
     generateWallet,
     wallet,
     username,
-    onChangeUsername,
+    onChangeForm,
     handleSubmitRegistration,
+    password,
+    repeatPassword,
+    handleDownloadBackup,
   } = useRegistration();
   return (
     <div className="bg-muted flex min-h-svh flex-col items-center justify-center gap-6 p-6 md:p-10">
@@ -29,7 +32,12 @@ export default function SignupPage() {
             <CardContent>
               <form onSubmit={handleSubmitRegistration}>
                 <StepContainer step={1} currentStep={currentStep}>
-                  <FirstStep onNext={nextStep} />
+                  <FirstStep
+                    onNext={nextStep}
+                    onChangeForm={onChangeForm}
+                    password={password}
+                    repeatPassword={repeatPassword}
+                  />
                 </StepContainer>
 
                 <StepContainer step={2} currentStep={currentStep}>
@@ -38,14 +46,14 @@ export default function SignupPage() {
                     onPrev={prevStep}
                     generateWallet={generateWallet}
                     wallet={wallet}
+                    handleDownloadBackup={handleDownloadBackup}
                   />
                 </StepContainer>
 
                 <StepContainer step={3} currentStep={currentStep}>
                   <SecondStep
-                    onNext={nextStep}
                     username={username}
-                    onChangeUsername={onChangeUsername}
+                    onChangeUsername={onChangeForm}
                   />
                 </StepContainer>
               </form>

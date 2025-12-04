@@ -1,6 +1,7 @@
 import { TransactionRepository } from "@/repository/transaction";
 import { useAuthStore } from "@/store/auth-store";
 import { useTransactionStore } from "@/store/transaction-store";
+import { TTransactionWalletResponse } from "@/types/transaction";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 
@@ -18,7 +19,18 @@ export const useTransaction = () => {
     queryFn: async () => {
       if (!user) {
         toast.error("User not authenticated");
-        return;
+        const emptyResponse: TTransactionWalletResponse = {
+          balance: 0,
+          address: "",
+          transactions: {
+            transactions: [],
+            total: 0,
+            page: filter.page,
+            limit: filter.limit,
+            total_pages: 1,
+          },
+        };
+        return emptyResponse;
       }
 
       return await TransactionRepository.getTransactionByAddress(

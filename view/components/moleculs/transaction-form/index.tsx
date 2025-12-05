@@ -4,6 +4,7 @@ import { useSendBalance } from "@/hooks/use-send-balance";
 import { TextareaTx } from "./textarea-tx";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { FieldSeparator } from "@/components/ui/field";
 
 export const TransactionForm = () => {
   const {
@@ -50,14 +51,32 @@ export const TransactionForm = () => {
           disabled={isLoading}
         />
 
-        <TextareaTx
-          label="Mnemonic Key"
-          name="mnemonic"
-          placeholder="Enter your mnemonic key"
-          onChange={handleChange}
-          value={form.mnemonic}
-          disabled={isLoading}
-        />
+        {form.file === null && (
+          <TextareaTx
+            label="Mnemonic Key"
+            name="mnemonic"
+            placeholder="Enter your mnemonic key"
+            onChange={handleChange}
+            value={form.mnemonic}
+            disabled={isLoading}
+          />
+        )}
+
+        <FieldSeparator className="*:data-[slot=field-separator-content]:bg-card my-6">
+          Or use your wallet file
+        </FieldSeparator>
+
+        {form.file !== null && (
+          <InputTx
+            label="Password"
+            name="password"
+            type="password"
+            placeholder="Enter your password"
+            onChange={handleChange}
+            value={form.password}
+            disabled={isLoading}
+          />
+        )}
 
         <button
           type="submit"

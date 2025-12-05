@@ -13,6 +13,8 @@ export const useSendBalance = () => {
     toAddress: "",
     amount: 0,
     mnemonic: "",
+    file: null as File | null,
+    password: "",
   });
 
   const sendBalanceMutation = useMutation({
@@ -33,6 +35,8 @@ export const useSendBalance = () => {
       toAddress: "",
       amount: 0,
       mnemonic: "",
+      file: null,
+      password: "",
     });
   };
 

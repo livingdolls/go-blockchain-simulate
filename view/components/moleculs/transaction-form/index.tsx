@@ -5,6 +5,7 @@ import { TextareaTx } from "./textarea-tx";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { FieldSeparator } from "@/components/ui/field";
+import { WalletFileDropzone } from "./dropzone";
 
 export const TransactionForm = () => {
   const {
@@ -13,7 +14,14 @@ export const TransactionForm = () => {
     refetch: refetchNonce,
   } = useTransactionNonce();
 
-  const { sendTransaction, isLoading, form, handleChange } = useSendBalance();
+  const {
+    sendTransaction,
+    isLoading,
+    form,
+    handleChange,
+    fileWallet,
+    handleWalletFileChange,
+  } = useSendBalance();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,7 +59,7 @@ export const TransactionForm = () => {
           disabled={isLoading}
         />
 
-        {form.file === null && (
+        {fileWallet === null && (
           <TextareaTx
             label="Mnemonic Key"
             name="mnemonic"
@@ -66,7 +74,12 @@ export const TransactionForm = () => {
           Or use your wallet file
         </FieldSeparator>
 
-        {form.file !== null && (
+        <WalletFileDropzone
+          onFile={handleWalletFileChange}
+          disabled={isLoading}
+        />
+
+        {fileWallet !== null && (
           <InputTx
             label="Password"
             name="password"

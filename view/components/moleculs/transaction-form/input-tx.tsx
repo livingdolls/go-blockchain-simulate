@@ -5,7 +5,7 @@ type Props = {
   name: string;
   type: string;
   placeholder?: string;
-  value: string | number;
+  value?: string | number;
   onChange: (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => void;
@@ -20,6 +20,7 @@ export const InputTx: React.FC<Props> = ({
   value,
   onChange,
   disabled,
+  ...props
 }) => {
   return (
     <div className="flex flex-col">
@@ -33,8 +34,9 @@ export const InputTx: React.FC<Props> = ({
         className="rounded border border-gray-300 p-2"
         placeholder={placeholder}
         onChange={onChange}
-        value={value}
         disabled={disabled}
+        {...(type !== "file" ? { value } : {})}
+        {...props}
       />
     </div>
   );

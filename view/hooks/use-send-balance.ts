@@ -13,9 +13,10 @@ export const useSendBalance = () => {
     toAddress: "",
     amount: 0,
     mnemonic: "",
-    file: null as File | null,
     password: "",
   });
+
+  const [fileWallet, setFileWallet] = useState<File | null>(null);
 
   const sendBalanceMutation = useMutation({
     mutationFn: TransactionRepository.sendBalance,
@@ -35,7 +36,6 @@ export const useSendBalance = () => {
       toAddress: "",
       amount: 0,
       mnemonic: "",
-      file: null,
       password: "",
     });
   };
@@ -94,10 +94,16 @@ export const useSendBalance = () => {
     }));
   };
 
+  const handleWalletFileChange = (file: File | null) => {
+    setFileWallet(file);
+  };
+
   return {
     sendTransaction,
     isLoading: sendBalanceMutation.isPending,
     form,
     handleChange,
+    fileWallet,
+    handleWalletFileChange,
   };
 };

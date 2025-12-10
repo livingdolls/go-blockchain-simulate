@@ -75,7 +75,9 @@ export const TransactionForm = () => {
         </FieldSeparator>
 
         <WalletFileDropzone
-          onFile={handleWalletFileChange}
+          onFile={(file, content) => {
+            handleWalletFileChange(file, content);
+          }}
           disabled={isLoading}
         />
 

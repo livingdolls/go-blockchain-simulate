@@ -2,7 +2,7 @@ import { useCallback, useState } from "react";
 import { useDropzone } from "react-dropzone";
 
 type WalletFileDropzoneProps = {
-  onFile: (file: File) => void;
+  onFile: (file: File, content: unknown) => void;
   disabled?: boolean;
 };
 
@@ -15,8 +15,21 @@ export const WalletFileDropzone: React.FC<WalletFileDropzoneProps> = ({
   const onDrop = useCallback(
     (acceptedFiles: File[]) => {
       if (acceptedFiles.length > 0) {
-        onFile(acceptedFiles[0]);
-        setFileName(acceptedFiles[0].name);
+        const file = acceptedFiles[0];
+        setFileName(file.name);
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          try {
+            const text = e.target?.result as string;
+            const json = JSON.parse(text);
+            onFile(file, json);
+          } catch (error) {
+            console.error("Error reading wallet file:", error);
+            onFile(file, null);
+          }
+        };
+        reader.readAsText(file);
       }
     },
     [onFile]

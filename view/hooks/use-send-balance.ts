@@ -94,7 +94,12 @@ export const useSendBalance = () => {
     }));
   };
 
-  const handleWalletFileChange = (file: File | null) => {
+  const handleWalletFileChange = (file: File | null, content: unknown) => {
+    if (content && typeof content !== "object") {
+      toast.error("Invalid wallet file content");
+      return;
+    }
+
     setFileWallet(file);
   };
 

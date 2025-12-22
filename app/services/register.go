@@ -20,7 +20,7 @@ import (
 type RegisterService interface {
 	Register(req models.UserRegister) (models.UserRegisterResponse, error)
 	Challenge(ctx context.Context, address string) (string, error)
-	Verify(ctx context.Context, address, nonce, signature string) (string, error)
+	Verify(ctx context.Context, address, nonce, signature, username string) (string, error)
 }
 
 type registerService struct {
@@ -73,7 +73,7 @@ func (r *registerService) Challenge(contex context.Context, address string) (str
 	return nonce, nil
 }
 
-func (r *registerService) Verify(ctx context.Context, address, nonce, signature string) (string, error) {
+func (r *registerService) Verify(ctx context.Context, address, nonce, signature, username string) (string, error) {
 	addr := strings.ToLower(strings.TrimSpace(address))
 
 	stored, ok := r.redis.Get(ctx, addr)
@@ -142,6 +142,22 @@ func (r *registerService) Verify(ctx context.Context, address, nonce, signature 
 	recovered := strings.ToLower(crypto.PubkeyToAddress(*pubKey).Hex())
 	if recovered != addr {
 		return "", fmt.Errorf("address mismatch recovered=%s expected=%s", recovered, addr)
+	}
+
+	// check username uniqueness
+	existingUser, err := r.repo.GetByAddress(addr)
+	if err != nil {
+		return "", fmt.Errorf("failed to get user by address: %w", err)
+	}
+	if existingUser.ID == 0 {
+		return "", fmt.Errorf("user not found for address: %s", addr)
+	}
+	if existingUser.Name != username {
+		return "", fmt.Errorf("username does not match the registered username")
+	}
+
+	if addr != strings.ToLower(existingUser.Address) {
+		return "", fmt.Errorf("address does not match the registered address")
 	}
 
 	// success: delete nonce

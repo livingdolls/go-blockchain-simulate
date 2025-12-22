@@ -30,6 +30,8 @@ export function LoginForm({
     setFile,
     handleLogin,
     togglePasswordVisibility,
+    username,
+    setUsername,
   } = useLogin();
 
   return (
@@ -44,7 +46,12 @@ export function LoginForm({
 
             <form onSubmit={handleLogin}>
               <FieldGroup className="mb-6 gap-2">
-                <Input type="text" placeholder="Enter your username" />
+                <Input
+                  type="text"
+                  placeholder="Enter your username"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                />
               </FieldGroup>
 
               {file === null && (

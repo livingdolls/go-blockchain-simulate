@@ -7,6 +7,7 @@ import (
 	"github.com/livingdolls/go-blockchain-simulate/app/handler"
 	"github.com/livingdolls/go-blockchain-simulate/app/repository"
 	"github.com/livingdolls/go-blockchain-simulate/app/services"
+	"github.com/livingdolls/go-blockchain-simulate/app/worker"
 	"github.com/livingdolls/go-blockchain-simulate/database"
 	"github.com/livingdolls/go-blockchain-simulate/redis"
 	"github.com/livingdolls/go-blockchain-simulate/security"
@@ -51,8 +52,11 @@ func main() {
 	balanceService := services.NewBalanceService(userRepo, txRepo)
 	balanceHandler := handler.NewBalanceHandler(balanceService)
 
+	marketRepo := repository.NewMarketRepository(db.GetDB())
+	marketService := services.NewMarketEngineService(marketRepo)
+
 	blockRepo := repository.NewBlockRepository(db.GetDB())
-	blockService := services.NewBlockService(blockRepo, txRepo, userRepo, ledgerRepo)
+	blockService := services.NewBlockService(blockRepo, txRepo, userRepo, ledgerRepo, marketService)
 	blockHandler := handler.NewBlockHandler(blockService)
 
 	rewardService := services.NewRewardHandler(blockRepo)
@@ -61,11 +65,17 @@ func main() {
 	profileService := services.NewProfileService(userRepo)
 	profileHandler := handler.NewUserHandler(profileService, jwt)
 
+	// start worker
+	generateBlockWorker := worker.NewGenerateBlockWorker(blockService)
+	generateBlockWorker.Start(10 * time.Second)
+
 	r := gin.Default()
 
 	allowedOrigins := map[string]bool{
 		"http://192.168.88.178:3001": true,
 		"http://localhost:3001":      true,
+		"http://192.168.88.178:3000": true,
+		"http://192.168.88.178:3002": true,
 	}
 
 	r.Use(func(c *gin.Context) {
@@ -93,6 +103,7 @@ func main() {
 	r.POST("/send", transactionHandler.Send)
 	r.GET("/generate-tx-nonce/:address", transactionHandler.GenerateNonce)
 	r.GET("/transaction/:id", transactionHandler.GetTransaction)
+	r.POST("/transaction/buy", transactionHandler.Buy)
 	r.GET("/balance/:address", balanceHandler.GetBalance)
 	r.GET("/wallet/:address", balanceHandler.GetWalletBalance)
 	r.POST("/generate-block", blockHandler.GenerateBlock)

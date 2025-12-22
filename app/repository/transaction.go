@@ -34,11 +34,11 @@ func NewTransactionRepository(db *sqlx.DB) TransactionRepository {
 
 func (r *transactionRepository) CreateWithTx(dbTx *sqlx.Tx, transaction models.Transaction) (int64, error) {
 	query := `
-		INSERT INTO transactions (from_address, to_address, amount, fee, signature, status)
-		VALUES (?, ?, ?, ?, ?, ?)
+		INSERT INTO transactions (from_address, to_address, amount, fee, type, signature, status)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
 	`
 
-	result, err := dbTx.Exec(query, transaction.FromAddress, transaction.ToAddress, transaction.Amount, transaction.Fee, transaction.Signature, transaction.Status)
+	result, err := dbTx.Exec(query, transaction.FromAddress, transaction.ToAddress, transaction.Amount, transaction.Fee, transaction.Type, transaction.Signature, transaction.Status)
 	if err != nil {
 		return 0, err
 	}
@@ -53,11 +53,11 @@ func (r *transactionRepository) CreateWithTx(dbTx *sqlx.Tx, transaction models.T
 
 func (r *transactionRepository) Create(transaction models.Transaction) (int64, error) {
 	query := `
-		INSERT INTO transactions (from_address, to_address, amount, fee, signature, status)
-		VALUES (?, ?, ?, ?, ?, ?)
+		INSERT INTO transactions (from_address, to_address, amount, fee, type, signature, status)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
 	`
 
-	result, err := r.db.Exec(query, transaction.FromAddress, transaction.ToAddress, transaction.Amount, transaction.Fee, transaction.Signature, transaction.Status)
+	result, err := r.db.Exec(query, transaction.FromAddress, transaction.ToAddress, transaction.Amount, transaction.Fee, transaction.Type, transaction.Signature, transaction.Status)
 	if err != nil {
 		return 0, err
 	}
@@ -85,7 +85,7 @@ func (r *transactionRepository) GetPendingTransactionsWithTx(dbTx *sqlx.Tx) ([]m
 	var list []models.Transaction
 
 	query := `
-        SELECT id, from_address, to_address, amount, fee, signature, status 
+        SELECT id, from_address, to_address, amount, fee, type, signature, status 
         FROM transactions 
         WHERE TRIM(status) = 'PENDING'
         ORDER BY id ASC
@@ -122,7 +122,7 @@ func (r *transactionRepository) GetPendingTransactions(limit int) ([]models.Tran
 	var list []models.Transaction
 
 	query := `
-        SELECT id, from_address, to_address, amount, fee, signature, status 
+        SELECT id, from_address, to_address, amount, fee, type, signature, status 
         FROM transactions 
         WHERE TRIM(status) = 'PENDING'
         ORDER BY id ASC
@@ -175,7 +175,7 @@ func (r *transactionRepository) GetTransactionsByBlockID(blockID int64) ([]model
 	var transaction []models.Transaction
 
 	query := `
-		SELECT tx.id, tx.from_address, tx.to_address, tx.amount, tx.fee, tx.signature, tx.status
+		SELECT tx.id, tx.from_address, tx.to_address, tx.amount, tx.fee, tx.type, tx.signature, tx.status
 		FROM transactions as tx
 		JOIN block_transactions as bt ON tx.id = bt.transaction_id
 		WHERE bt.block_id = ?
@@ -189,7 +189,7 @@ func (r *transactionRepository) GetTransactionByID(id int64) (models.Transaction
 	var transaction models.Transaction
 
 	query := `
-		SELECT id, from_address, to_address, amount, fee, signature, status
+		SELECT id, from_address, to_address, amount, fee, type, signature, status
 		FROM transactions
 		WHERE id = ?
 	`
@@ -251,7 +251,7 @@ func (r *transactionRepository) GetTransactionByAddress(filter models.Transactio
 	offset := (result.Page - 1) * result.Limit
 
 	query := fmt.Sprintf(`
-		SELECT id, from_address, to_address, amount, fee, signature, status, 
+		SELECT id, from_address, to_address, amount, fee, type, signature, status, 
 		CASE 
 			WHEN LOWER(from_address) = LOWER(?) THEN 'send' 
 			ELSE 'received' 

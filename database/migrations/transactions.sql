@@ -24,3 +24,7 @@ CREATE INDEX idx_transactions_fee ON transactions(fee DESC);
 
 ALTER TABLE transactions MODIFY COLUMN amount DECIMAL(20, 8) NOT NULL;
 ALTER TABLE transactions MODIFY COLUMN fee DECIMAL(20, 8) NOT NULL;
+
+-- ADD type column to transactions
+ALTER TABLE transactions
+ADD COLUMN type ENUM('TRANSFER', 'BUY', 'SELL') NOT NULL DEFAULT 'TRANSFER' AFTER fee;

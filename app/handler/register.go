@@ -57,6 +57,7 @@ func (h *RegisterHandler) Verify(c *gin.Context) {
 		Address   string `json:"address"`
 		Signature string `json:"signature"`
 		Nonce     string `json:"nonce"`
+		Username  string `json:"username"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -64,7 +65,7 @@ func (h *RegisterHandler) Verify(c *gin.Context) {
 		return
 	}
 
-	valid, err := h.service.Verify(c.Request.Context(), req.Address, req.Nonce, req.Signature)
+	valid, err := h.service.Verify(c.Request.Context(), req.Address, req.Nonce, req.Signature, req.Username)
 	if err != nil {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return

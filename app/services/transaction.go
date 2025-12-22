@@ -18,6 +18,7 @@ type TransactionService interface {
 	GetTransactionByID(id int64) (models.Transaction, error)
 	GenerateTransactionNonce(ctx context.Context, address string) string
 	SendWithSignature(ctx context.Context, fromAddress, toAddress string, amount float64, nonce, signature string) (models.Transaction, error)
+	Buy(ctx context.Context, address, signature, nonce string, amount float64) (models.Transaction, error)
 }
 
 type transactionService struct {
@@ -185,6 +186,7 @@ func (s *transactionService) SendWithSignature(ctx context.Context, fromAddress,
 		ToAddress:   toAddress,
 		Amount:      amount,
 		Fee:         fee,
+		Type:        "TRANSFER",
 		Signature:   signature,
 		Status:      "PENDING",
 	}
@@ -197,5 +199,59 @@ func (s *transactionService) SendWithSignature(ctx context.Context, fromAddress,
 
 	tx.ID = txID
 
+	return tx, nil
+}
+
+func (s *transactionService) Buy(ctx context.Context, address, nonce, signature string, amount float64) (models.Transaction, error) {
+	// validate inputs amount
+	if amount <= 0 {
+		return models.Transaction{}, fmt.Errorf("amount must be greater than zero")
+	}
+
+	//sistem sebagai penjual adalah address "MINER_ACCOUNT"
+	buyerAddress := address
+	sellerAddress := "MINER_ACCOUNT"
+
+	// verify user exists
+	_, err := s.users.GetByAddress(buyerAddress)
+	if err != nil {
+		return models.Transaction{}, fmt.Errorf("user not found")
+	}
+
+	// ambil akun miner
+	_, err = s.users.GetByAddress(sellerAddress)
+	if err != nil {
+		return models.Transaction{}, fmt.Errorf("miner account not found")
+	}
+
+	// verify signature
+	if err := s.txVerify.VerifyTransactionSignature(ctx, sellerAddress, buyerAddress, amount, nonce, signature); err != nil {
+		return models.Transaction{}, fmt.Errorf("signature verification failed: %w", err)
+	}
+
+	// calculate transaction fee
+	fee := utils.CalculateTransactionFee(amount)
+	fee = utils.FormatFee(fee)
+
+	// create transaction
+	tx := models.Transaction{
+		FromAddress: sellerAddress,
+		ToAddress:   buyerAddress,
+		Amount:      amount,
+		Fee:         fee,
+		Type:        "BUY",
+		Signature:   signature,
+		Status:      "PENDING",
+	}
+
+	txID, err := s.txs.Create(tx)
+
+	if err != nil {
+		return models.Transaction{}, fmt.Errorf("failed to create tx: %w", err)
+	}
+
+	tx.ID = txID
+
+	// verify signature
 	return tx, nil
 }

@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/livingdolls/go-blockchain-simulate/app/entity"
 	"github.com/livingdolls/go-blockchain-simulate/app/models"
 	"github.com/livingdolls/go-blockchain-simulate/app/repository"
 	"github.com/livingdolls/go-blockchain-simulate/utils"
@@ -24,14 +25,16 @@ type blockService struct {
 	txRepo     repository.TransactionRepository
 	userRepo   repository.UserRepository
 	ledgerRepo repository.LedgerRepository
+	market     MarketEngineService
 }
 
-func NewBlockService(blockRepo repository.BlockRepository, txRepo repository.TransactionRepository, userRepo repository.UserRepository, ledgerRepo repository.LedgerRepository) BlockService {
+func NewBlockService(blockRepo repository.BlockRepository, txRepo repository.TransactionRepository, userRepo repository.UserRepository, ledgerRepo repository.LedgerRepository, market MarketEngineService) BlockService {
 	return &blockService{
 		blockRepo:  blockRepo,
 		txRepo:     txRepo,
 		userRepo:   userRepo,
 		ledgerRepo: ledgerRepo,
+		market:     market,
 	}
 }
 
@@ -53,7 +56,16 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 	}
 
 	if len(pendingTxs) == 0 {
-		return models.Block{}, fmt.Errorf("no pending transactions")
+		return models.Block{}, entity.ErrNoPendingTransactions
+	}
+
+	var buyVolume, sellVolume float64
+	for _, t := range pendingTxs {
+		if strings.EqualFold(t.Type, "BUY") {
+			buyVolume += t.Amount
+		} else if strings.EqualFold(t.Type, "SELL") {
+			sellVolume += t.Amount
+		}
 	}
 
 	// Collect unique addresses
@@ -266,6 +278,12 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 	err = s.userRepo.BulkUpdateBalancesWithTx(tx, currentBalances)
 	if err != nil {
 		return models.Block{}, fmt.Errorf("bulk update balances: %w", err)
+	}
+
+	if s.market != nil {
+		if _, err := s.market.ApplyBlockPricingWithTx(tx, blockID, buyVolume, sellVolume, len(pendingTxs)); err != nil {
+			return models.Block{}, fmt.Errorf("apply market pricing: %w", err)
+		}
 	}
 
 	// Commit (total transaction time: < 2 seconds)

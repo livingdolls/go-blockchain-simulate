@@ -1,4 +1,5 @@
 import { WalletFromMnemonic } from "@/lib/crypto";
+import { walletRestoreFromBackup } from "@/lib/wallet-backup";
 import { TransactionRepository } from "@/repository/transaction";
 import { useAuthStore } from "@/store/auth-store";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -44,6 +45,79 @@ export const useSendBalance = () => {
     if (!user) {
       toast.error("User not authenticated");
       return;
+    }
+
+    if (fileWallet) {
+      return new Promise<boolean>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+          try {
+            const content = e.target?.result;
+
+            if (typeof content !== "string") {
+              toast.error("Invalid file content.");
+              resolve(false);
+              return;
+            }
+
+            const validate = await walletRestoreFromBackup(
+              form.password,
+              content
+            );
+
+            if (!validate.ok || !validate.wallet) {
+              toast.error("Failed to restore wallet: " + validate.error);
+              resolve(false);
+              return;
+            }
+
+            const wallet = validate.wallet;
+            const fromAddress = wallet.address.toLowerCase();
+
+            // validasii user address
+            if (fromAddress !== user.address.toLowerCase()) {
+              toast.error(
+                "Derived address does not match authenticated user address"
+              );
+              resolve(false);
+              return;
+            }
+
+            const normalizedToAddress = form.toAddress.toLowerCase();
+
+            const formattedAmount = form.amount.toFixed(2);
+            const message = `Send ${formattedAmount} to ${normalizedToAddress} nonce:${nonce}`;
+
+            //sign message
+            const signature = await wallet.signMessage(message);
+
+            // verify localy signature
+            const recovered = verifyMessage(message, signature).toLowerCase();
+
+            if (recovered !== fromAddress) {
+              toast.error("Signature verification failed");
+              resolve(false);
+              return;
+            }
+
+            // send transaction
+            const txData = {
+              from_address: fromAddress,
+              to_address: normalizedToAddress,
+              amount: parseFloat(formattedAmount),
+              nonce,
+              signature,
+            };
+
+            await sendBalanceMutation.mutateAsync(txData);
+            resolve(true);
+          } catch (error) {
+            toast.error("Invalid wallet file.");
+            resolve(false);
+          }
+        };
+        reader.readAsText(fileWallet);
+      });
     }
 
     // derive wallet from mnemonic

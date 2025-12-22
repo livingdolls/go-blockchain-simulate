@@ -8,6 +8,7 @@ import { api } from "@/lib/axios";
 export const useLogin = () => {
   const [mnemonic, setMnemonic] = useState("");
   const [password, setPassword] = useState("");
+  const [username, setUsername] = useState("");
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -44,6 +45,7 @@ export const useLogin = () => {
         address: addr,
         signature,
         nonce,
+        username,
       };
 
       const res = await api.post(`/challenge/verify`, payload);
@@ -56,7 +58,6 @@ export const useLogin = () => {
         return false;
       }
     } catch (error) {
-      console.error("Login error:", error);
       toast.error("Login failed. Please try again.");
       return false;
     }
@@ -145,6 +146,7 @@ export const useLogin = () => {
     setMnemonic("");
     setPassword("");
     setFile(null);
+    setUsername("");
     setIsPasswordVisible(false);
   };
 
@@ -165,5 +167,7 @@ export const useLogin = () => {
     handleLogin,
     togglePasswordVisibility,
     resetForm,
+    username,
+    setUsername,
   };
 };

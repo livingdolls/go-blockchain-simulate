@@ -60,6 +60,34 @@ func (h *TransactionHandler) Send(c *gin.Context) {
 	})
 }
 
+func (h *TransactionHandler) Buy(c *gin.Context) {
+	var req SendTransactionWithSignatureRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+
+	tx, err := h.transactionService.Buy(c.Request.Context(), req.FromAddress, req.Nonce, req.Signature, req.Amount)
+
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(200, gin.H{
+		"message":     "Buy transaction created successfully",
+		"transaction": tx,
+		"breakdown": gin.H{
+			"amount":             tx.Amount,
+			"fee":                tx.Fee,
+			"total_cost":         tx.Amount + tx.Fee,
+			"recipient_receives": tx.Amount,
+		},
+		"status": "PENDING",
+		"note":   "Transaction will be confirmed when included a block",
+	})
+}
+
 func (h *TransactionHandler) GetTransaction(c *gin.Context) {
 	idStr := c.Param("id")
 

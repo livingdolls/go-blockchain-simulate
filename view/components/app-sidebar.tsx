@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/sidebar";
 import {
   Bitcoin,
+  CreditCard,
   HelpCircle,
   Search,
   Send,
@@ -40,6 +41,11 @@ const data = {
       title: "Send",
       url: "/dashboard/send",
       icon: <Send />,
+    },
+    {
+      title: "Buy",
+      url: "/dashboard/transaction",
+      icon: <CreditCard />,
     },
   ],
   navSecondary: [

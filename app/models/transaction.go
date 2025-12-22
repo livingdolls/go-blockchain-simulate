@@ -8,6 +8,7 @@ type Transaction struct {
 	ToAddress   string  `db:"to_address" json:"to_address"`
 	Amount      float64 `db:"amount" json:"amount"`
 	Fee         float64 `db:"fee" json:"fee"`
+	Type        string  `db:"type" json:"type"` // "TRANSFER", "BUY", "SELL"
 	Signature   string  `db:"signature" json:"signature"`
 	Status      string  `db:"status" json:"status"`
 }

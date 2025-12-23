@@ -5,13 +5,18 @@ import { InputTx } from "@/components/moleculs/transaction-form/input-tx";
 import { TextareaTx } from "@/components/moleculs/transaction-form/textarea-tx";
 import { Card } from "@/components/ui/card";
 import { FieldSeparator } from "@/components/ui/field";
-import { useBuy } from "@/hooks/use-buy";
+import { useSell } from "@/hooks/use-sell";
 import { useTransactionNonce } from "@/hooks/use-transaction-nonce";
 import { toast } from "sonner";
 
-export const FormBuy = () => {
-  const { fileWallet, handleWalletFileChange, form, handleChange, executeBuy } =
-    useBuy();
+export const FormSell = () => {
+  const {
+    fileWallet,
+    handleWalletFileChange,
+    form,
+    handleChange,
+    executeSell,
+  } = useSell();
 
   const {
     data: nonceData,
@@ -28,7 +33,7 @@ export const FormBuy = () => {
       return;
     }
 
-    await executeBuy(nonceData);
+    await executeSell(nonceData);
     refetchNonce();
   };
 

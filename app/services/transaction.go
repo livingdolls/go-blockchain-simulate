@@ -19,6 +19,7 @@ type TransactionService interface {
 	GenerateTransactionNonce(ctx context.Context, address string) string
 	SendWithSignature(ctx context.Context, fromAddress, toAddress string, amount float64, nonce, signature string) (models.Transaction, error)
 	Buy(ctx context.Context, address, signature, nonce string, amount float64) (models.Transaction, error)
+	Sell(ctx context.Context, address, signature, nonce string, amount float64) (models.Transaction, error)
 }
 
 type transactionService struct {
@@ -225,7 +226,7 @@ func (s *transactionService) Buy(ctx context.Context, address, nonce, signature 
 	}
 
 	// verify signature
-	if err := s.txVerify.VerifyTransactionSignature(ctx, sellerAddress, buyerAddress, amount, nonce, signature); err != nil {
+	if err := s.txVerify.VerifyBuySellSignature(ctx, buyerAddress, amount, nonce, signature, BuyTransaction); err != nil {
 		return models.Transaction{}, fmt.Errorf("signature verification failed: %w", err)
 	}
 
@@ -251,7 +252,76 @@ func (s *transactionService) Buy(ctx context.Context, address, nonce, signature 
 	}
 
 	tx.ID = txID
+	tx.FromAddress = "SYSTEM_SELLER"
 
 	// verify signature
+	return tx, nil
+}
+
+func (s *transactionService) Sell(ctx context.Context, address, nonce, signature string, amount float64) (models.Transaction, error) {
+	// validate inputs amount
+	if amount <= 0 {
+		return models.Transaction{}, fmt.Errorf("amount must be greater than zero")
+	}
+
+	//sistem sebagai pembeli adalah address "MINER_ACCOUNT"
+	sellerAddress := address
+	buyerAddress := "MINER_ACCOUNT"
+
+	// verify user exists
+	seller, err := s.users.GetByAddress(address)
+	if err != nil {
+		return models.Transaction{}, fmt.Errorf("user not found")
+	}
+
+	// ambil akun miner
+	_, err = s.users.GetByAddress(buyerAddress)
+
+	if err != nil {
+		return models.Transaction{}, fmt.Errorf("miner account not found")
+	}
+
+	// verify signature
+	if err := s.txVerify.VerifyBuySellSignature(ctx, sellerAddress, amount, nonce, signature, SellTransaction); err != nil {
+		return models.Transaction{}, fmt.Errorf("signature verification failed: %w", err)
+	}
+
+	// check if seller has enough balance
+	if seller.Balance < amount {
+		return models.Transaction{}, fmt.Errorf("insufficient balance: required %.5f, available %.5f", amount, seller.Balance)
+	}
+
+	// check pending transactions from seller to prevent double spending
+	pendingAmount, err := s.txs.GetPendingTransactionsByAddress(sellerAddress)
+	if err == nil && pendingAmount > 0 {
+		availableBalance := seller.Balance - pendingAmount
+		if availableBalance < amount {
+			return models.Transaction{}, fmt.Errorf("insufficient balance considering pending transactions: required %.5f, available %.5f", amount, availableBalance)
+		}
+	}
+
+	// calculate transaction fee
+	fee := utils.CalculateTransactionFee(amount)
+	fee = utils.FormatFee(fee)
+
+	// create transaction
+	tx := models.Transaction{
+		FromAddress: sellerAddress,
+		ToAddress:   buyerAddress,
+		Amount:      amount,
+		Fee:         fee,
+		Type:        "SELL",
+		Signature:   signature,
+		Status:      "PENDING",
+	}
+
+	txID, err := s.txs.Create(tx)
+
+	if err != nil {
+		return models.Transaction{}, fmt.Errorf("failed to create tx: %w", err)
+	}
+
+	tx.ID = txID
+	tx.ToAddress = "SYSTEM_BUYER"
 	return tx, nil
 }

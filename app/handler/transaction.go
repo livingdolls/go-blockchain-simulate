@@ -22,6 +22,13 @@ type SendTransactionWithSignatureRequest struct {
 	Signature   string  `json:"signature"`
 }
 
+type BuySellTransactionRequest struct {
+	Address   string  `json:"address"`
+	Amount    float64 `json:"amount"`
+	Nonce     string  `json:"nonce"`
+	Signature string  `json:"signature"`
+}
+
 type TransactionHandler struct {
 	transactionService services.TransactionService
 }
@@ -61,13 +68,13 @@ func (h *TransactionHandler) Send(c *gin.Context) {
 }
 
 func (h *TransactionHandler) Buy(c *gin.Context) {
-	var req SendTransactionWithSignatureRequest
+	var req BuySellTransactionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
 
-	tx, err := h.transactionService.Buy(c.Request.Context(), req.FromAddress, req.Nonce, req.Signature, req.Amount)
+	tx, err := h.transactionService.Buy(c.Request.Context(), req.Address, req.Nonce, req.Signature, req.Amount)
 
 	if err != nil {
 		c.JSON(500, gin.H{"error": err.Error()})
@@ -76,6 +83,34 @@ func (h *TransactionHandler) Buy(c *gin.Context) {
 
 	c.JSON(200, gin.H{
 		"message":     "Buy transaction created successfully",
+		"transaction": tx,
+		"breakdown": gin.H{
+			"amount":             tx.Amount,
+			"fee":                tx.Fee,
+			"total_cost":         tx.Amount + tx.Fee,
+			"recipient_receives": tx.Amount,
+		},
+		"status": "PENDING",
+		"note":   "Transaction will be confirmed when included a block",
+	})
+}
+
+func (h *TransactionHandler) Sell(c *gin.Context) {
+	var req BuySellTransactionRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+
+	tx, err := h.transactionService.Sell(c.Request.Context(), req.Address, req.Nonce, req.Signature, req.Amount)
+
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(200, gin.H{
+		"message":     "Sell transaction created successfully",
 		"transaction": tx,
 		"breakdown": gin.H{
 			"amount":             tx.Amount,

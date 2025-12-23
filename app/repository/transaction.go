@@ -251,7 +251,16 @@ func (r *transactionRepository) GetTransactionByAddress(filter models.Transactio
 	offset := (result.Page - 1) * result.Limit
 
 	query := fmt.Sprintf(`
-		SELECT id, from_address, to_address, amount, fee, type, signature, status, 
+		SELECT id, 
+		CASE
+			WHEN from_address = 'MINER_ACCOUNT' THEN 'BUYER SYSTEM'
+			ELSE from_address
+		END AS from_address,
+		CASE
+			WHEN to_address = 'MINER_ACCOUNT' THEN 'SELLER SYSTEM'
+			ELSE to_address
+		END AS to_address,
+		amount, fee, type, signature, status, 
 		CASE 
 			WHEN LOWER(from_address) = LOWER(?) THEN 'send' 
 			ELSE 'received' 

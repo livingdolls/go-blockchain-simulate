@@ -43,7 +43,7 @@ const data = {
       icon: <Send />,
     },
     {
-      title: "Buy",
+      title: "Orders",
       url: "/dashboard/transaction",
       icon: <CreditCard />,
     },

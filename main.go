@@ -7,6 +7,7 @@ import (
 	"github.com/livingdolls/go-blockchain-simulate/app/handler"
 	"github.com/livingdolls/go-blockchain-simulate/app/repository"
 	"github.com/livingdolls/go-blockchain-simulate/app/services"
+	"github.com/livingdolls/go-blockchain-simulate/app/websocket"
 	"github.com/livingdolls/go-blockchain-simulate/app/worker"
 	"github.com/livingdolls/go-blockchain-simulate/database"
 	"github.com/livingdolls/go-blockchain-simulate/redis"
@@ -69,6 +70,9 @@ func main() {
 	generateBlockWorker := worker.NewGenerateBlockWorker(blockService)
 	generateBlockWorker.Start(10 * time.Second)
 
+	marketHub := websocket.NewMarketHub()
+	go marketHub.Run()
+
 	r := gin.Default()
 
 	allowedOrigins := map[string]bool{
@@ -104,6 +108,7 @@ func main() {
 	r.GET("/generate-tx-nonce/:address", transactionHandler.GenerateNonce)
 	r.GET("/transaction/:id", transactionHandler.GetTransaction)
 	r.POST("/transaction/buy", transactionHandler.Buy)
+	r.POST("/transaction/sell", transactionHandler.Sell)
 	r.GET("/balance/:address", balanceHandler.GetBalance)
 	r.GET("/wallet/:address", balanceHandler.GetWalletBalance)
 	r.POST("/generate-block", blockHandler.GenerateBlock)

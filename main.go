@@ -5,6 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/livingdolls/go-blockchain-simulate/app/handler"
+	"github.com/livingdolls/go-blockchain-simulate/app/publisher"
 	"github.com/livingdolls/go-blockchain-simulate/app/repository"
 	"github.com/livingdolls/go-blockchain-simulate/app/services"
 	"github.com/livingdolls/go-blockchain-simulate/app/websocket"
@@ -38,6 +39,12 @@ func main() {
 		panic(err)
 	}
 
+	hub := websocket.NewHub()
+	go hub.Run()
+
+	hubHandler := websocket.GinHandler(hub)
+	publisherWS := publisher.NewPublisherWS(hub)
+
 	userRepo := repository.NewUserRepository(db.GetDB())
 	userService := services.NewRegisterService(userRepo, jwt, redisServices)
 	userHandler := handler.NewRegisterHandler(userService)
@@ -57,7 +64,7 @@ func main() {
 	marketService := services.NewMarketEngineService(marketRepo)
 
 	blockRepo := repository.NewBlockRepository(db.GetDB())
-	blockService := services.NewBlockService(blockRepo, txRepo, userRepo, ledgerRepo, marketService)
+	blockService := services.NewBlockService(blockRepo, txRepo, userRepo, ledgerRepo, marketService, publisherWS)
 	blockHandler := handler.NewBlockHandler(blockService)
 
 	rewardService := services.NewRewardHandler(blockRepo)
@@ -69,9 +76,6 @@ func main() {
 	// start worker
 	generateBlockWorker := worker.NewGenerateBlockWorker(blockService)
 	generateBlockWorker.Start(10 * time.Second)
-
-	marketHub := websocket.NewMarketHub()
-	go marketHub.Run()
 
 	r := gin.Default()
 
@@ -119,6 +123,7 @@ func main() {
 	r.GET("/reward/schedule/:number", rewardHandler.GetRewardSchedule)
 	r.GET("/reward/block/:number", rewardHandler.GetBlockReward)
 	r.GET("/reward/info", rewardHandler.GetRewardInfo)
+	r.GET("/ws/market", hubHandler)
 
 	protected := r.Group("/profile")
 	protected.Use(handler.JWTMiddleware(jwt))

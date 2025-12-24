@@ -3,115 +3,115 @@ package websocket
 import (
 	"encoding/json"
 	"log"
-	"net/http"
+	"sync"
 
-	"github.com/gin-gonic/gin"
-	"github.com/gorilla/websocket"
+	"github.com/livingdolls/go-blockchain-simulate/app/entity"
 )
 
-type marketClient struct {
-	hub  *MarketHub
-	conn *websocket.Conn
-	send chan []byte
+type Hub struct {
+	clients       map[*ClientWS]bool
+	subscriptions map[*ClientWS]map[entity.MessageType]bool
+	register      chan *ClientWS
+	unregister    chan *ClientWS
+	broadcast     chan *Message
+
+	mu sync.RWMutex
 }
 
-type MarketHub struct {
-	upgrader   websocket.Upgrader
-	clients    map[*marketClient]bool
-	register   chan *marketClient
-	unregister chan *marketClient
-	broadcast  chan []byte
-}
-
-func NewMarketHub() *MarketHub {
-	return &MarketHub{
-		upgrader: websocket.Upgrader{
-			CheckOrigin: func(r *http.Request) bool { return true },
-		},
-		clients:    make(map[*marketClient]bool),
-		register:   make(chan *marketClient),
-		unregister: make(chan *marketClient),
-		broadcast:  make(chan []byte, 32),
+func NewHub() *Hub {
+	return &Hub{
+		clients:       make(map[*ClientWS]bool),
+		subscriptions: make(map[*ClientWS]map[entity.MessageType]bool),
+		register:      make(chan *ClientWS),
+		unregister:    make(chan *ClientWS),
+		broadcast:     make(chan *Message, 256),
 	}
 }
 
-func (h *MarketHub) Run() {
+func (h *Hub) Run() {
 	for {
 		select {
 		case c := <-h.register:
+			h.mu.Lock()
 			h.clients[c] = true
+			h.subscriptions[c] = make(map[entity.MessageType]bool)
+			h.mu.Unlock()
+			log.Printf("Client registered, total :%d", len(h.clients))
+
 		case c := <-h.unregister:
+			h.mu.Lock()
 			if _, ok := h.clients[c]; ok {
 				delete(h.clients, c)
+				delete(h.subscriptions, c)
 				close(c.send)
 				_ = c.conn.Close()
 			}
+			h.mu.Unlock()
+			log.Printf("Client unregistered, total :%d", len(h.clients))
 		case msg := <-h.broadcast:
-			for c := range h.clients {
-				select {
-				case c.send <- msg:
-				default:
-					delete(h.clients, c)
-					close(c.send)
-					_ = c.conn.Close()
-				}
-			}
+			h.broadcastMessageToSubscribers(msg)
 		}
 	}
 }
 
-func (h *MarketHub) BroadcastMessage(message []byte) {
+func (h *Hub) broadcastMessageToSubscribers(message *Message) {
+	log.Printf("Broadcasting message to subscribers: %v", message.Type)
 	payload, err := json.Marshal(message)
-
 	if err != nil {
+		log.Printf("==========================================")
 		log.Printf("WebSocket broadcast marshal error: %v", err)
 		return
 	}
 
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	log.Printf("COUNT CLIENT %v", len(h.clients))
+
+	for client := range h.clients {
+		log.Printf("SEND TO CLIENT: %v", len(h.clients))
+		if subscribed, ok := h.subscriptions[client][message.Type]; ok && subscribed {
+			select {
+			case client.send <- payload:
+				log.Println("Message sent to client")
+			default:
+				log.Println("WebSocket client send channel full, dropping message")
+			}
+		}
+	}
+}
+
+func (h *Hub) Subscribe(client *ClientWS, evenType entity.MessageType) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	if subs, ok := h.subscriptions[client]; ok {
+		subs[evenType] = true
+	}
+
+	log.Printf("Client subscribed to %v", evenType)
+}
+
+func (h *Hub) Unsubscribe(client *ClientWS, eventType entity.MessageType) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	if subs, ok := h.subscriptions[client]; ok {
+		delete(subs, eventType)
+	}
+
+	log.Printf("Client unsubscribed from %v", eventType)
+}
+
+func (h *Hub) BroadCast(msgType entity.MessageType, data any) {
+	message := &Message{
+		Type: msgType,
+		Data: data,
+	}
+
 	select {
-	case h.broadcast <- payload:
+	case h.broadcast <- message:
 	default:
 		log.Println("WebSocket broadcast channel full, dropping message")
 	}
-}
-
-func (h *MarketHub) HandleMarketWS(c *gin.Context) {
-	conn, err := h.upgrader.Upgrade(c.Writer, c.Request, nil)
-
-	if err != nil {
-		log.Printf("WebSocket upgrade error: %v", err)
-		return
-	}
-
-	client := &marketClient{
-		hub:  h,
-		conn: conn,
-		send: make(chan []byte, 8),
-	}
-
-	h.register <- client
-	go client.writePump()
-	client.readPump()
-}
-
-func (c *marketClient) readPump() {
-	defer func() {
-		c.hub.unregister <- c
-	}()
-
-	for {
-		if _, _, err := c.conn.ReadMessage(); err != nil {
-			break
-		}
-	}
-}
-
-func (c *marketClient) writePump() {
-	for msg := range c.send {
-		if err := c.conn.WriteMessage(websocket.TextMessage, msg); err != nil {
-			break
-		}
-	}
-
-	_ = c.conn.Close()
 }

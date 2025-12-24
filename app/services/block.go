@@ -2,14 +2,21 @@ package services
 
 import (
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
 	"github.com/livingdolls/go-blockchain-simulate/app/entity"
 	"github.com/livingdolls/go-blockchain-simulate/app/models"
+	"github.com/livingdolls/go-blockchain-simulate/app/publisher"
 	"github.com/livingdolls/go-blockchain-simulate/app/repository"
 	"github.com/livingdolls/go-blockchain-simulate/utils"
 )
+
+type broadcastPrice struct {
+	Type entity.MessageType  `json:"type"`
+	Data models.MarketEngine `json:"data"`
+}
 
 type BlockService interface {
 	GenerateBlock() (models.Block, error)
@@ -21,20 +28,22 @@ type BlockService interface {
 }
 
 type blockService struct {
-	blockRepo  repository.BlockRepository
-	txRepo     repository.TransactionRepository
-	userRepo   repository.UserRepository
-	ledgerRepo repository.LedgerRepository
-	market     MarketEngineService
+	blockRepo   repository.BlockRepository
+	txRepo      repository.TransactionRepository
+	userRepo    repository.UserRepository
+	ledgerRepo  repository.LedgerRepository
+	market      MarketEngineService
+	publisherWS *publisher.PublisherWS
 }
 
-func NewBlockService(blockRepo repository.BlockRepository, txRepo repository.TransactionRepository, userRepo repository.UserRepository, ledgerRepo repository.LedgerRepository, market MarketEngineService) BlockService {
+func NewBlockService(blockRepo repository.BlockRepository, txRepo repository.TransactionRepository, userRepo repository.UserRepository, ledgerRepo repository.LedgerRepository, market MarketEngineService, publisherWS *publisher.PublisherWS) BlockService {
 	return &blockService{
-		blockRepo:  blockRepo,
-		txRepo:     txRepo,
-		userRepo:   userRepo,
-		ledgerRepo: ledgerRepo,
-		market:     market,
+		blockRepo:   blockRepo,
+		txRepo:      txRepo,
+		userRepo:    userRepo,
+		ledgerRepo:  ledgerRepo,
+		market:      market,
+		publisherWS: publisherWS,
 	}
 }
 
@@ -60,6 +69,8 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 	}
 
 	var buyVolume, sellVolume float64
+	var marketState models.MarketEngine
+
 	for _, t := range pendingTxs {
 		if strings.EqualFold(t.Type, "BUY") {
 			buyVolume += t.Amount
@@ -281,7 +292,7 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 	}
 
 	if s.market != nil {
-		if _, err := s.market.ApplyBlockPricingWithTx(tx, blockID, buyVolume, sellVolume, len(pendingTxs)); err != nil {
+		if marketState, err = s.market.ApplyBlockPricingWithTx(tx, blockID, buyVolume, sellVolume, len(pendingTxs)); err != nil {
 			return models.Block{}, fmt.Errorf("apply market pricing: %w", err)
 		}
 	}
@@ -289,6 +300,18 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 	// Commit (total transaction time: < 2 seconds)
 	if err := tx.Commit(); err != nil {
 		return models.Block{}, fmt.Errorf("commit transaction: %w", err)
+	}
+
+	//broadcast new block mined
+	if s.publisherWS != nil {
+		log.Printf("Publishing new block mined: %+v", newBlock)
+		s.publisherWS.Publish(entity.EventTypeBlockMined, newBlock)
+	}
+
+	// Broadcast market update
+	if s.publisherWS != nil && marketState.ID != 0 {
+		log.Printf("Publishing market update: %+v", marketState)
+		s.publisherWS.Publish(entity.EventMarketUpdate, marketState)
 	}
 
 	// load transactions

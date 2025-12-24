@@ -1,9 +1,18 @@
+"use client";
+
 import { FormBuy } from "@/components/organisme/Buy/FormBuy";
 import { FormSell } from "@/components/organisme/Sell/FormSell";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useDashboardStore } from "@/store/dashboard-store";
 
 export default function TransactionPage() {
+  const connected = useDashboardStore((state) => state.connected);
+  const market = useDashboardStore((state) => state.market);
+  if (!connected) {
+    return <div>Connecting to WebSocket...</div>;
+  }
+
   return (
     <div className="grid grid-cols-12 gap-4">
       <div className="col-span-12 lg:col-span-3">
@@ -24,7 +33,7 @@ export default function TransactionPage() {
       <div className="col-span-12 xl:col-span-9 mt-[45px]">
         <Card className="p-4">
           <h2 className="mb-4 text-lg font-semibold text-center">
-            Transaction History
+            Transaction History ${market?.price ?? "N/A"}
           </h2>
           {/* Transaction history content goes here */}
         </Card>

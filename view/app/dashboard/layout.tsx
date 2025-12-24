@@ -1,6 +1,7 @@
 import { AppSidebar } from "@/components/app-sidebar";
 import { SiteHeader } from "@/components/site-header";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
+import { DashboardWSBootstrap } from "@/providers/dashboard-bootstrap";
 import { UserProvider } from "@/providers/user-provider";
 
 export default async function DashboardLayout({
@@ -10,6 +11,8 @@ export default async function DashboardLayout({
 }>) {
   return (
     <UserProvider>
+      <DashboardWSBootstrap />
+
       <SidebarProvider
         style={
           {

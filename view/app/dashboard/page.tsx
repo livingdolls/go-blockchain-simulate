@@ -19,8 +19,6 @@ export default function Page() {
     return <div>Connecting to WebSocket...</div>;
   }
 
-  console.log("Market data:", market);
-
   return (
     <>
       <SectionCards />

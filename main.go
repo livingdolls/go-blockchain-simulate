@@ -42,7 +42,7 @@ func main() {
 	hub := websocket.NewHub()
 	go hub.Run()
 
-	hubHandler := websocket.GinHandler(hub)
+	hubHandler := websocket.GinHandler(hub, jwt)
 	publisherWS := publisher.NewPublisherWS(hub)
 
 	userRepo := repository.NewUserRepository(db.GetDB())
@@ -72,6 +72,8 @@ func main() {
 
 	profileService := services.NewProfileService(userRepo)
 	profileHandler := handler.NewUserHandler(profileService, jwt)
+
+	marketHandler := handler.NewMarketHandler(marketService)
 
 	// start worker
 	generateBlockWorker := worker.NewGenerateBlockWorker(blockService)
@@ -124,6 +126,7 @@ func main() {
 	r.GET("/reward/block/:number", rewardHandler.GetBlockReward)
 	r.GET("/reward/info", rewardHandler.GetRewardInfo)
 	r.GET("/ws/market", hubHandler)
+	r.GET("/market", marketHandler.GetMarketEngineState)
 
 	protected := r.Group("/profile")
 	protected.Use(handler.JWTMiddleware(jwt))

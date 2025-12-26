@@ -2,41 +2,37 @@
 
 import { FormBuy } from "@/components/organisme/Buy/FormBuy";
 import { FormSell } from "@/components/organisme/Sell/FormSell";
-import { Card } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { OrderList } from "@/features/orders/components/orders-list";
+import { TabsTransaction } from "@/features/orders/components/tabs-tx";
 import { useDashboardStore } from "@/store/dashboard-store";
+import { useState } from "react";
 
 export default function TransactionPage() {
+  const [selectedTab, setSelectedTab] = useState<"buy" | "sell">("buy");
   const connected = useDashboardStore((state) => state.connected);
   const market = useDashboardStore((state) => state.market);
   if (!connected) {
     return <div>Connecting to WebSocket...</div>;
   }
 
-  return (
-    <div className="grid grid-cols-12 gap-4">
-      <div className="col-span-12 lg:col-span-3">
-        <Tabs defaultValue="buy">
-          <TabsList>
-            <TabsTrigger value="buy">Buy</TabsTrigger>
-            <TabsTrigger value="sell">Sell</TabsTrigger>
-          </TabsList>
-          <TabsContent value="buy">
-            <FormBuy />
-          </TabsContent>
-          <TabsContent value="sell">
-            <FormSell />
-          </TabsContent>
-        </Tabs>
-      </div>
+  const handleTabChange = (tab: "buy" | "sell") => {
+    setSelectedTab(tab);
+  };
 
-      <div className="col-span-12 xl:col-span-9 mt-[45px]">
-        <Card className="p-4">
-          <h2 className="mb-4 text-lg font-semibold text-center">
-            Transaction History ${market?.price ?? "N/A"}
-          </h2>
-          {/* Transaction history content goes here */}
-        </Card>
+  return (
+    <div>
+      <TabsTransaction
+        handleTabClick={handleTabChange}
+        selectedTab={selectedTab}
+      />
+      <div className="grid grid-cols-12 gap-4 mt-4">
+        <div className="col-span-12 lg:col-span-3">
+          {selectedTab === "buy" ? <FormBuy /> : <FormSell />}
+        </div>
+
+        <div className="col-span-12 xl:col-span-9">
+          <OrderList selectedTab={selectedTab} />
+        </div>
       </div>
     </div>
   );

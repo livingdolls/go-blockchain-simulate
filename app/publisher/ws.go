@@ -18,3 +18,7 @@ func NewPublisherWS(hub *ws.Hub) *PublisherWS {
 func (p *PublisherWS) Publish(eventType entity.MessageType, message interface{}) {
 	p.hub.BroadCast(eventType, message)
 }
+
+func (p *PublisherWS) PublishToAddress(address string, eventType entity.MessageType, message any) {
+	p.hub.SendToAddress(address, eventType, message)
+}

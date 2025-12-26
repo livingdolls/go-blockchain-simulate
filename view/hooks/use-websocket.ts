@@ -11,7 +11,6 @@ export const useWebsocket = <T = any>(url: string) => {
 
     ws.onopen = () => {
       setConnected(true);
-      console.log("WebSocket connected");
     };
 
     ws.onmessage = (event) => {
@@ -21,7 +20,6 @@ export const useWebsocket = <T = any>(url: string) => {
 
     ws.onclose = () => {
       setConnected(false);
-      console.log("WebSocket disconnected");
     };
 
     ws.onerror = (error) => {

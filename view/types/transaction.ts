@@ -19,8 +19,9 @@ export type TTransactionInfo = {
   amount: number;
   fee: number;
   signature: string;
-  status: string;
-  type: "send" | "received";
+  status: TTransactionStatus;
+  type: TTransactionType;
+  created_at: string;
 };
 
 export type TTransactionFilter = {
@@ -35,5 +36,11 @@ export type TTransactionFilter = {
 export const TRANSACTION_STATUSES = ["ALL", "PENDING", "CONFIRMED"] as const;
 export type TTransactionStatus = (typeof TRANSACTION_STATUSES)[number];
 
-export const TRANSACTION_TYPES = ["all", "send", "receive"] as const;
+export const TRANSACTION_TYPES = [
+  "all",
+  "send",
+  "received",
+  "sell",
+  "buy",
+] as const;
 export type TTransactionType = (typeof TRANSACTION_TYPES)[number];

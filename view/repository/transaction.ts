@@ -1,7 +1,11 @@
 import { api } from "@/lib/axios";
 import { TSendBalanceResponse } from "@/types/balance";
 import { TErrorAPI } from "@/types/error-api";
-import { TTransactionWalletResponse } from "@/types/transaction";
+import {
+  TTransactionStatus,
+  TTransactionType,
+  TTransactionWalletResponse,
+} from "@/types/transaction";
 
 export type TTransactionData = {
   from_address: string;
@@ -39,8 +43,8 @@ export const TransactionRepository = {
     address: string,
     page: number,
     limit: number,
-    type: "all" | "send" | "receive",
-    status: "ALL" | "PENDING" | "CONFIRMED",
+    type: TTransactionType,
+    status: TTransactionStatus,
     order: "asc" | "desc",
     sort_by: string
   ): Promise<TTransactionWalletResponse | TErrorAPI> => {

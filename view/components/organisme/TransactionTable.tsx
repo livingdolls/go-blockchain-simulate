@@ -2,21 +2,14 @@
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  ChevronLeft,
-  ChevronRight,
-  ChevronsLeft,
-  ChevronsRight,
-  Loader2,
-  RefreshCcw,
-} from "lucide-react";
-import {
-  TTransactionFilter,
-  TTransactionWalletResponse,
-} from "@/types/transaction";
+import { Loader2, RefreshCcw } from "lucide-react";
+import { TTransactionWalletResponse } from "@/types/transaction";
 import { TransactionTableSkeleton } from "../moleculs/transaction-tables/table-skeleton";
 import { TransactionTablesIndex } from "../moleculs/transaction-tables";
 import { useTransactionStore } from "@/store/transaction-store";
+import { PaginateTransactionTable } from "../tables/paginate-transaction";
+import { useTransactionFullFilter } from "@/hooks/use-transaction-full-filter";
+import { useEffect } from "react";
 
 type Props = {
   isLoading: boolean;
@@ -25,13 +18,18 @@ type Props = {
 };
 
 export function TransactionTable({ isLoading, isFetching, data }: Props) {
-  const { goToPage, resetFilters } = useTransactionStore();
+  const { resetFilters, defaultFilter, setFilter } = useTransactionFullFilter();
+
+  useEffect(() => {
+    setFilter(defaultFilter);
+    return () => {
+      resetFilters();
+    };
+  }, []);
 
   if (isLoading) {
     return <TransactionTableSkeleton />;
   }
-
-  const headTable = ["ID", "Type", "Address", "Amount", "Fee", "Status"];
 
   return (
     <Card>
@@ -54,86 +52,18 @@ export function TransactionTable({ isLoading, isFetching, data }: Props) {
       </CardHeader>
 
       {/* Filters */}
-
       <CardContent>
-        <div className="rounded-md border">
-          <TransactionTablesIndex
-            isLoading={isFetching}
-            data={data}
-            headTable={headTable}
-          />
-        </div>
+        <TransactionTablesIndex isLoading={isFetching} data={data} />
 
         {/* Pagination */}
         {data.transactions && data.transactions.total > 0 && (
-          <div className="flex items-center justify-between mt-4">
-            <div className="text-sm text-muted-foreground">
-              Showing{" "}
-              <span className="font-medium">
-                {(data.transactions.page - 1) * data.transactions.limit + 1}
-              </span>{" "}
-              to{" "}
-              <span className="font-medium">
-                {Math.min(
-                  data.transactions.page * data.transactions.limit,
-                  data.transactions.total
-                )}
-              </span>{" "}
-              of <span className="font-medium">{data.transactions.total}</span>{" "}
-              transactions
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => goToPage(1)}
-                disabled={data.transactions.page === 1 || isFetching}
-              >
-                <ChevronsLeft className="h-4 w-4" />
-              </Button>
-
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => goToPage(data.transactions.page - 1)}
-                disabled={data.transactions.page === 1 || isFetching}
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-
-              <div className="flex items-center gap-1">
-                <span className="text-sm font-medium">
-                  Page {data.transactions.page} of{" "}
-                  {data.transactions.total_pages}
-                </span>
-              </div>
-
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => goToPage(data.transactions.page + 1)}
-                disabled={
-                  data.transactions.page === data.transactions.total_pages ||
-                  isFetching
-                }
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => goToPage(data.transactions.total_pages)}
-                disabled={
-                  data.transactions.page === data.transactions.total_pages ||
-                  isFetching
-                }
-              >
-                <ChevronsRight className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
+          <PaginateTransactionTable
+            total={data.transactions.total}
+            page={data.transactions.page}
+            limit={data.transactions.limit}
+            total_pages={data.transactions.total_pages}
+            isFetching={isFetching}
+          />
         )}
       </CardContent>
     </Card>

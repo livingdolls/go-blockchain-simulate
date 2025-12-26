@@ -1,18 +1,34 @@
 import { TableCell, TableRow } from "@/components/ui/table";
-import { TRANSACTION_STATUSES, TTransactionFilter } from "@/types/transaction";
+import { TRANSACTION_STATUSES } from "@/types/transaction";
 import { SelectFilter } from "./select-filter";
-import { useTransactionStore } from "@/store/transaction-store";
+import { useTransactionFullFilter } from "@/hooks/use-transaction-full-filter";
 
 export const TableCellFilter = () => {
-  const { updateFilter, filter: f } = useTransactionStore();
+  const filterControl = useTransactionFullFilter();
 
   const updateFilterData = (name: string, value: string) => {
-    updateFilter({ [name]: value });
+    filterControl.updateFilter({ [name]: value });
   };
   return (
     <TableRow>
-      <TableCell colSpan={5}>
-        <div className="py-2">Filter Transactions:</div>
+      <TableCell colSpan={1}>
+        <div className="py-2"></div>
+      </TableCell>
+
+      <TableCell colSpan={1}>
+        <div className="py-2"></div>
+      </TableCell>
+
+      <TableCell colSpan={1}>
+        <div className="py-2"></div>
+      </TableCell>
+
+      <TableCell colSpan={1}>
+        <div className="py-2"></div>
+      </TableCell>
+
+      <TableCell colSpan={1}>
+        <div className="py-2"></div>
       </TableCell>
 
       <TableCell colSpan={1}>
@@ -22,9 +38,13 @@ export const TableCellFilter = () => {
             setFilterValue={updateFilterData}
             placeholder="Select a status"
             label="Status"
-            value={f.status}
+            value={filterControl.filter.status}
           />
         </div>
+      </TableCell>
+
+      <TableCell colSpan={1}>
+        <div className="py-2"></div>
       </TableCell>
     </TableRow>
   );

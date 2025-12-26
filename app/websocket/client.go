@@ -17,9 +17,10 @@ const (
 )
 
 type ClientWS struct {
-	conn *websocket.Conn
-	send chan []byte
-	hub  *Hub
+	address string
+	conn    *websocket.Conn
+	send    chan []byte
+	hub     *Hub
 }
 
 func (c *ClientWS) Read() {
@@ -99,13 +100,13 @@ func (c *ClientWS) handleMessage(data []byte) {
 			if err := json.Unmarshal(dataBytes, &subReq); err == nil {
 				for _, eventType := range subReq.Events {
 					c.hub.Subscribe(c, eventType)
-
-					// send confirmation
-					c.sendResponse(entity.EventTypeSubscribe, SubscribeResponse{
-						Success: true,
-						Events:  subReq.Events,
-					})
 				}
+
+				// send confirmation
+				c.sendResponse(entity.EventTypeSubscribe, SubscribeResponse{
+					Success: true,
+					Events:  subReq.Events,
+				})
 			} else {
 				log.Printf("WebSocket handleMessage subscribe unmarshal error: %v", err)
 			}

@@ -91,7 +91,7 @@ export const FormSell = () => {
           type="submit"
           className="mt-4 cursor-pointer rounded bg-black px-4 py-2 text-white flex flex-row items-center gap-2 justify-center disabled:opacity-50"
         >
-          Buy
+          Sell
         </button>
       </form>
     </Card>

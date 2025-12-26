@@ -4,21 +4,27 @@ import { TTransactionWalletResponse } from "@/types/transaction";
 import { TransactionTableSkeleton } from "./table-skeleton";
 import { TransactionTableCellNotFound } from "./table-cell-not-found";
 import { TransactionTableCell } from "./table-cell";
+import { TableCellFilter } from "./table-cell-filter";
 
 type Props = {
   isLoading: boolean;
   data: TTransactionWalletResponse;
-  headTable: string[];
 };
 
-export const TransactionTablesIndex = ({
-  isLoading,
-  data,
-  headTable,
-}: Props) => {
+export const TransactionTablesIndex = ({ isLoading, data }: Props) => {
   if (isLoading) {
     return <TransactionTableSkeleton />;
   }
+
+  const headTable = [
+    "ID",
+    "Type",
+    "Address",
+    "Amount",
+    "Fee",
+    "Status",
+    "Created At",
+  ];
 
   return (
     <Table>
@@ -28,7 +34,10 @@ export const TransactionTablesIndex = ({
         data.transactions.transactions.length === 0 ? (
           <TransactionTableCellNotFound colspan={headTable.length} />
         ) : (
-          <TransactionTableCell data={data.transactions.transactions} />
+          <>
+            <TableCellFilter />
+            <TransactionTableCell data={data.transactions.transactions} />
+          </>
         )}
       </TableBody>
     </Table>

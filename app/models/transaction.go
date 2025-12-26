@@ -11,11 +11,7 @@ type Transaction struct {
 	Type        string  `db:"type" json:"type"` // "TRANSFER", "BUY", "SELL"
 	Signature   string  `db:"signature" json:"signature"`
 	Status      string  `db:"status" json:"status"`
-}
-
-type TransactionWithType struct {
-	Transaction
-	TypeTx string `db:"type" json:"type"` // "sent" or "received"
+	CreatedAt   string  `db:"created_at" json:"created_at"`
 }
 
 type TransactionFilter struct {
@@ -29,11 +25,11 @@ type TransactionFilter struct {
 }
 
 type TransactionWithTypeResponse struct {
-	Transactions []TransactionWithType `json:"transactions"`
-	Total        int64                 `json:"total"`
-	Page         int                   `json:"page"`
-	Limit        int                   `json:"limit"`
-	TotalPages   int                   `json:"total_pages"`
+	Transactions []Transaction `json:"transactions"`
+	Total        int64         `json:"total"`
+	Page         int           `json:"page"`
+	Limit        int           `json:"limit"`
+	TotalPages   int           `json:"total_pages"`
 }
 
 // Validate and set defaults
@@ -51,7 +47,7 @@ func (f *TransactionFilter) Validate() {
 		f.Type = "all"
 	}
 	// validate type, only allow "all", "send", "received"
-	validTypes := map[string]bool{"all": true, "send": true, "received": true}
+	validTypes := map[string]bool{"all": true, "send": true, "received": true, "buy": true, "sell": true}
 	if !validTypes[f.Type] {
 		f.Type = "all"
 	}

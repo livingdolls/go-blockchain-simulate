@@ -17,28 +17,26 @@ interface IEventHandlers {
 }
 export const useEventWebSocket = (url: string) => {
   const wsRef = useRef<WebSocket | null>(null);
-  const connectingRef = useRef(false); // 🔥 kunci utama
+  const connectingRef = useRef(false);
   const handlersRef = useRef<IEventHandlers>({});
   const subscribedEventsRef = useRef<TEventType[]>([]);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const shouldReconnectRef = useRef(true);
 
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const connect = useCallback(() => {
-    if (wsRef.current || connectingRef.current) {
-      console.log("WS already active / connecting");
+    if (wsRef.current || connectingRef.current || !shouldReconnectRef.current) {
       return;
     }
 
     connectingRef.current = true;
-    console.log("WS connecting...");
 
     const ws = new WebSocket(url);
     wsRef.current = ws;
 
     ws.onopen = () => {
-      console.log("WS connected");
       connectingRef.current = false;
       setConnected(true);
       setError(null);
@@ -57,33 +55,42 @@ export const useEventWebSocket = (url: string) => {
 
     ws.onmessage = (event) => {
       const msg: IWebSocketMessage = JSON.parse(event.data);
-      console.log("WS message received:", msg);
       handlersRef.current[msg.type]?.(msg.data);
     };
 
     ws.onerror = (e) => {
-      console.error("WS error", e);
       setError("WebSocket error");
     };
 
     ws.onclose = () => {
-      console.log("WS closed");
       wsRef.current = null; // 🔥 WAJIB
       connectingRef.current = false; // 🔥 WAJIB
       setConnected(false);
 
-      reconnectTimeoutRef.current = setTimeout(connect, 3000);
+      // 🔥 Hanya reconnect jika component masih mounted
+      if (shouldReconnectRef.current) {
+        reconnectTimeoutRef.current = setTimeout(connect, 3000);
+      }
     };
   }, [url]);
 
   useEffect(() => {
+    shouldReconnectRef.current = true; // 🔥 Set true saat mount
     connect();
 
     return () => {
-      reconnectTimeoutRef.current && clearTimeout(reconnectTimeoutRef.current);
+      shouldReconnectRef.current = false; // 🔥 Set false saat unmount
 
-      wsRef.current?.close();
-      wsRef.current = null;
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+      }
+
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+      }
+
       connectingRef.current = false;
     };
   }, [connect]);

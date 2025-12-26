@@ -2,7 +2,6 @@ package services
 
 import (
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
@@ -304,18 +303,34 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 
 	//broadcast new block mined
 	if s.publisherWS != nil {
-		log.Printf("Publishing new block mined: %+v", newBlock)
 		s.publisherWS.Publish(entity.EventTypeBlockMined, newBlock)
 	}
 
 	// Broadcast market update
 	if s.publisherWS != nil && marketState.ID != 0 {
-		log.Printf("Publishing market update: %+v", marketState)
 		s.publisherWS.Publish(entity.EventMarketUpdate, marketState)
 	}
 
 	// load transactions
 	newBlock.Transactions, _ = s.txRepo.GetTransactionsByBlockID(blockID)
+
+	// send notifycation to websocket
+	if s.publisherWS != nil && len(newBlock.Transactions) > 0 {
+		for _, tx := range newBlock.Transactions {
+			payload := tx
+
+			fmt.Printf("PUBLISH NOTIFICATIONS")
+
+			if tx.FromAddress != "MINER_ACCOUNT" {
+				s.publisherWS.PublishToAddress(strings.ToLower(tx.FromAddress), entity.EventTransactionUpdate, payload)
+			}
+
+			if tx.ToAddress != "MINER_ACCOUNT" {
+				s.publisherWS.PublishToAddress(strings.ToLower(tx.ToAddress), entity.EventTransactionUpdate, payload)
+			}
+		}
+	}
+
 	fmt.Printf("\n" + strings.Repeat("=", 60) + "\n")
 	fmt.Printf("✅ BLOCK #%d SUCCESSFULLY MINED\n", newBlock.BlockNumber)
 	fmt.Printf(strings.Repeat("=", 60) + "\n\n")

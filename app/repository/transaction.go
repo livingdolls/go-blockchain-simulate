@@ -222,9 +222,13 @@ func (r *transactionRepository) GetTransactionByAddress(filter models.Transactio
 	case "send":
 		whereCondition = append(whereCondition, "LOWER(from_address) = LOWER(?)")
 		args = append(args, filter.Address)
-	case "receive":
+	case "received":
 		whereCondition = append(whereCondition, "LOWER(to_address) = LOWER(?)")
 		args = append(args, filter.Address)
+	case "buy":
+		whereCondition = append(whereCondition, "LOWER(from_address) = 'MINER_ACCOUNT'")
+	case "sell":
+		whereCondition = append(whereCondition, "LOWER(to_address) = 'MINER_ACCOUNT'")
 	}
 
 	// status filter
@@ -260,11 +264,16 @@ func (r *transactionRepository) GetTransactionByAddress(filter models.Transactio
 			WHEN to_address = 'MINER_ACCOUNT' THEN 'SELLER SYSTEM'
 			ELSE to_address
 		END AS to_address,
-		amount, fee, type, signature, status, 
+		amount, fee, signature, status, 
 		CASE 
-			WHEN LOWER(from_address) = LOWER(?) THEN 'send' 
-			ELSE 'received' 
-		END AS type
+			WHEN LOWER(type) = 'transfer' THEN
+				CASE
+					WHEN LOWER(from_address) = LOWER(?) 
+					THEN 'send'
+					ELSE 'received'
+				END
+			ELSE LOWER(type)
+		END AS type, created_at
 		FROM transactions
 		WHERE %s
 		ORDER BY %s %s

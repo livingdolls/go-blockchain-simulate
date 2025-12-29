@@ -32,3 +32,8 @@ CREATE TABLE candles (
 
     UNIQUE KEY uniq_candle (interval_type, start_time)
 );
+
+ALTER TABLE candles
+ADD INDEX idx_candle_interval (interval_type),
+ADD INDEX idx_candle_start_time (start_time),
+ADD INDEX idx_candle_interval_time (interval_type, start_time);

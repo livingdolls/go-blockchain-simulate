@@ -75,6 +75,10 @@ func main() {
 
 	marketHandler := handler.NewMarketHandler(marketService)
 
+	candleRepo := repository.NewCandleRepository(db.GetDB())
+	candleService := services.NewCandleService(candleRepo)
+	candleHandler := handler.NewCandleHandler(candleService)
+
 	// start worker
 	generateBlockWorker := worker.NewGenerateBlockWorker(blockService)
 	generateBlockWorker.Start(10 * time.Second)
@@ -127,6 +131,12 @@ func main() {
 	r.GET("/reward/info", rewardHandler.GetRewardInfo)
 	r.GET("/ws/market", hubHandler)
 	r.GET("/market", marketHandler.GetMarketEngineState)
+
+	candleGroup := r.Group("/candles")
+	{
+		candleGroup.GET("", candleHandler.GetCandle)
+		candleGroup.GET("/range", candleHandler.GetCandleFrom)
+	}
 
 	protected := r.Group("/profile")
 	protected.Use(handler.JWTMiddleware(jwt))

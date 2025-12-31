@@ -16,7 +16,8 @@ type Hub struct {
 	unregister    chan *ClientWS
 	broadcast     chan *Message
 
-	mu sync.RWMutex
+	stopChan chan struct{}
+	mu       sync.RWMutex
 }
 
 func NewHub() *Hub {
@@ -27,6 +28,7 @@ func NewHub() *Hub {
 		register:      make(chan *ClientWS),
 		unregister:    make(chan *ClientWS),
 		broadcast:     make(chan *Message, 256),
+		stopChan:      make(chan struct{}),
 	}
 }
 
@@ -68,6 +70,9 @@ func (h *Hub) Run() {
 			log.Printf("Client unregistered user=%s total=%d", c.address, len(h.clients))
 		case msg := <-h.broadcast:
 			h.broadcastMessageToSubscribers(msg)
+		case <-h.stopChan:
+			h.closeAllConnections()
+			return
 		}
 	}
 }
@@ -129,6 +134,8 @@ func (h *Hub) BroadCast(msgType entity.MessageType, data any) {
 
 	select {
 	case h.broadcast <- message:
+	case <-h.stopChan:
+		log.Println("Hub is closing, broadcast message dropped")
 	default:
 		log.Println("WebSocket broadcast channel full, dropping message")
 	}
@@ -155,10 +162,37 @@ func (h *Hub) SendToAddress(address string, msgType entity.MessageType, data any
 				select {
 				case client.send <- payload:
 					log.Printf("Message sent to client at address %s", address)
+				case <-h.stopChan:
+					log.Println("Hub is closing, message dropped")
 				default:
 					log.Println("WebSocket client send channel full, dropping message")
 				}
 			}
 		}
 	}
+}
+
+func (h *Hub) closeAllConnections() {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	log.Printf("Closing all %d client connections...\n", len(h.clients))
+
+	for client := range h.clients {
+		close(client.send)
+		_ = client.conn.Close()
+	}
+
+	// clear maps
+	h.clients = make(map[*ClientWS]bool)
+	h.address = make(map[string]map[*ClientWS]bool)
+	h.subscriptions = make(map[*ClientWS]map[entity.MessageType]bool)
+
+	log.Println("All client connections closed.")
+}
+
+func (h *Hub) Close() {
+	log.Println("shutting down websocket hub...")
+	close(h.stopChan)
+	log.Println("websocket hub stopped")
 }

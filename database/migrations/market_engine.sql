@@ -37,3 +37,6 @@ ALTER TABLE candles
 ADD INDEX idx_candle_interval (interval_type),
 ADD INDEX idx_candle_start_time (start_time),
 ADD INDEX idx_candle_interval_time (interval_type, start_time);
+
+ALTER TABLE candles
+MODIFY COLUMN start_time BIGINT NOT NULL;

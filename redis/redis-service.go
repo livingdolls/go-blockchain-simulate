@@ -2,6 +2,7 @@ package redis
 
 import (
 	"context"
+	"errors"
 	"log"
 	"time"
 
@@ -14,6 +15,8 @@ type MemoryAdapter interface {
 	Set(ctx context.Context, key string, value []byte, ttl time.Duration)
 	Del(ctx context.Context, key string)
 	InvalidatePattern(ctx context.Context, pattern string) error
+	Publish(ctx context.Context, channel string, message []byte) error
+	Subscribe(ctx context.Context, channel string, callback func([]byte) error) error
 }
 
 type cacheItem struct {
@@ -117,5 +120,29 @@ func (m *memoryAdapter) Set(ctx context.Context, key string, value []byte, ttl t
 	// set to redis
 	if m.redis != nil {
 		_ = m.redis.Set(ctx, key, value, ttl).Err()
+	}
+}
+
+func (r *memoryAdapter) Publish(ctx context.Context, channel string, message []byte) error {
+	result := r.redis.Publish(ctx, channel, message)
+	return result.Err()
+}
+
+func (r *memoryAdapter) Subscribe(ctx context.Context, channelName string, callback func([]byte) error) error {
+	sub := r.redis.Subscribe(ctx, channelName)
+	defer sub.Close()
+
+	for {
+		msg, err := sub.ReceiveMessage(ctx)
+		if err != nil {
+			if errors.Is(err, context.Canceled) {
+				return nil
+			}
+			return err
+		}
+
+		if err := callback([]byte(msg.Payload)); err != nil {
+			return err
+		}
 	}
 }

@@ -31,16 +31,18 @@ type blockService struct {
 	txRepo      repository.TransactionRepository
 	userRepo    repository.UserRepository
 	ledgerRepo  repository.LedgerRepository
+	candle      CandleService
 	market      MarketEngineService
 	publisherWS *publisher.PublisherWS
 }
 
-func NewBlockService(blockRepo repository.BlockRepository, txRepo repository.TransactionRepository, userRepo repository.UserRepository, ledgerRepo repository.LedgerRepository, market MarketEngineService, publisherWS *publisher.PublisherWS) BlockService {
+func NewBlockService(blockRepo repository.BlockRepository, txRepo repository.TransactionRepository, userRepo repository.UserRepository, ledgerRepo repository.LedgerRepository, candle CandleService, market MarketEngineService, publisherWS *publisher.PublisherWS) BlockService {
 	return &blockService{
 		blockRepo:   blockRepo,
 		txRepo:      txRepo,
 		userRepo:    userRepo,
 		ledgerRepo:  ledgerRepo,
+		candle:      candle,
 		market:      market,
 		publisherWS: publisherWS,
 	}

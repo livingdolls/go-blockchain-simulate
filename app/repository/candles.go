@@ -16,6 +16,9 @@ type CandlesRepository interface {
 	UpdateCandleWithTx(tx *sqlx.Tx, candle models.Candle) error
 	UpsertCandleWithTx(tx *sqlx.Tx, candle models.Candle) error
 	DeleteOldCandlesWithTx(tx *sqlx.Tx, intervalType string, beforeTime int64) error
+	GetTicksRange(startTime, endTime int64) ([]models.MarketTick, error)
+	UpsertCandleOnDuplicateWithTx(tx *sqlx.Tx, candle models.Candle) error
+	CandleBeginTx() (*sqlx.Tx, error)
 }
 
 type candleRepository struct {
@@ -162,4 +165,51 @@ func (c *candleRepository) UpsertCandleWithTx(tx *sqlx.Tx, candle models.Candle)
 
 	_, err = c.InsertCandleWithTx(tx, candle)
 	return err
+}
+
+func (c *candleRepository) UpsertCandleOnDuplicateWithTx(tx *sqlx.Tx, candle models.Candle) error {
+	_, err := tx.Exec(
+		`INSERT INTO candles (interval_type, start_time, open_price, high_price, low_price, close_price, volume) VALUES (?,?,?,?,?,?,?)
+		ON DUPLICATE KEY UPDATE 
+			open_price = VALUES(open_price),
+			high_price = VALUES(high_price),
+			low_price = VALUES(low_price),
+			close_price = VALUES(close_price),
+			volume = VALUES(volume)`,
+		candle.IntervalType,
+		candle.StartTime,
+		candle.OpenPrice,
+		candle.HighPrice,
+		candle.LowPrice,
+		candle.ClosePrice,
+		candle.Volume,
+	)
+
+	return err
+}
+
+func (c *candleRepository) GetTicksRange(startTime, endTime int64) ([]models.MarketTick, error) {
+	var ticks []models.MarketTick
+
+	err := c.db.Select(&ticks,
+		`SELECT id, block_id, price, buy_volume, sell_volume, tx_count, UNIX_TIMESTAMP(created_at) AS created_at FROM market_ticks
+		WHERE created_at >= FROM_UNIXTIME(?) AND created_at < FROM_UNIXTIME(?)
+		ORDER BY created_at ASC`,
+		startTime,
+		endTime,
+	)
+
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return nil, err
+	}
+
+	if ticks == nil {
+		ticks = []models.MarketTick{}
+	}
+
+	return ticks, err
+}
+
+func (c *candleRepository) CandleBeginTx() (*sqlx.Tx, error) {
+	return c.db.Beginx()
 }

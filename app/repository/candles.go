@@ -13,11 +13,12 @@ type CandlesRepository interface {
 	GetCandleByInterval(intervalType string, limit int) ([]models.Candle, error)
 	GetCandleByIntervalAndTime(intervalType string, startTime int64, limit int) ([]models.Candle, error)
 	GetCandleByIntervalAndStartTime(intervalType string, startTime int64) (models.Candle, error)
+	GetLatestCandleByInterval(intervalType string) (models.Candle, error)
 	UpdateCandleWithTx(tx *sqlx.Tx, candle models.Candle) error
 	UpsertCandleWithTx(tx *sqlx.Tx, candle models.Candle) error
 	DeleteOldCandlesWithTx(tx *sqlx.Tx, intervalType string, beforeTime int64) error
 	GetTicksRange(startTime, endTime int64) ([]models.MarketTick, error)
-	UpsertCandleOnDuplicateWithTx(tx *sqlx.Tx, candle models.Candle) error
+	UpsertCandleOnDuplicateWithTx(tx *sqlx.Tx, candle models.Candle) (int64, error)
 	CandleBeginTx() (*sqlx.Tx, error)
 }
 
@@ -167,8 +168,8 @@ func (c *candleRepository) UpsertCandleWithTx(tx *sqlx.Tx, candle models.Candle)
 	return err
 }
 
-func (c *candleRepository) UpsertCandleOnDuplicateWithTx(tx *sqlx.Tx, candle models.Candle) error {
-	_, err := tx.Exec(
+func (c *candleRepository) UpsertCandleOnDuplicateWithTx(tx *sqlx.Tx, candle models.Candle) (int64, error) {
+	res, err := tx.Exec(
 		`INSERT INTO candles (interval_type, start_time, open_price, high_price, low_price, close_price, volume) VALUES (?,?,?,?,?,?,?)
 		ON DUPLICATE KEY UPDATE 
 			open_price = VALUES(open_price),
@@ -185,7 +186,12 @@ func (c *candleRepository) UpsertCandleOnDuplicateWithTx(tx *sqlx.Tx, candle mod
 		candle.Volume,
 	)
 
-	return err
+	var rowsAffected int64 = 0
+	if err == nil {
+		rowsAffected, err = res.RowsAffected()
+	}
+
+	return rowsAffected, err
 }
 
 func (c *candleRepository) GetTicksRange(startTime, endTime int64) ([]models.MarketTick, error) {
@@ -212,4 +218,18 @@ func (c *candleRepository) GetTicksRange(startTime, endTime int64) ([]models.Mar
 
 func (c *candleRepository) CandleBeginTx() (*sqlx.Tx, error) {
 	return c.db.Beginx()
+}
+
+func (c *candleRepository) GetLatestCandleByInterval(intervalType string) (models.Candle, error) {
+	var candle models.Candle
+
+	err := c.db.Get(&candle,
+		`SELECT id, interval_type, start_time, open_price, high_price, low_price, close_price, volume FROM candles 
+		WHERE interval_type = ? 
+		ORDER BY start_time DESC 
+		LIMIT 1`,
+		intervalType,
+	)
+
+	return candle, err
 }

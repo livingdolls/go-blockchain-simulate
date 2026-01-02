@@ -15,6 +15,7 @@ type CandleService interface {
 	GetCandles(intervalType string, limit int) ([]models.Candle, error)
 	GetCandlesFrom(intervalType string, startTime int64, limit int) ([]models.Candle, error)
 	GetCandle(intervalType string, startTime int64) (models.Candle, error)
+	GetLatestCandleByInterval(intervalType string) (models.Candle, error)
 	UpsertCandleWithTx(tx *sqlx.Tx, candle models.Candle) error
 	DeleteOldCandlesWithTx(tx *sqlx.Tx, intervalType string, beforeTime int64) error
 	AggregateCandle(ctx context.Context, interval string, timestamp int64) error
@@ -128,16 +129,33 @@ func (c *candleService) AggregateCandle(ctx context.Context, interval string, ti
 		}
 	}()
 
-	if err = c.repo.UpsertCandleOnDuplicateWithTx(tx, candle); err != nil {
+	rowsAffected, err := c.repo.UpsertCandleOnDuplicateWithTx(tx, candle)
+
+	if err != nil {
 		return err
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-
-	if err := c.stream.PublishCandle(ctx, candle); err != nil {
-		log.Printf("PublishCandle error: %v\n", err)
+	if err := tx.Commit(); err != nil {
+		return err
 	}
 
-	return tx.Commit()
+	if rowsAffected > 0 {
+		log.Printf("Aggregated candle for interval=%s, start=%d\n", interval, start)
+		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+
+		if err := c.stream.PublishCandle(ctx, candle); err != nil {
+			log.Printf("PublishCandle error: %v\n", err)
+		} else {
+			log.Printf("Published candle for interval=%s, start=%d\n", interval, start)
+		}
+	} else {
+		log.Printf("Candle for interval=%s, start=%d already up-to-date, skipped publish\n", interval, start)
+	}
+
+	return nil
+}
+
+func (c *candleService) GetLatestCandleByInterval(intervalType string) (models.Candle, error) {
+	return c.repo.GetLatestCandleByInterval(intervalType)
 }

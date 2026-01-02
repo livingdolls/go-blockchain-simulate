@@ -73,7 +73,7 @@ func main() {
 	candleRepo := repository.NewCandleRepository(db.GetDB())
 	candleService := services.NewCandleService(candleRepo, candleStreamServices)
 	candleHandler := handler.NewCandleHandler(candleService)
-	candleStreamHandler := handler.NewCandleStreamHandler(candleStreamServices)
+	candleStreamHandler := handler.NewCandleStreamHandler(candleStreamServices, candleService)
 
 	blockRepo := repository.NewBlockRepository(db.GetDB())
 	blockService := services.NewBlockService(blockRepo, txRepo, userRepo, ledgerRepo, candleService, marketService, publisherWS)

@@ -12,11 +12,6 @@ import (
 	"github.com/livingdolls/go-blockchain-simulate/utils"
 )
 
-type broadcastPrice struct {
-	Type entity.MessageType  `json:"type"`
-	Data models.MarketEngine `json:"data"`
-}
-
 type BlockService interface {
 	GenerateBlock() (models.Block, error)
 	GetBlocks(limit, offset int) ([]models.Block, error)
@@ -320,9 +315,6 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 	if s.publisherWS != nil && len(newBlock.Transactions) > 0 {
 		for _, tx := range newBlock.Transactions {
 			payload := tx
-
-			fmt.Printf("PUBLISH NOTIFICATIONS")
-
 			if tx.FromAddress != "MINER_ACCOUNT" {
 				s.publisherWS.PublishToAddress(strings.ToLower(tx.FromAddress), entity.EventTransactionUpdate, payload)
 			}

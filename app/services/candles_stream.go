@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"sync/atomic"
 
 	"github.com/livingdolls/go-blockchain-simulate/app/models"
 	"github.com/livingdolls/go-blockchain-simulate/redis"
@@ -17,7 +18,8 @@ type CandleStreamService interface {
 }
 
 type candleStreamService struct {
-	redis redis.MemoryAdapter
+	redis           redis.MemoryAdapter
+	subscriberCount atomic.Int32
 }
 
 func NewCandleStreamService(redisAdapter redis.MemoryAdapter) CandleStreamService {
@@ -59,13 +61,21 @@ func (c *candleStreamService) PublishCandle(ctx context.Context, candle models.C
 		return err
 	}
 
-	log.Printf("Published candle to channel=%s\n", channel)
 	return nil
 }
 
 // SubscribeCandle implements [CandleStreamService].
 func (c *candleStreamService) SubscribeCandle(ctx context.Context, interval string, callback func(models.Candle) error) error {
 	channel := fmt.Sprintf("candles:%s", interval)
+
+	// increment counter
+	count := c.subscriberCount.Add(1)
+	log.Printf("CandleStreamService SubscribeCandle: New subscriber to interval=%s, total subscribers=%d\n", interval, count)
+
+	defer func() {
+		count := c.subscriberCount.Add(-1)
+		log.Printf("CandleStreamService SubscribeCandle: Subscriber left interval=%s, total subscribers=%d\n", interval, count)
+	}()
 
 	return c.redis.Subscribe(ctx, channel, func(message []byte) error {
 		var candle models.Candle
@@ -75,7 +85,6 @@ func (c *candleStreamService) SubscribeCandle(ctx context.Context, interval stri
 			return err
 		}
 
-		log.Printf("Received candle update: %s\n", interval)
 		return callback(candle)
 	})
 }

@@ -17,11 +17,13 @@ import (
 
 type CandleStreamHandler struct {
 	streamService services.CandleStreamService
+	candleService services.CandleService
 }
 
-func NewCandleStreamHandler(streamService services.CandleStreamService) *CandleStreamHandler {
+func NewCandleStreamHandler(streamService services.CandleStreamService, candleService services.CandleService) *CandleStreamHandler {
 	return &CandleStreamHandler{
 		streamService: streamService,
+		candleService: candleService,
 	}
 }
 
@@ -51,26 +53,66 @@ func (h *CandleStreamHandler) StreamCandles(c *gin.Context) {
 	// listen untuk client
 	log.Printf("SSE connected for interval: %s\n", interval)
 
+	// write initial candle
+	go func() {
+		latestCandle, err := h.candleService.GetLatestCandleByInterval(interval)
+		if err == nil {
+			data, err := json.Marshal(latestCandle)
+
+			if err == nil {
+				fmt.Fprintf(w, "data: %s\n\n", string(data))
+				flusher.Flush()
+				log.Printf("Initial candle sent for interval: %s\n", interval)
+			}
+		}
+	}()
+
 	errChan := make(chan error, 1)
+	doneChan := make(chan struct{})
 
 	// subscribe to candle stream
 	go func() {
-		err := h.streamService.SubscribeCandle(ctx, interval, func(c models.Candle) error {
-			data, err := json.Marshal(c)
+		defer close(doneChan)
+		err := h.streamService.SubscribeCandle(ctx, interval, func(candle models.Candle) error {
+			// check context
+
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
+			}
+
+			data, err := json.Marshal(candle)
 
 			if err != nil {
 				log.Printf("Marshal candle error: %v\n", err)
 				return err
 			}
 
-			fmt.Fprintf(w, "data: %s\n\n", string(data))
-			flusher.Flush()
+			// recover panic
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("Recovered in candle stream SSE: %v", r)
+					cancel()
+				}
+			}()
 
+			// safe write
+
+			if _, err := fmt.Fprintf(w, "data: %s\n\n", string(data)); err != nil {
+				log.Printf("Write to SSE error: %v\n", err)
+				return err
+			}
+
+			flusher.Flush()
 			return nil
 		})
 
-		if err != nil {
-			errChan <- err
+		if err != nil && err != context.Canceled {
+			select {
+			case errChan <- err:
+			default:
+			}
 		}
 	}()
 
@@ -83,6 +125,9 @@ func (h *CandleStreamHandler) StreamCandles(c *gin.Context) {
 		log.Printf("SSE error for interval %s: %v\n", interval, err)
 		cancel()
 	}
+
+	<-doneChan
+	log.Printf("SSE routine ended for interval: %s\n", interval)
 }
 
 func (h *CandleStreamHandler) Ping(c *gin.Context) {

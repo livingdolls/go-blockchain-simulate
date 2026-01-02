@@ -1,9 +1,19 @@
-"use client"
+"use client";
 
-import * as React from "react"
-import { Area, AreaChart, CartesianGrid, XAxis } from "recharts"
+import * as React from "react";
+import {
+  ComposedChart,
+  Bar,
+  Line,
+  CartesianGrid,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from "recharts";
 
-import { useIsMobile } from "@/hooks/use-mobile"
+import { useIsMobile } from "@/hooks/use-mobile";
 import {
   Card,
   CardAction,
@@ -11,281 +21,315 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card"
+} from "@/components/ui/card";
 import {
   ChartConfig,
   ChartContainer,
   ChartTooltip,
   ChartTooltipContent,
-} from "@/components/ui/chart"
+} from "@/components/ui/chart";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select"
-import {
-  ToggleGroup,
-  ToggleGroupItem,
-} from "@/components/ui/toggle-group"
+} from "@/components/ui/select";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { UseMarketSSE } from "@/hooks/use-market-sse";
+import { TInterval } from "@/types/candles";
 
-export const description = "An interactive area chart"
+export const description = "An interactive OHLCV candlestick chart";
 
-const chartData = [
-  { date: "2024-04-01", desktop: 222, mobile: 150 },
-  { date: "2024-04-02", desktop: 97, mobile: 180 },
-  { date: "2024-04-03", desktop: 167, mobile: 120 },
-  { date: "2024-04-04", desktop: 242, mobile: 260 },
-  { date: "2024-04-05", desktop: 373, mobile: 290 },
-  { date: "2024-04-06", desktop: 301, mobile: 340 },
-  { date: "2024-04-07", desktop: 245, mobile: 180 },
-  { date: "2024-04-08", desktop: 409, mobile: 320 },
-  { date: "2024-04-09", desktop: 59, mobile: 110 },
-  { date: "2024-04-10", desktop: 261, mobile: 190 },
-  { date: "2024-04-11", desktop: 327, mobile: 350 },
-  { date: "2024-04-12", desktop: 292, mobile: 210 },
-  { date: "2024-04-13", desktop: 342, mobile: 380 },
-  { date: "2024-04-14", desktop: 137, mobile: 220 },
-  { date: "2024-04-15", desktop: 120, mobile: 170 },
-  { date: "2024-04-16", desktop: 138, mobile: 190 },
-  { date: "2024-04-17", desktop: 446, mobile: 360 },
-  { date: "2024-04-18", desktop: 364, mobile: 410 },
-  { date: "2024-04-19", desktop: 243, mobile: 180 },
-  { date: "2024-04-20", desktop: 89, mobile: 150 },
-  { date: "2024-04-21", desktop: 137, mobile: 200 },
-  { date: "2024-04-22", desktop: 224, mobile: 170 },
-  { date: "2024-04-23", desktop: 138, mobile: 230 },
-  { date: "2024-04-24", desktop: 387, mobile: 290 },
-  { date: "2024-04-25", desktop: 215, mobile: 250 },
-  { date: "2024-04-26", desktop: 75, mobile: 130 },
-  { date: "2024-04-27", desktop: 383, mobile: 420 },
-  { date: "2024-04-28", desktop: 122, mobile: 180 },
-  { date: "2024-04-29", desktop: 315, mobile: 240 },
-  { date: "2024-04-30", desktop: 454, mobile: 380 },
-  { date: "2024-05-01", desktop: 165, mobile: 220 },
-  { date: "2024-05-02", desktop: 293, mobile: 310 },
-  { date: "2024-05-03", desktop: 247, mobile: 190 },
-  { date: "2024-05-04", desktop: 385, mobile: 420 },
-  { date: "2024-05-05", desktop: 481, mobile: 390 },
-  { date: "2024-05-06", desktop: 498, mobile: 520 },
-  { date: "2024-05-07", desktop: 388, mobile: 300 },
-  { date: "2024-05-08", desktop: 149, mobile: 210 },
-  { date: "2024-05-09", desktop: 227, mobile: 180 },
-  { date: "2024-05-10", desktop: 293, mobile: 330 },
-  { date: "2024-05-11", desktop: 335, mobile: 270 },
-  { date: "2024-05-12", desktop: 197, mobile: 240 },
-  { date: "2024-05-13", desktop: 197, mobile: 160 },
-  { date: "2024-05-14", desktop: 448, mobile: 490 },
-  { date: "2024-05-15", desktop: 473, mobile: 380 },
-  { date: "2024-05-16", desktop: 338, mobile: 400 },
-  { date: "2024-05-17", desktop: 499, mobile: 420 },
-  { date: "2024-05-18", desktop: 315, mobile: 350 },
-  { date: "2024-05-19", desktop: 235, mobile: 180 },
-  { date: "2024-05-20", desktop: 177, mobile: 230 },
-  { date: "2024-05-21", desktop: 82, mobile: 140 },
-  { date: "2024-05-22", desktop: 81, mobile: 120 },
-  { date: "2024-05-23", desktop: 252, mobile: 290 },
-  { date: "2024-05-24", desktop: 294, mobile: 220 },
-  { date: "2024-05-25", desktop: 201, mobile: 250 },
-  { date: "2024-05-26", desktop: 213, mobile: 170 },
-  { date: "2024-05-27", desktop: 420, mobile: 460 },
-  { date: "2024-05-28", desktop: 233, mobile: 190 },
-  { date: "2024-05-29", desktop: 78, mobile: 130 },
-  { date: "2024-05-30", desktop: 340, mobile: 280 },
-  { date: "2024-05-31", desktop: 178, mobile: 230 },
-  { date: "2024-06-01", desktop: 178, mobile: 200 },
-  { date: "2024-06-02", desktop: 470, mobile: 410 },
-  { date: "2024-06-03", desktop: 103, mobile: 160 },
-  { date: "2024-06-04", desktop: 439, mobile: 380 },
-  { date: "2024-06-05", desktop: 88, mobile: 140 },
-  { date: "2024-06-06", desktop: 294, mobile: 250 },
-  { date: "2024-06-07", desktop: 323, mobile: 370 },
-  { date: "2024-06-08", desktop: 385, mobile: 320 },
-  { date: "2024-06-09", desktop: 438, mobile: 480 },
-  { date: "2024-06-10", desktop: 155, mobile: 200 },
-  { date: "2024-06-11", desktop: 92, mobile: 150 },
-  { date: "2024-06-12", desktop: 492, mobile: 420 },
-  { date: "2024-06-13", desktop: 81, mobile: 130 },
-  { date: "2024-06-14", desktop: 426, mobile: 380 },
-  { date: "2024-06-15", desktop: 307, mobile: 350 },
-  { date: "2024-06-16", desktop: 371, mobile: 310 },
-  { date: "2024-06-17", desktop: 475, mobile: 520 },
-  { date: "2024-06-18", desktop: 107, mobile: 170 },
-  { date: "2024-06-19", desktop: 341, mobile: 290 },
-  { date: "2024-06-20", desktop: 408, mobile: 450 },
-  { date: "2024-06-21", desktop: 169, mobile: 210 },
-  { date: "2024-06-22", desktop: 317, mobile: 270 },
-  { date: "2024-06-23", desktop: 480, mobile: 530 },
-  { date: "2024-06-24", desktop: 132, mobile: 180 },
-  { date: "2024-06-25", desktop: 141, mobile: 190 },
-  { date: "2024-06-26", desktop: 434, mobile: 380 },
-  { date: "2024-06-27", desktop: 448, mobile: 490 },
-  { date: "2024-06-28", desktop: 149, mobile: 200 },
-  { date: "2024-06-29", desktop: 103, mobile: 160 },
-  { date: "2024-06-30", desktop: 446, mobile: 400 },
-]
+interface CandleData {
+  id: number;
+  interval_type: string;
+  start_time: number;
+  open_price: number;
+  high_price: number;
+  low_price: number;
+  close_price: number;
+  volume: number;
+}
 
 const chartConfig = {
-  visitors: {
-    label: "Visitors",
-  },
-  desktop: {
-    label: "Desktop",
+  open: {
+    label: "Open",
     color: "var(--primary)",
   },
-  mobile: {
-    label: "Mobile",
-    color: "var(--primary)",
+  high: {
+    label: "High",
+    color: "#10b981",
   },
-} satisfies ChartConfig
+  low: {
+    label: "Low",
+    color: "#ef4444",
+  },
+  close: {
+    label: "Close",
+    color: "#3b82f6",
+  },
+  volume: {
+    label: "Volume",
+    color: "#8b5cf6",
+  },
+} satisfies ChartConfig;
 
 export function ChartAreaInteractive() {
-  const isMobile = useIsMobile()
-  const [timeRange, setTimeRange] = React.useState("90d")
+  const { olhcData, isConnected, interval, changeInterval, isLoading, error } =
+    UseMarketSSE();
 
-  React.useEffect(() => {
-    if (isMobile) {
-      setTimeRange("7d")
-    }
-  }, [isMobile])
+  // Format data untuk chart
+  const chartData = React.useMemo(() => {
+    return (olhcData || []).map((candle) => ({
+      time: new Date(candle.start_time * 1000).toLocaleTimeString("en-US", {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+      timestamp: candle.start_time,
+      open: parseFloat(candle.open_price.toFixed(2)),
+      high: parseFloat(candle.high_price.toFixed(2)),
+      low: parseFloat(candle.low_price.toFixed(2)),
+      close: parseFloat(candle.close_price.toFixed(2)),
+      volume: parseFloat(candle.volume.toFixed(2)),
+    }));
+  }, [olhcData]);
 
-  const filteredData = chartData.filter((item) => {
-    const date = new Date(item.date)
-    const referenceDate = new Date("2024-06-30")
-    let daysToSubtract = 90
-    if (timeRange === "30d") {
-      daysToSubtract = 30
-    } else if (timeRange === "7d") {
-      daysToSubtract = 7
-    }
-    const startDate = new Date(referenceDate)
-    startDate.setDate(startDate.getDate() - daysToSubtract)
-    return date >= startDate
-  })
+  // Get latest candle stats
+  const latestCandle = React.useMemo(() => {
+    if (chartData.length === 0) return null;
+    return chartData[chartData.length - 1];
+  }, [chartData]);
 
   return (
     <Card className="@container/card">
       <CardHeader>
-        <CardTitle>Total Visitors</CardTitle>
-        <CardDescription>
-          <span className="hidden @[540px]/card:block">
-            Total for the last 3 months
-          </span>
-          <span className="@[540px]/card:hidden">Last 3 months</span>
-        </CardDescription>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle>Candlestick Chart ({interval})</CardTitle>
+            <CardDescription>
+              <span className="hidden @[540px]/card:block">
+                Real-time OHLCV data
+              </span>
+              <span className="@[540px]/card:hidden">OHLCV Data</span>
+            </CardDescription>
+          </div>
+          <div className="flex items-center gap-2">
+            <span
+              className={`inline-block w-2 h-2 rounded-full ${
+                isConnected ? "bg-green-500" : "bg-red-500"
+              }`}
+            />
+            <span className="text-sm text-gray-500">
+              {isConnected ? "Live" : "Offline"}
+            </span>
+          </div>
+        </div>
         <CardAction>
-          <ToggleGroup
-            type="single"
-            value={timeRange}
-            onValueChange={setTimeRange}
-            variant="outline"
-            className="hidden *:data-[slot=toggle-group-item]:!px-4 @[767px]/card:flex"
-          >
-            <ToggleGroupItem value="90d">Last 3 months</ToggleGroupItem>
-            <ToggleGroupItem value="30d">Last 30 days</ToggleGroupItem>
-            <ToggleGroupItem value="7d">Last 7 days</ToggleGroupItem>
-          </ToggleGroup>
-          <Select value={timeRange} onValueChange={setTimeRange}>
+          <Select value={interval} onValueChange={changeInterval}>
             <SelectTrigger
-              className="flex w-40 **:data-[slot=select-value]:block **:data-[slot=select-value]:truncate @[767px]/card:hidden"
+              className="flex w-32 **:data-[slot=select-value]:block **:data-[slot=select-value]:truncate"
               size="sm"
-              aria-label="Select a value"
             >
-              <SelectValue placeholder="Last 3 months" />
+              <SelectValue placeholder="Select interval" />
             </SelectTrigger>
             <SelectContent className="rounded-xl">
-              <SelectItem value="90d" className="rounded-lg">
-                Last 3 months
-              </SelectItem>
-              <SelectItem value="30d" className="rounded-lg">
-                Last 30 days
-              </SelectItem>
-              <SelectItem value="7d" className="rounded-lg">
-                Last 7 days
-              </SelectItem>
+              {TInterval.map((value) => (
+                <SelectItem key={value} value={value} className="rounded-lg">
+                  {value}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </CardAction>
       </CardHeader>
+
+      {/* Latest Candle Stats */}
+      {latestCandle && (
+        <div className="px-6 pt-4">
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-5 mb-4">
+            <div className="bg-gray-50 dark:bg-gray-900 p-3 rounded-lg">
+              <p className="text-xs font-medium text-gray-600 dark:text-gray-400">
+                Open
+              </p>
+              <p className="text-lg font-bold text-gray-900 dark:text-gray-100">
+                ${latestCandle.open.toFixed(4)}
+              </p>
+            </div>
+            <div className="bg-green-50 dark:bg-green-900/20 p-3 rounded-lg">
+              <p className="text-xs font-medium text-green-600 dark:text-green-400">
+                High
+              </p>
+              <p className="text-lg font-bold text-green-600 dark:text-green-400">
+                ${latestCandle.high.toFixed(4)}
+              </p>
+            </div>
+            <div className="bg-red-50 dark:bg-red-900/20 p-3 rounded-lg">
+              <p className="text-xs font-medium text-red-600 dark:text-red-400">
+                Low
+              </p>
+              <p className="text-lg font-bold text-red-600 dark:text-red-400">
+                ${latestCandle.low.toFixed(4)}
+              </p>
+            </div>
+            <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg">
+              <p className="text-xs font-medium text-blue-600 dark:text-blue-400">
+                Close
+              </p>
+              <p className="text-lg font-bold text-blue-600 dark:text-blue-400">
+                ${latestCandle.close.toFixed(4)}
+              </p>
+            </div>
+            <div className="bg-purple-50 dark:bg-purple-900/20 p-3 rounded-lg">
+              <p className="text-xs font-medium text-purple-600 dark:text-purple-400">
+                Volume
+              </p>
+              <p className="text-lg font-bold text-purple-600 dark:text-purple-400">
+                {latestCandle.volume.toFixed(2)}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <CardContent className="px-2 pt-4 sm:px-6 sm:pt-6">
-        <ChartContainer
-          config={chartConfig}
-          className="aspect-auto h-[250px] w-full"
-        >
-          <AreaChart data={filteredData}>
-            <defs>
-              <linearGradient id="fillDesktop" x1="0" y1="0" x2="0" y2="1">
-                <stop
-                  offset="5%"
-                  stopColor="var(--color-desktop)"
-                  stopOpacity={1.0}
-                />
-                <stop
-                  offset="95%"
-                  stopColor="var(--color-desktop)"
-                  stopOpacity={0.1}
-                />
-              </linearGradient>
-              <linearGradient id="fillMobile" x1="0" y1="0" x2="0" y2="1">
-                <stop
-                  offset="5%"
-                  stopColor="var(--color-mobile)"
-                  stopOpacity={0.8}
-                />
-                <stop
-                  offset="95%"
-                  stopColor="var(--color-mobile)"
-                  stopOpacity={0.1}
-                />
-              </linearGradient>
-            </defs>
-            <CartesianGrid vertical={false} />
-            <XAxis
-              dataKey="date"
-              tickLine={false}
-              axisLine={false}
-              tickMargin={8}
-              minTickGap={32}
-              tickFormatter={(value) => {
-                const date = new Date(value)
-                return date.toLocaleDateString("en-US", {
-                  month: "short",
-                  day: "numeric",
-                })
-              }}
-            />
-            <ChartTooltip
-              cursor={false}
-              content={
-                <ChartTooltipContent
-                  labelFormatter={(value) => {
-                    return new Date(value).toLocaleDateString("en-US", {
-                      month: "short",
-                      day: "numeric",
-                    })
-                  }}
-                  indicator="dot"
-                />
-              }
-            />
-            <Area
-              dataKey="mobile"
-              type="natural"
-              fill="url(#fillMobile)"
-              stroke="var(--color-mobile)"
-              stackId="a"
-            />
-            <Area
-              dataKey="desktop"
-              type="natural"
-              fill="url(#fillDesktop)"
-              stroke="var(--color-desktop)"
-              stackId="a"
-            />
-          </AreaChart>
-        </ChartContainer>
+        <div className="w-full h-[400px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <ComposedChart
+              data={chartData}
+              margin={{ top: 5, right: 30, left: 0, bottom: 5 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+              <XAxis dataKey="time" tick={{ fontSize: 12 }} tickMargin={8} />
+              <YAxis
+                yAxisId="left"
+                tick={{ fontSize: 12 }}
+                domain={["dataMin - 0.1", "dataMax + 0.1"]}
+              />
+              <YAxis
+                yAxisId="right"
+                orientation="right"
+                tick={{ fontSize: 12 }}
+              />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: "rgba(0, 0, 0, 0.8)",
+                  border: "1px solid #666",
+                  borderRadius: "8px",
+                }}
+                formatter={(value: any) => {
+                  if (typeof value === "number") {
+                    return [value.toFixed(4), ""];
+                  }
+                  return value;
+                }}
+                labelFormatter={(label) => `Time: ${label}`}
+              />
+              <Legend
+                verticalAlign="top"
+                height={36}
+                wrapperStyle={{ paddingBottom: "10px" }}
+              />
+              {/* OHLC Lines */}
+              <Line
+                yAxisId="left"
+                type="monotone"
+                dataKey="open"
+                stroke="#3b82f6"
+                dot={false}
+                strokeWidth={2}
+                isAnimationActive={false}
+              />
+              <Line
+                yAxisId="left"
+                type="monotone"
+                dataKey="high"
+                stroke="#10b981"
+                dot={false}
+                strokeWidth={2}
+                isAnimationActive={false}
+              />
+              <Line
+                yAxisId="left"
+                type="monotone"
+                dataKey="low"
+                stroke="#ef4444"
+                dot={false}
+                strokeWidth={2}
+                isAnimationActive={false}
+              />
+              <Line
+                yAxisId="left"
+                type="monotone"
+                dataKey="close"
+                stroke="#8b5cf6"
+                dot={false}
+                strokeWidth={2}
+                name="Close"
+                isAnimationActive={false}
+              />
+              {/* Volume Bar */}
+              <Bar
+                yAxisId="right"
+                dataKey="volume"
+                fill="#fbbf24"
+                opacity={0.3}
+                name="Volume"
+              />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
       </CardContent>
+
+      {/* Data Table */}
+      <div className="px-6 pb-6">
+        <h3 className="text-sm font-semibold mb-3">Recent Candles</h3>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead className="border-b bg-gray-50 dark:bg-gray-900">
+              <tr>
+                <th className="px-2 py-2 text-left font-medium">Time</th>
+                <th className="px-2 py-2 text-right font-medium">Open</th>
+                <th className="px-2 py-2 text-right font-medium">High</th>
+                <th className="px-2 py-2 text-right font-medium">Low</th>
+                <th className="px-2 py-2 text-right font-medium">Close</th>
+                <th className="px-2 py-2 text-right font-medium">Volume</th>
+              </tr>
+            </thead>
+            <tbody>
+              {chartData
+                .slice(-10)
+                .reverse()
+                .map((row, idx) => (
+                  <tr
+                    key={idx}
+                    className="border-b hover:bg-gray-50 dark:hover:bg-gray-900"
+                  >
+                    <td className="px-2 py-2">{row.time}</td>
+                    <td className="px-2 py-2 text-right">
+                      ${row.open.toFixed(4)}
+                    </td>
+                    <td className="px-2 py-2 text-right text-green-600">
+                      ${row.high.toFixed(4)}
+                    </td>
+                    <td className="px-2 py-2 text-right text-red-600">
+                      ${row.low.toFixed(4)}
+                    </td>
+                    <td className="px-2 py-2 text-right font-medium">
+                      ${row.close.toFixed(4)}
+                    </td>
+                    <td className="px-2 py-2 text-right text-purple-600">
+                      {row.volume.toFixed(2)}
+                    </td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="text-xs text-gray-500 mt-3">
+          Showing last 10 candles • Total: {chartData.length} candles
+        </p>
+      </div>
     </Card>
-  )
+  );
 }

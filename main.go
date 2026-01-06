@@ -51,8 +51,11 @@ func main() {
 	hubHandler := websocket.GinHandler(hub, jwt)
 	publisherWS := publisher.NewPublisherWS(hub)
 
+	userBalanceRepository := repository.NewUserBalanceRepository(db.GetDB())
+	walletRepo := repository.NewUserWalletRepository(db.GetDB())
+
 	userRepo := repository.NewUserRepository(db.GetDB())
-	userService := services.NewRegisterService(userRepo, jwt, redisServices)
+	userService := services.NewRegisterService(userRepo, walletRepo, userBalanceRepository, jwt, redisServices)
 	userHandler := handler.NewRegisterHandler(userService)
 
 	txRepo := repository.NewTransactionRepository(db.GetDB())
@@ -60,10 +63,10 @@ func main() {
 
 	txVerify := services.NewVerifyTxService(redisServices)
 
-	transactionService := services.NewTransactionService(userRepo, txRepo, ledgerRepo, redisServices, txVerify)
+	transactionService := services.NewTransactionService(userRepo, walletRepo, txRepo, ledgerRepo, redisServices, txVerify)
 	transactionHandler := handler.NewTransactionHandler(transactionService)
 
-	balanceService := services.NewBalanceService(userRepo, txRepo)
+	balanceService := services.NewBalanceService(userRepo, txRepo, userBalanceRepository, publisherWS)
 	balanceHandler := handler.NewBalanceHandler(balanceService)
 
 	marketRepo := repository.NewMarketRepository(db.GetDB())
@@ -76,7 +79,7 @@ func main() {
 	candleStreamHandler := handler.NewCandleStreamHandler(candleStreamServices, candleService)
 
 	blockRepo := repository.NewBlockRepository(db.GetDB())
-	blockService := services.NewBlockService(blockRepo, txRepo, userRepo, ledgerRepo, candleService, marketService, publisherWS)
+	blockService := services.NewBlockService(blockRepo, walletRepo, txRepo, userRepo, ledgerRepo, candleService, marketService, publisherWS)
 	blockHandler := handler.NewBlockHandler(blockService)
 
 	rewardService := services.NewRewardHandler(blockRepo)
@@ -132,6 +135,7 @@ func main() {
 	r.POST("/transaction/buy", transactionHandler.Buy)
 	r.POST("/transaction/sell", transactionHandler.Sell)
 	r.GET("/balance/:address", balanceHandler.GetBalance)
+	r.POST("/balance/topup", balanceHandler.TopUpUSDBalance)
 	r.GET("/wallet/:address", balanceHandler.GetWalletBalance)
 	r.POST("/generate-block", blockHandler.GenerateBlock)
 	r.GET("/blocks", blockHandler.GetBlocks)

@@ -1,10 +1,13 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/livingdolls/go-blockchain-simulate/app/dto"
+	"github.com/livingdolls/go-blockchain-simulate/app/entity"
 	"github.com/livingdolls/go-blockchain-simulate/app/models"
 	"github.com/livingdolls/go-blockchain-simulate/app/services"
 )
@@ -34,7 +37,6 @@ func (h *BalanceHandler) GetBalance(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"address": user.Address,
-		"balance": user.Balance,
 	})
 }
 
@@ -78,4 +80,30 @@ func (h *BalanceHandler) GetWalletBalance(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, walletResponse)
+}
+
+func (h *BalanceHandler) TopUpUSDBalance(c *gin.Context) {
+	var req dto.TopUpRequestDTO
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, dto.NewErrorResponse[string]("invalid request body"))
+		return
+	}
+
+	res, err := h.service.TopUpUSDBalance(req.Address, req.Amount, req.ReferenceID, req.Description)
+
+	if err != nil {
+		status := http.StatusInternalServerError
+
+		switch {
+		case errors.Is(err, entity.ErrAddressNotFound),
+			errors.Is(err, entity.ErrUserBalanceNotFound),
+			errors.Is(err, entity.ErrAmountMustBePositive):
+			status = http.StatusBadRequest
+		}
+		c.JSON(status, dto.NewErrorResponse[string](err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, res)
 }

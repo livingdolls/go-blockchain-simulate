@@ -23,6 +23,7 @@ type BlockService interface {
 
 type blockService struct {
 	blockRepo   repository.BlockRepository
+	walletRepo  repository.UserWalletRepository
 	txRepo      repository.TransactionRepository
 	userRepo    repository.UserRepository
 	ledgerRepo  repository.LedgerRepository
@@ -31,9 +32,10 @@ type blockService struct {
 	publisherWS *publisher.PublisherWS
 }
 
-func NewBlockService(blockRepo repository.BlockRepository, txRepo repository.TransactionRepository, userRepo repository.UserRepository, ledgerRepo repository.LedgerRepository, candle CandleService, market MarketEngineService, publisherWS *publisher.PublisherWS) BlockService {
+func NewBlockService(blockRepo repository.BlockRepository, walletRepo repository.UserWalletRepository, txRepo repository.TransactionRepository, userRepo repository.UserRepository, ledgerRepo repository.LedgerRepository, candle CandleService, market MarketEngineService, publisherWS *publisher.PublisherWS) BlockService {
 	return &blockService{
 		blockRepo:   blockRepo,
+		walletRepo:  walletRepo,
 		txRepo:      txRepo,
 		userRepo:    userRepo,
 		ledgerRepo:  ledgerRepo,
@@ -102,10 +104,28 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 		userCache[u.Address] = u
 	}
 
+	// get all wallets
+	wallets, err := s.walletRepo.GetMultipleByAddress(addresses)
+	if err != nil {
+		return models.Block{}, fmt.Errorf("get multiple wallets: %w", err)
+	}
+
+	// build wallet cache
+	walletCache := make(map[string]models.UserWallet)
+	for _, w := range wallets {
+		walletCache[w.UserAddress] = w
+	}
+
 	// Pre-validate in-memory (no DB)
 	balances := make(map[string]float64)
-	for _, u := range users {
-		balances[u.Address] = u.Balance
+	for _, addr := range addresses {
+		wallet, exists := walletCache[addr]
+
+		if exists {
+			balances[addr] = wallet.YTEBalance
+		} else {
+			balances[addr] = 0
+		}
 	}
 
 	for _, t := range pendingTxs {
@@ -181,9 +201,25 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 		return models.Block{}, fmt.Errorf("new block created while processing, please retry")
 	}
 
+	// get locked wallets for update
+	lockedWallets, err := s.walletRepo.GetMultipleByAddressWithTx(tx, addresses)
+	if err != nil {
+		return models.Block{}, fmt.Errorf("lock multiple wallets: %w", err)
+	}
+
+	// build current wallet cache
+	currentWallets := make(map[string]models.UserWallet)
+	for _, w := range lockedWallets {
+		currentWallets[w.UserAddress] = w
+	}
+
 	currentBalances := make(map[string]float64)
-	for _, u := range users {
-		currentBalances[u.Address] = u.Balance
+	for _, addr := range addresses {
+		if wallet, exists := currentWallets[addr]; exists {
+			currentBalances[addr] = wallet.YTEBalance
+		} else {
+			currentBalances[addr] = 0
+		}
 	}
 
 	// verify miner address
@@ -282,7 +318,12 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 	}
 
 	// Bulk update user balances (1 query instead of N)
-	err = s.userRepo.BulkUpdateBalancesWithTx(tx, currentBalances)
+	walletUpdates := make(map[string]float64)
+	for addr, bal := range currentBalances {
+		walletUpdates[addr] = bal
+	}
+
+	err = s.walletRepo.BulkUpdateBalancesWithTx(tx, walletUpdates)
 	if err != nil {
 		return models.Block{}, fmt.Errorf("bulk update balances: %w", err)
 	}

@@ -4,6 +4,7 @@ import { useEventWebSocket } from "@/hooks/use-event-websocket";
 import { WSEvents } from "@/lib/constants/ws-events";
 import { WS_URL_MARKET } from "@/lib/constants/ws-url";
 import { useDashboardStore } from "@/store/dashboard-store";
+import { TUserBalance } from "@/types/balance";
 import { TTransactionInfo } from "@/types/transaction";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
@@ -35,6 +36,12 @@ export const DashboardWSBootstrap = () => {
       setBlock(data);
     });
 
+    on(WSEvents.BALANCE_UPDATE, (data: TUserBalance) => {
+      toast.success("New balance update received!", {
+        description: `New USD balance: ${data.usd_balance} \n New Crypto balance: ${data.yte_balance}`,
+      });
+    });
+
     on(WSEvents.TRANSACTION_UPDATE, (data: TTransactionInfo) => {
       toast.success(`Transaction ${data.type} of ${data.amount} confirmed!`, {
         description: `From: ${data.from_address} To: ${data.to_address}`,
@@ -48,6 +55,7 @@ export const DashboardWSBootstrap = () => {
       WSEvents.MARKET_UPDATE,
       WSEvents.BLOCK_MINED,
       WSEvents.TRANSACTION_UPDATE,
+      WSEvents.BALANCE_UPDATE,
     ]);
     initializedRef.current = true;
   }, [connected, on, subscribe, setMarket, setBlock]);

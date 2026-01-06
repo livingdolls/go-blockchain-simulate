@@ -7,5 +7,4 @@ export type TRegister = {
 export type TRegisterResponse = {
   username: string;
   address: string;
-  balance: number;
 };

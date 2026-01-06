@@ -24,13 +24,15 @@ type RegisterService interface {
 }
 
 type registerService struct {
-	repo  repository.UserRepository
-	jwt   security.JWTService
-	redis redis.MemoryAdapter
+	repo        repository.UserRepository
+	walletRepo  repository.UserWalletRepository
+	balanceRepo repository.UserBalanceRepository
+	jwt         security.JWTService
+	redis       redis.MemoryAdapter
 }
 
-func NewRegisterService(repo repository.UserRepository, jwt security.JWTService, redis redis.MemoryAdapter) RegisterService {
-	return &registerService{repo: repo, jwt: jwt, redis: redis}
+func NewRegisterService(repo repository.UserRepository, walletRepo repository.UserWalletRepository, balanceRepo repository.UserBalanceRepository, jwt security.JWTService, redis redis.MemoryAdapter) RegisterService {
+	return &registerService{repo: repo, walletRepo: walletRepo, balanceRepo: balanceRepo, jwt: jwt, redis: redis}
 }
 
 // Registr implements RegisterService.
@@ -40,12 +42,23 @@ func (r *registerService) Register(req models.UserRegister) (models.UserRegister
 		Name:      req.Username,
 		Address:   req.Address,
 		PublicKey: req.PublicKey,
-		Balance:   1000,
 	}
 
 	err := r.repo.Create(user)
 	if err != nil {
-		return models.UserRegisterResponse{}, err
+		return models.UserRegisterResponse{}, fmt.Errorf("failed to create user: %w", err)
+	}
+
+	// create empty wallet
+	err = r.walletRepo.UpsertEmptyIfNotExists(user.Address)
+	if err != nil {
+		return models.UserRegisterResponse{}, fmt.Errorf("failed to create user wallet: %w", err)
+	}
+
+	// create empty balance
+	err = r.balanceRepo.UpsertEmptyIfNotExists(user.Address)
+	if err != nil {
+		return models.UserRegisterResponse{}, fmt.Errorf("failed to create user balance: %w", err)
 	}
 
 	token, err := r.jwt.GenerateToken(user.Address)
@@ -54,10 +67,11 @@ func (r *registerService) Register(req models.UserRegister) (models.UserRegister
 	}
 
 	userResponse := models.UserRegisterResponse{
-		Username: req.Username,
-		Address:  req.Address,
-		Balance:  user.Balance,
-		Token:    token,
+		Username:   req.Username,
+		Address:    req.Address,
+		YTEBalance: 0,
+		USDBalance: 0,
+		Token:      token,
 	}
 
 	return userResponse, nil

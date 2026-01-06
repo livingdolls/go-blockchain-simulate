@@ -6,6 +6,7 @@ import { Register } from "@/repository/register";
 import { createEthersBackup } from "@/lib/wallet-backup";
 import { toast } from "sonner";
 import { DownloadFile } from "@/lib/download-filte";
+import { TApiResponse } from "@/types/http";
 
 export type MnemonicWallet = {
   mnemonic: string;
@@ -45,14 +46,24 @@ export function useRegistration() {
     });
   };
 
-  const mutateRegister = useMutation<TRegisterResponse, Error, TRegister>({
+  const mutateRegister = useMutation<
+    TApiResponse<TRegisterResponse>,
+    Error,
+    TRegister
+  >({
     mutationFn: Register,
     onSuccess: (data) => {
-      console.log("Registration successful:", data);
-      window.location.href = "/dashboard";
+      if (data.success) {
+        toast.success(
+          "Registration successful!, please wait... we are redirecting you."
+        );
+        window.location.href = "/dashboard";
+      } else {
+        toast.error(`Registration failed: ${data.error}`);
+      }
     },
     onError: (error) => {
-      console.error("Registration failed:", error);
+      toast.error(`Registration failed: ${error.message}`);
     },
   });
 

@@ -122,18 +122,3 @@ CREATE TABLE wallet_history (
     INDEX idx_created_at (created_at),
     FOREIGN KEY (user_address) REFERENCES users(address) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- Migrate existing data
--- USD Balance (dari users table jika ada)
-INSERT INTO user_balances (user_address, usd_balance, last_transaction_at)
-SELECT address, balance, created_at
-FROM users
-WHERE address NOT IN ('MINER_ACCOUNT', 'FEE_POOL')
-ON DUPLICATE KEY UPDATE usd_balance = VALUES(usd_balance);
-
--- YTE Wallet (from users balance)
-INSERT INTO user_wallets (user_address, yte_balance, last_transaction_at)
-SELECT address, balance, created_at
-FROM users
-WHERE address NOT IN ('MINER_ACCOUNT', 'FEE_POOL')
-ON DUPLICATE KEY UPDATE yte_balance = VALUES(yte_balance);

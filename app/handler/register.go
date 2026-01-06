@@ -1,9 +1,11 @@
 package handler
 
 import (
+	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/livingdolls/go-blockchain-simulate/app/dto"
 	"github.com/livingdolls/go-blockchain-simulate/app/models"
 	"github.com/livingdolls/go-blockchain-simulate/app/services"
 )
@@ -19,25 +21,24 @@ func NewRegisterHandler(service services.RegisterService) *RegisterHandler {
 func (h *RegisterHandler) Register(c *gin.Context) {
 	var req models.UserRegister
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, dto.NewErrorResponse[string]("invalid request body"))
 		return
 	}
 
 	user, err := h.service.Register(req)
 	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, dto.NewErrorResponse[string](err.Error()))
 		return
 	}
 
 	resp := &models.UserRegisterResponse{
 		Address:  user.Address,
 		Username: user.Username,
-		Balance:  1000,
 	}
 
 	c.SetCookie("auth_token", user.Token, int(24*time.Hour.Seconds()), "/", "", false, true)
 
-	c.JSON(200, resp)
+	c.JSON(200, dto.NewSuccessResponse(resp))
 }
 
 func (h *RegisterHandler) Challenge(c *gin.Context) {

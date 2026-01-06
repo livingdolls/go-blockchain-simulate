@@ -29,3 +29,10 @@ export type TTransactionBreakdown = {
   total_cost: number;
   recipient_receives: number;
 };
+
+export type TUserBalance = {
+  name: string;
+  address: string;
+  yte_balance: number;
+  usd_balance: number;
+};

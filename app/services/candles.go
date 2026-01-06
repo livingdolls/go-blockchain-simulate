@@ -150,7 +150,7 @@ func (c *candleService) AggregateCandle(ctx context.Context, interval string, ti
 			log.Printf("Published candle for interval=%s, start=%d\n", interval, start)
 		}
 	} else {
-		log.Printf("Candle for interval=%s, start=%d already up-to-date, skipped publish\n", interval, start)
+		// log.Printf("Candle for interval=%s, start=%d already up-to-date, skipped publish\n", interval, start)
 	}
 
 	return nil

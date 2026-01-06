@@ -38,7 +38,6 @@ func (h *UserHandler) Me(c *gin.Context) {
 		ID:        user.ID,
 		Address:   user.Address,
 		Username:  user.Name,
-		Balance:   user.Balance,
 		PublicKey: user.PublicKey,
 	}
 

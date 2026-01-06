@@ -22,3 +22,12 @@ ON DUPLICATE KEY UPDATE address = address;
 ALTER TABLE users MODIFY COLUMN balance DECIMAL(20, 8) NOT NULL;
 
 ALTER TABLE users DROP COLUMN private_key;
+
+-- Migrate data dari users.balance ke user_wallets
+INSERT INTO user_wallets (user_address, yte_balance, last_transaction_at)
+SELECT address, balance, created_at
+FROM users
+ON DUPLICATE KEY UPDATE yte_balance = VALUES(yte_balance);
+
+-- Drop kolom balance dari tabel users
+ALTER TABLE users DROP COLUMN balance;

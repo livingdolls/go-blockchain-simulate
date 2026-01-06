@@ -8,4 +8,5 @@ const (
 	EventTypeSubscribe     MessageType = "subscribe"
 	EventTypeUnsubscribe   MessageType = "unsubscribe"
 	EventTransactionUpdate MessageType = "transaction.update"
+	EventBalanceUpdate     MessageType = "balance.update"
 )

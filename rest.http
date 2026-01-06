@@ -4,7 +4,7 @@ POST http://localhost:3010/register
 Content-Type: application/json
 
 {
-  "name": "yurina"
+  "name": "Alice"
 }
 
 ### Send a transaction
@@ -65,10 +65,10 @@ GET http://localhost:3010/reward/schedule/10
 ### get wallet balance
 GET http://localhost:3010/wallet/0xc92e12f3a0df04e081cd2c6410c8e554b695b0dd?page=1&limit=5&type=received&status=confirmed&order=desc
 
-## challenge request
+### challenge request
 POST http://localhost:3010/challenge/0xce4b0c6afb4a5c27922557f5cb3d3e1b6ef496b0
 
-## challenge verify request
+### challenge verify request
 POST http://localhost:3010/challenge/verify
 Content-Type: application/json
 
@@ -77,5 +77,16 @@ Content-Type: application/json
   "signature": "0x2c6404e5f3cf3f2a4d5f7c6b4c8e2f3a4b5c6d7e8f9a0b1c2d3e4f506172839405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20"
 }
 
-## get market engine state
+### get market engine state
 GET http://localhost:3010/market
+
+### top-up USD balance
+POST http://localhost:3010/balance/topup
+Content-Type: application/json
+
+{
+  "address": "0xc09c572714aecd616928617299a338d61707448a",
+  "amount": 1000,
+  "reference_id": "topup-001",
+  "description": "Initial top-up"
+}

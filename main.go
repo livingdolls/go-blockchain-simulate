@@ -63,7 +63,7 @@ func main() {
 
 	txVerify := services.NewVerifyTxService(redisServices)
 
-	transactionService := services.NewTransactionService(userRepo, walletRepo, txRepo, ledgerRepo, redisServices, txVerify)
+	transactionService := services.NewTransactionService(userRepo, walletRepo, userBalanceRepository, txRepo, ledgerRepo, redisServices, txVerify)
 	transactionHandler := handler.NewTransactionHandler(transactionService)
 
 	balanceService := services.NewBalanceService(userRepo, txRepo, userBalanceRepository, publisherWS)
@@ -79,7 +79,7 @@ func main() {
 	candleStreamHandler := handler.NewCandleStreamHandler(candleStreamServices, candleService)
 
 	blockRepo := repository.NewBlockRepository(db.GetDB())
-	blockService := services.NewBlockService(blockRepo, walletRepo, txRepo, userRepo, ledgerRepo, candleService, marketService, publisherWS)
+	blockService := services.NewBlockService(blockRepo, walletRepo, userBalanceRepository, txRepo, userRepo, ledgerRepo, candleService, marketService, publisherWS)
 	blockHandler := handler.NewBlockHandler(blockService)
 
 	rewardService := services.NewRewardHandler(blockRepo)

@@ -24,6 +24,7 @@ type BlockService interface {
 type blockService struct {
 	blockRepo   repository.BlockRepository
 	walletRepo  repository.UserWalletRepository
+	balanceRepo repository.UserBalanceRepository
 	txRepo      repository.TransactionRepository
 	userRepo    repository.UserRepository
 	ledgerRepo  repository.LedgerRepository
@@ -32,10 +33,11 @@ type blockService struct {
 	publisherWS *publisher.PublisherWS
 }
 
-func NewBlockService(blockRepo repository.BlockRepository, walletRepo repository.UserWalletRepository, txRepo repository.TransactionRepository, userRepo repository.UserRepository, ledgerRepo repository.LedgerRepository, candle CandleService, market MarketEngineService, publisherWS *publisher.PublisherWS) BlockService {
+func NewBlockService(blockRepo repository.BlockRepository, walletRepo repository.UserWalletRepository, balanceRepo repository.UserBalanceRepository, txRepo repository.TransactionRepository, userRepo repository.UserRepository, ledgerRepo repository.LedgerRepository, candle CandleService, market MarketEngineService, publisherWS *publisher.PublisherWS) BlockService {
 	return &blockService{
 		blockRepo:   blockRepo,
 		walletRepo:  walletRepo,
+		balanceRepo: balanceRepo,
 		txRepo:      txRepo,
 		userRepo:    userRepo,
 		ledgerRepo:  ledgerRepo,
@@ -56,6 +58,25 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 		return models.Block{}, fmt.Errorf("get last block: %w", err)
 	}
 
+	// get current market state
+	var currentMarket models.MarketEngine
+	if s.market != nil {
+		currentMarket, err = s.market.GetState()
+		if err != nil {
+			// If error, use default price
+			if !strings.Contains(err.Error(), "no rows in result set") {
+				return models.Block{}, fmt.Errorf("get market state: %w", err)
+			}
+			currentMarket.Price = 100.0 // default only on error
+		} else if currentMarket.Price == 0 {
+			// Fallback if price is 0
+			currentMarket.Price = 100.0
+		}
+	} else {
+		// default market state if service not available
+		currentMarket.Price = 100.0
+	}
+
 	// Get pending transactions (read-only, limit to 100 to prevent timeout)
 	pendingTxs, err := s.txRepo.GetPendingTransactions(100)
 	if err != nil {
@@ -67,7 +88,7 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 	}
 
 	var buyVolume, sellVolume float64
-	var marketState models.MarketEngine
+	marketState := currentMarket
 
 	for _, t := range pendingTxs {
 		if strings.EqualFold(t.Type, "BUY") {
@@ -327,6 +348,115 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 	if err != nil {
 		return models.Block{}, fmt.Errorf("bulk update balances: %w", err)
 	}
+
+	// Process USD Balance Updates For BUY and SELL tx
+
+	var buyerAddresses, sellerAddresses []string
+	var totalBuyUSD, totalSellUSD float64
+	usdBalances := make(map[string]models.UserBalance)
+
+	for _, t := range pendingTxs {
+		if strings.EqualFold(t.Type, "BUY") {
+			// Buyer to_address receives YTE Pays USD
+			buyerAddresses = append(buyerAddresses, t.ToAddress)
+			totalBuyUSD += t.Amount + t.Fee
+		} else if strings.EqualFold(t.Type, "SELL") {
+			// seller : from_address selss YTE receives USD
+			sellerAddresses = append(sellerAddresses, t.FromAddress)
+			totalSellUSD += t.Amount + t.Fee
+		}
+	}
+
+	// get all USD with lock
+	allUSDAddresses := append(buyerAddresses, sellerAddresses...)
+	allUSDAddresses = append(allUSDAddresses, "MINER_ACCOUNT") // miner gets fee
+
+	if len(allUSDAddresses) > 0 {
+		lockedUSDBalances, err := s.balanceRepo.GetMultipleByAddressWithTxForUpdate(tx, allUSDAddresses)
+
+		if err != nil {
+			return models.Block{}, fmt.Errorf("lock multiple USD balances: %w", err)
+		}
+
+		for _, ub := range lockedUSDBalances {
+			usdBalances[ub.UserAddress] = ub
+		}
+
+		// ensure all address have USD balance record
+		for _, addr := range allUSDAddresses {
+			if _, exists := usdBalances[addr]; !exists {
+				if err := s.balanceRepo.UpsertEmptyIfNotExistsWithTx(tx, addr); err != nil {
+					return models.Block{}, fmt.Errorf("upsert empty USD balance: %w", err)
+				}
+
+				// refetch after upsert
+				balance, err := s.balanceRepo.GetForUpdateWithTx(tx, addr)
+				if err != nil {
+					return models.Block{}, fmt.Errorf("refetch USD balance after upsert: %w", err)
+				}
+				usdBalances[addr] = balance
+			}
+		}
+	}
+
+	for _, t := range pendingTxs {
+		if strings.EqualFold(t.Type, "BUY") {
+			buyerAddr := t.ToAddress
+			totalCost := t.Amount + t.Fee
+
+			buyerBalance := usdBalances[buyerAddr]
+			balanceBefore := buyerBalance.USDBalance
+			balanceAfter := balanceBefore - totalCost
+
+			usdBalances[buyerAddr] = models.UserBalance{
+				UserAddress:     buyerAddr,
+				USDBalance:      balanceAfter,
+				LockedBalance:   buyerBalance.LockedBalance,
+				TotalDeposited:  buyerBalance.TotalDeposited,
+				TotalWithdrawn:  buyerBalance.TotalWithdrawn + totalCost,
+				TotalTraded:     buyerBalance.TotalTraded + t.Amount,
+				LastTransaction: buyerBalance.LastTransaction,
+			}
+
+			// miner fee receives USD
+			minerBalance := usdBalances["MINER_ACCOUNT"]
+			minerBalance.USDBalance += t.Fee
+			usdBalances["MINER_ACCOUNT"] = minerBalance
+
+		} else if strings.EqualFold(t.Type, "SELL") {
+			sellerAddr := t.FromAddress
+
+			// use market price to calculate USD received
+			usdAmount := t.Amount * currentMarket.Price
+			usdFee := t.Fee * currentMarket.Price
+
+			sellerBalance := usdBalances[sellerAddr]
+			balanceBefore := sellerBalance.USDBalance
+			balanceAfter := balanceBefore + usdAmount
+
+			usdBalances[sellerAddr] = models.UserBalance{
+				UserAddress:     sellerAddr,
+				USDBalance:      balanceAfter,
+				LockedBalance:   sellerBalance.LockedBalance,
+				TotalDeposited:  sellerBalance.TotalDeposited + usdAmount,
+				TotalWithdrawn:  sellerBalance.TotalWithdrawn,
+				TotalTraded:     sellerBalance.TotalTraded + usdAmount,
+				LastTransaction: sellerBalance.LastTransaction,
+			}
+
+			// miner fee receives USD
+			minerBalance := usdBalances["MINER_ACCOUNT"]
+			minerBalance.USDBalance += usdFee
+			usdBalances["MINER_ACCOUNT"] = minerBalance
+		}
+	}
+
+	// bulk update all usd balances
+	if err := s.balanceRepo.BulkUpdateBalancesWithTx(tx, usdBalances); err != nil {
+		return models.Block{}, fmt.Errorf("bulk update USD balances: %w", err)
+	}
+
+	// End process USD
 
 	if s.market != nil {
 		if marketState, err = s.market.ApplyBlockPricingWithTx(tx, blockID, buyVolume, sellVolume, len(pendingTxs)); err != nil {

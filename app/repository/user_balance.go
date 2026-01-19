@@ -15,6 +15,9 @@ type UserBalanceRepository interface {
 	GetForUpdateWithTx(tx *sqlx.Tx, address string) (models.UserBalance, error)
 	UpdateBalanceWithTx(tx *sqlx.Tx, address string, newBalance, totalDeposited float64) error
 	InsertHistoryWithTx(tx *sqlx.Tx, history models.BalanceHistory) error
+	GetByAddress(address string) (models.UserBalance, error)
+	GetMultipleByAddressWithTxForUpdate(tx *sqlx.Tx, addresses []string) ([]models.UserBalance, error)
+	BulkUpdateBalancesWithTx(tx *sqlx.Tx, balances map[string]models.UserBalance) error
 }
 
 type userBalanceRepository struct {
@@ -28,6 +31,22 @@ func NewUserBalanceRepository(db *sqlx.DB) UserBalanceRepository {
 // BeginTx implements [UserBalanceRepository].
 func (u *userBalanceRepository) BeginTx() (*sqlx.Tx, error) {
 	return u.db.Beginx()
+}
+
+func (u *userBalanceRepository) GetByAddress(address string) (models.UserBalance, error) {
+	var ub models.UserBalance
+	query := `
+		SELECT user_address, usd_balance, locked_balance, total_deposited, total_withdrawn, total_traded, last_transaction_at
+		FROM user_balances
+		WHERE user_address = ?
+	`
+	err := u.db.Get(&ub, query, address)
+
+	if err == sql.ErrNoRows {
+		return models.UserBalance{}, entity.ErrUserBalanceNotFound
+	}
+
+	return ub, err
 }
 
 // GetForUpdateWithTx implements [UserBalanceRepository].
@@ -92,4 +111,36 @@ func (u *userBalanceRepository) UpsertEmptyIfNotExists(address string) error {
 	`
 	_, err := u.db.Exec(query, address)
 	return err
+}
+
+func (u *userBalanceRepository) GetMultipleByAddressWithTxForUpdate(tx *sqlx.Tx, addresses []string) ([]models.UserBalance, error) {
+	var balances []models.UserBalance
+
+	query := `
+		SELECT user_address, usd_balance, locked_balance, total_deposited, total_withdrawn, total_traded, last_transaction_at
+		FROM user_balances
+		WHERE user_address IN (?)
+		FOR UPDATE
+	`
+
+	query, args, err := sqlx.In(query, addresses)
+
+	if err != nil {
+		return nil, err
+	}
+
+	err = tx.Select(&balances, tx.Rebind(query), args...)
+	return balances, err
+}
+
+func (u *userBalanceRepository) BulkUpdateBalancesWithTx(tx *sqlx.Tx, balances map[string]models.UserBalance) error {
+	for addr, balance := range balances {
+		query := `UPDATE user_balances SET usd_balance = ?, total_withdrawn = ?, total_traded = ?, last_transaction_at = NOW() WHERE user_address = ?`
+
+		if _, err := tx.Exec(query, balance.USDBalance, balance.TotalWithdrawn, balance.TotalTraded, addr); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

@@ -17,6 +17,7 @@ type TransactionRepository interface {
 	MarkConfirmedWithTx(dbTx *sqlx.Tx, txID int64) error
 	BulkMarkConfirmedWithTx(dbTx *sqlx.Tx, txIDs []int64) error
 	GetPendingTransactionsByAddress(address string) (float64, error)
+	GetPendingBuyCostByBuyer(address string) (float64, error)
 	GetTransactionsByBlockID(blockID int64) ([]models.Transaction, error)
 	GetTransactionByID(id int64) (models.Transaction, error)
 	GetTransactionByAddress(filter models.TransactionFilter) (models.TransactionWithTypeResponse, error)
@@ -164,6 +165,19 @@ func (r *transactionRepository) GetPendingTransactionsByAddress(address string) 
 		FROM transactions
 		WHERE from_address = ? AND status = 'PENDING'
 	`
+
+	var pendingAmount float64
+
+	err := r.db.Get(&pendingAmount, query, address)
+	return pendingAmount, err
+}
+
+func (r *transactionRepository) GetPendingBuyCostByBuyer(address string) (float64, error) {
+	query := `
+		SELECT COALESCE(SUM(amount + fee), 0) as pending_amount
+		FROM transactions
+		WHERE LOWER(to_address) = LOWER(?) AND status = 'PENDING' AND LOWER(type) = 'buy'
+		`
 
 	var pendingAmount float64
 

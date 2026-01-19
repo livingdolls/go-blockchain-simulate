@@ -24,6 +24,7 @@ type TransactionService interface {
 type transactionService struct {
 	users    repository.UserRepository
 	wallets  repository.UserWalletRepository
+	balances repository.UserBalanceRepository
 	txs      repository.TransactionRepository
 	ledgers  repository.LedgerRepository
 	memory   redis.MemoryAdapter
@@ -33,6 +34,7 @@ type transactionService struct {
 func NewTransactionService(
 	users repository.UserRepository,
 	wallets repository.UserWalletRepository,
+	balances repository.UserBalanceRepository,
 	txs repository.TransactionRepository,
 	ledgers repository.LedgerRepository,
 	memory redis.MemoryAdapter,
@@ -41,6 +43,7 @@ func NewTransactionService(
 	return &transactionService{
 		users:    users,
 		wallets:  wallets,
+		balances: balances,
 		txs:      txs,
 		ledgers:  ledgers,
 		memory:   memory,
@@ -173,6 +176,27 @@ func (s *transactionService) Buy(ctx context.Context, address, nonce, signature 
 		}
 	}
 
+	// calculate transaction fee
+	fee := utils.CalculateTransactionFee(amount)
+	totalCost := amount + fee
+
+	// validate buyer has enaugh USD considering locked and pending
+	userBalance, err := s.balances.GetByAddress(buyerAddress)
+	if err != nil {
+		return models.Transaction{}, fmt.Errorf("failed to get user balance: %w", err)
+	}
+
+	pendingBuyCost, err := s.txs.GetPendingBuyCostByBuyer(buyerAddress)
+	if err != nil {
+		return models.Transaction{}, fmt.Errorf("failed to get pending buy cost: %w", err)
+	}
+
+	availableUSD := userBalance.USDBalance - userBalance.LockedBalance - pendingBuyCost
+
+	if availableUSD < totalCost {
+		return models.Transaction{}, fmt.Errorf("insufficient USD balance considering locked and pending: required %.2f, available %.2f", totalCost, availableUSD)
+	}
+
 	// check miner account
 	_, err = s.ensureWallet(sellerAddress)
 	if err != nil {
@@ -183,10 +207,6 @@ func (s *transactionService) Buy(ctx context.Context, address, nonce, signature 
 	if err := s.txVerify.VerifyBuySellSignature(ctx, buyerAddress, amount, nonce, signature, BuyTransaction); err != nil {
 		return models.Transaction{}, fmt.Errorf("signature verification failed: %w", err)
 	}
-
-	// calculate transaction fee
-	fee := utils.CalculateTransactionFee(amount)
-	fee = utils.FormatFee(fee)
 
 	// create transaction
 	tx := models.Transaction{

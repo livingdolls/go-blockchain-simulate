@@ -38,7 +38,7 @@ export const useBuy = () => {
   });
 
   const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
   ) => {
     const { name, value } = e.target;
     setForm((prev) => ({
@@ -66,7 +66,7 @@ export const useBuy = () => {
 
       if (address !== user.address.toLowerCase()) {
         toast.error(
-          "Derived address does not match authenticated user address"
+          "Derived address does not match authenticated user address",
         );
         return;
       }

@@ -107,3 +107,21 @@ func (h *BalanceHandler) TopUpUSDBalance(c *gin.Context) {
 
 	c.JSON(http.StatusOK, res)
 }
+
+func (h *BalanceHandler) GetUserWithUSDBalance(c *gin.Context) {
+	address := c.Param("address")
+
+	if address == "" {
+		c.JSON(400, dto.NewErrorResponse[string]("address is required"))
+		return
+	}
+
+	userWithBalance, err := h.service.GetUserWithUSDBalance(address)
+
+	if err != nil {
+		c.JSON(404, dto.NewErrorResponse[string](err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, dto.NewSuccessResponse(userWithBalance))
+}

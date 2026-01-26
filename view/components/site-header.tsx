@@ -1,8 +1,13 @@
-import { Button } from "@/components/ui/button"
-import { Separator } from "@/components/ui/separator"
-import { SidebarTrigger } from "@/components/ui/sidebar"
+"use client";
+
+import { Separator } from "@/components/ui/separator";
+import { SidebarTrigger } from "@/components/ui/sidebar";
+import { useUserBalanceStore } from "@/store/user-balance-store";
+import { DollarSign } from "lucide-react";
 
 export function SiteHeader() {
+  const userBalance = useUserBalanceStore((state) => state.userBalance);
+
   return (
     <header className="flex h-(--header-height) shrink-0 items-center gap-2 border-b transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-(--header-height) sticky top-0 z-10 bg-background/95 backdrop-blur-sm">
       <div className="flex w-full items-center gap-1 px-4 lg:gap-2 lg:px-6">
@@ -11,20 +16,18 @@ export function SiteHeader() {
           orientation="vertical"
           className="mx-2 data-[orientation=vertical]:h-4"
         />
-        <h1 className="text-base font-medium">Documents</h1>
+        <h1 className="text-base font-medium">{userBalance?.name}</h1>
         <div className="ml-auto flex items-center gap-2">
-          <Button variant="ghost" asChild size="sm" className="hidden sm:flex">
-            <a
-              href="https://github.com/shadcn-ui/ui/tree/main/apps/v4/app/(examples)/dashboard"
-              rel="noopener noreferrer"
-              target="_blank"
-              className="dark:text-foreground"
-            >
-              GitHub
-            </a>
-          </Button>
+          <span className="text-sm font-medium flex flex-row items-center gap-1">
+            {userBalance ? userBalance.usd_balance : "0.0000"}{" "}
+            <DollarSign size={16} />
+          </span>
+          |
+          <span className="text-sm font-medium">
+            {userBalance ? userBalance.yte_balance : "0.0000"} YTE
+          </span>
         </div>
       </div>
     </header>
-  )
+  );
 }

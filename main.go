@@ -134,7 +134,7 @@ func main() {
 	r.GET("/transaction/:id", transactionHandler.GetTransaction)
 	r.POST("/transaction/buy", transactionHandler.Buy)
 	r.POST("/transaction/sell", transactionHandler.Sell)
-	r.GET("/balance/:address", balanceHandler.GetBalance)
+	r.GET("/balance/:address", balanceHandler.GetUserWithUSDBalance)
 	r.POST("/balance/topup", balanceHandler.TopUpUSDBalance)
 	r.GET("/wallet/:address", balanceHandler.GetWalletBalance)
 	r.POST("/generate-block", blockHandler.GenerateBlock)

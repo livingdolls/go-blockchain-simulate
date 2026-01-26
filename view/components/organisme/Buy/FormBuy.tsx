@@ -7,9 +7,14 @@ import { Card } from "@/components/ui/card";
 import { FieldSeparator } from "@/components/ui/field";
 import { useBuy } from "@/hooks/use-buy";
 import { useTransactionNonce } from "@/hooks/use-transaction-nonce";
+import { TMarketData } from "@/types/market";
 import { toast } from "sonner";
 
-export const FormBuy = () => {
+type props = {
+  market: TMarketData | null;
+};
+
+export const FormBuy = ({ market }: props) => {
   const { fileWallet, handleWalletFileChange, form, handleChange, executeBuy } =
     useBuy();
 
@@ -81,6 +86,23 @@ export const FormBuy = () => {
             disabled={false}
           />
         )}
+
+        <div>
+          <p className="text-sm">
+            Current Price: {market ? market.price.toFixed(2) : ""} USD per YTC
+          </p>
+          <p className="text-sm">
+            <strong>Amount to pay:</strong>{" "}
+            {form.amount ? form.amount.toFixed(2) : ""} USD
+          </p>
+          <p className="text-sm">
+            <strong>YTC to receive:</strong>{" "}
+            {form.amount && market
+              ? (form.amount / market.price).toFixed(8)
+              : ""}{" "}
+            YTC
+          </p>
+        </div>
 
         <button
           type="submit"

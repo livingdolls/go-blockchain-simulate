@@ -13,6 +13,7 @@ import (
 
 type BalanceService interface {
 	GetBalance(address string) (models.User, error)
+	GetUserWithUSDBalance(address string) (dto.DTOUserWithBalance, error)
 	GetWalletBalance(filter models.TransactionFilter) (models.WalletResponse, error)
 	TopUpUSDBalance(address string, amount float64, referenceID, description string) (dto.TopUpResultDTO, error)
 }
@@ -155,6 +156,27 @@ func (s *balanceService) TopUpUSDBalance(address string, amount float64, referen
 		}
 
 		s.publisherWs.PublishToAddress(address, entity.EventBalanceUpdate, dtoResult)
+	}
+
+	return result, nil
+}
+
+func (s *balanceService) GetUserWithUSDBalance(address string) (dto.DTOUserWithBalance, error) {
+	if address == "" {
+		return dto.DTOUserWithBalance{}, entity.ErrAddressNotFound
+	}
+
+	user, err := s.users.GetByAddressWithBalance(address)
+
+	if err != nil {
+		return dto.DTOUserWithBalance{}, entity.ErrAddressNotFound
+	}
+
+	result := dto.DTOUserWithBalance{
+		Name:       user.Name,
+		Address:    user.Address,
+		USDBalance: user.USDBalance,
+		YTEBalance: user.YTEBalance,
 	}
 
 	return result, nil

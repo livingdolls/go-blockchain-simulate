@@ -3,7 +3,9 @@
 import { useEventWebSocket } from "@/hooks/use-event-websocket";
 import { WSEvents } from "@/lib/constants/ws-events";
 import { WS_URL_MARKET } from "@/lib/constants/ws-url";
+import { useAuthStore } from "@/store/auth-store";
 import { useDashboardStore } from "@/store/dashboard-store";
+import { useUserBalanceStore } from "@/store/user-balance-store";
 import { TUserBalance } from "@/types/balance";
 import { TTransactionInfo } from "@/types/transaction";
 import { useQueryClient } from "@tanstack/react-query";
@@ -14,6 +16,8 @@ export const DashboardWSBootstrap = () => {
   const { connected, on, subscribe, error, off } =
     useEventWebSocket(WS_URL_MARKET);
   const { setConnected, setMarket, setBlock } = useDashboardStore();
+  const user = useAuthStore((state) => state.user);
+  const setUserBalance = useUserBalanceStore((state) => state.setUserBalance);
   const initializedRef = useRef(false);
   const qc = useQueryClient();
 
@@ -40,6 +44,7 @@ export const DashboardWSBootstrap = () => {
       toast.success("New balance update received!", {
         description: `New USD balance: ${data.usd_balance} \n New Crypto balance: ${data.yte_balance}`,
       });
+      setUserBalance(data);
     });
 
     on(WSEvents.TRANSACTION_UPDATE, (data: TTransactionInfo) => {

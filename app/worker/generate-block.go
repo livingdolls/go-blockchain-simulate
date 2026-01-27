@@ -31,11 +31,9 @@ func (w *GenerateBlockWorker) Start(interval time.Duration) {
 		for {
 			select {
 			case <-w.ticker.C:
-				log.Println("GenerateBlockWorker: Generating new block...")
 				_, err := w.blockService.GenerateBlock()
 				if err != nil {
 					if errors.Is(err, entity.ErrNoPendingTransactions) {
-						log.Println("No pending transactions to include in the new block.")
 						continue
 					}
 					log.Printf("generate block error : %v", err)

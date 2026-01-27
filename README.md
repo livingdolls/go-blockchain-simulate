@@ -43,6 +43,17 @@ A production-ready blockchain implementation in Go with complete cryptocurrency 
 - **Indexed Queries** - Optimized database schema with proper indexes
 - **Caching Layer** - Redis-based caching for frequently accessed data
 
+### 📨 **Message Queue System (RabbitMQ)**
+
+- **Async Transaction Processing** - Non-blocking transaction submission with queuing
+- **Multiple Workers** - Configurable worker pool for concurrent transaction processing
+- **Retry Logic** - Automatic message requeue on processing failure
+- **Transaction Types** - Support for SEND, BUY, and SELL transaction types
+- **Message Durability** - Persistent queues with durable exchanges
+- **Topic Routing** - Advanced message routing based on routing keys
+- **Graceful Shutdown** - Proper consumer cleanup on application termination
+- **Error Handling** - Failed messages logged and requeued for retry
+
 ### 🌐 **API & Integration**
 
 - **REST API** - 30+ endpoints for complete blockchain operations
@@ -62,6 +73,16 @@ A production-ready blockchain implementation in Go with complete cryptocurrency 
 - **Input Sanitization** - Prevent injection attacks
 
 ## 🆕 Latest Updates
+
+### v3.0.0 - Message Queue Integration
+
+- ✅ **RabbitMQ Integration** - Complete message queue setup with channel pooling
+- ✅ **Transaction Consumer** - Async transaction processing with multiple workers
+- ✅ **Queue Topology** - Exchanges, queues, and routing configuration
+- ✅ **Retry Mechanism** - Automatic message requeue on failure
+- ✅ **Worker Pool** - Configurable worker count for scaling
+- ✅ **Graceful Shutdown** - Proper consumer cleanup on application termination
+- ✅ **Error Handling** - Comprehensive logging and error management
 
 ### v2.0.0 - Market Trading Platform
 
@@ -95,7 +116,42 @@ A production-ready blockchain implementation in Go with complete cryptocurrency 
 - **Go** 1.23.0 or higher
 - **MySQL** 8.0 or higher
 - **Redis** 6.0 or higher (for caching and pub/sub)
+- **RabbitMQ** 3.8 or higher (for async transaction processing)
 - **Make** (optional, for using Makefile commands)
+
+## ⚡ Quick Start
+
+Get the application running in 5 minutes:
+
+```bash
+# 1. Clone and setup
+git clone https://github.com/livingdolls/go-blockchain-simulate.git
+cd go-blockchain-simulate
+go mod download
+
+# 2. Start services (requires Docker)
+docker-compose up -d mysql redis rabbitmq
+
+# 3. Setup database migrations
+mysql -u root -p < database/migrations/users.sql
+mysql -u root -p < database/migrations/transactions.sql
+# ... run all migration files
+
+# 4. Start application
+go run main.go
+
+# 5. Test API
+curl -X POST http://localhost:3010/register \
+  -H "Content-Type: application/json" \
+  -d '{"initial_balance": 1000}'
+```
+
+**Access:**
+
+- API: http://localhost:3010
+- RabbitMQ Dashboard: http://localhost:15672 (guest:guest)
+- Database: localhost:3306
+- Redis: localhost:6379
 
 ## 🛠️ Installation
 
@@ -148,10 +204,33 @@ A production-ready blockchain implementation in Go with complete cryptocurrency 
 5. **Configure Environment**
 
    Update database and Redis credentials in the code:
-
    - Database: `database/conn.go`
    - Redis: `redis/redis.go`
    - JWT Secret: `main.go` (line 29)
+
+6. **Setup RabbitMQ**
+
+   ```bash
+   # Install RabbitMQ (Ubuntu/Debian)
+   sudo apt-get install rabbitmq-server
+
+   # Start RabbitMQ
+   sudo systemctl start rabbitmq-server
+
+   # Enable RabbitMQ management UI
+   sudo rabbitmq-plugins enable rabbitmq_management
+
+   # Verify RabbitMQ is running
+   sudo rabbitmqctl status
+
+   # Access Management UI: http://localhost:15672 (guest:guest)
+   ```
+
+   Or using Docker Compose:
+
+   ```bash
+   docker-compose up -d rabbitmq
+   ```
 
 ## 🚦 Running the Application
 
@@ -726,20 +805,127 @@ go-blockchain-simulate/
 └── README.md              # This file
 ```
 
-## 🔄 System Flow
+## � RabbitMQ Message Queue Architecture
 
-### Transaction Flow
+### Queue Configuration
+
+The system uses RabbitMQ with **Topic Exchange** pattern for flexible message routing:
+
+| Queue                   | Exchange       | Routing Key             | Purpose                             |
+| ----------------------- | -------------- | ----------------------- | ----------------------------------- |
+| `transaction.pending`   | `transactions` | `transaction.submitted` | Pending transaction processing      |
+| `transaction.confirmed` | `transactions` | `transaction.confirmed` | Confirmed transaction notifications |
+| `block.generation`      | `blocks`       | `block.generate`        | Block mining requests               |
+| `block.mined`           | `blocks`       | `block.mined`           | New block notifications             |
+| `market.pricing`        | `market`       | `market.pricing`        | Market price updates                |
+
+### Transaction Consumer
+
+The **Transaction Consumer** processes SEND, BUY, and SELL transactions asynchronously:
+
+**Features:**
+
+- **Multi-worker Processing** - Configurable worker pool (default: 5 workers)
+- **Concurrent Processing** - Handle multiple transactions simultaneously
+- **Automatic Retry** - Failed messages are automatically requeued
+- **Message Durability** - Persistent storage on RabbitMQ
+- **Graceful Shutdown** - Proper cleanup on application termination
+- **Comprehensive Logging** - Detailed logs for debugging
+
+**Request Format:**
+
+```json
+{
+  "type": "SEND|BUY|SELL",
+  "address": "0x1a2b3c4d...",
+  "to_address": "0x5e6f7g8h...", // Only for SEND
+  "amount": 50.5,
+  "nonce": "1",
+  "signature": "signed_data..."
+}
+```
+
+**Processing Flow:**
 
 ```
-1. User creates transaction with private key signature
-2. Transaction validated (signature, balance, nonce)
-3. Transaction added to mempool (PENDING status)
-4. Worker mines block every 10 seconds
-5. Block validation + PoW mining
-6. Transactions marked as CONFIRMED
-7. Market price updated from buy/sell orders
-8. Candle data aggregated per interval
-9. Real-time updates sent via WebSocket/SSE
+1. Transaction submitted via HTTP endpoint
+2. Message published to RabbitMQ queue
+3. Consumer picks up message with available worker
+4. Transaction processed based on type
+5. On success: Message acknowledged, DB updated
+6. On error: Message requeued for retry
+7. Logs available for monitoring
+```
+
+**Example Usage:**
+
+```bash
+# Send transaction (API returns immediately with 202 Accepted)
+curl -X POST http://localhost:3010/send \
+  -H "Content-Type: application/json" \
+  -d '{
+    "from_address": "0x1a2b3c4d...",
+    "to_address": "0x5e6f7g8h...",
+    "amount": 50,
+    "nonce": "1",
+    "signature": "..."
+  }'
+
+# Response (202 Accepted)
+{
+  "message": "Transaction queued for processing",
+  "status": "PENDING"
+}
+```
+
+### Monitoring RabbitMQ
+
+**Access RabbitMQ Management UI:**
+
+```
+URL: http://localhost:15672
+Username: guest
+Password: guest
+```
+
+**View consumer details:**
+
+```bash
+# List all consumers
+sudo rabbitmqctl list_consumers
+
+# Check queue statistics
+sudo rabbitmqctl list_queues name messages consumers
+
+# Monitor exchange bindings
+sudo rabbitmqctl list_bindings
+```
+
+## 🔄 System Flow
+
+### Transaction Flow (with RabbitMQ)
+
+```
+1. User submits transaction via HTTP endpoint
+2. Handler validates input and publishes to RabbitMQ
+3. API returns 202 Accepted (non-blocking)
+4. Transaction Consumer picks up message
+5. Message deserialized based on type (SEND/BUY/SELL)
+6. Transaction validated (signature, balance, nonce)
+7. Transaction processed in database
+8. Message acknowledged to RabbitMQ
+9. Worker mines block every 10 seconds
+10. Block validation + PoW mining
+11. Transactions marked as CONFIRMED
+12. Market price updated from buy/sell orders
+13. Candle data aggregated per interval
+14. Real-time updates sent via WebSocket/SSE
+
+On Error:
+- Message processing fails → Nack with requeue
+- Failed message goes back to queue
+- Another worker retries after backoff
+- Detailed logs for debugging
 ```
 
 ### Mining Flow
@@ -791,6 +977,35 @@ addr: "localhost:6379"
 password: ""  // leave empty if no password
 db: 0
 ```
+
+### RabbitMQ Configuration
+
+Edit `main.go`:
+
+```go
+// RabbitMQ connection (default: amqp://guest:guest@localhost:5672/)
+rmqClient, err := rabbitmq.NewClient("amqp://guest:guest@localhost:5672/", 10)
+if err != nil {
+    panic(err)
+}
+
+// Configure transaction consumer with worker count
+transactionConsumer := worker.NewTransactionConsumer(rmqClient, transactionService, 5)
+
+// Start consumer in background
+go func() {
+    ctx := context.Background()
+    if err := transactionConsumer.Start(ctx); err != nil {
+        log.Printf("Failed to start transaction consumer: %v\n", err)
+    }
+}()
+```
+
+**Configuration options:**
+
+- `poolSize`: Channel pool size (default: 10)
+- `workerCount`: Concurrent workers (default: 5)
+- `processingTimeout`: Message processing timeout (default: 30s)
 
 ### JWT Secret
 
@@ -891,7 +1106,66 @@ sudo systemctl status redis-server
 redis-cli ping
 ```
 
-### Port Already in Use
+### RabbitMQ Connection Error
+
+```bash
+# Check RabbitMQ is running
+sudo systemctl status rabbitmq-server
+
+# Test connection
+sudo rabbitmqctl status
+
+# Reset RabbitMQ (if needed)
+sudo rabbitmqctl reset
+sudo rabbitmqctl start_app
+```
+
+### Transactions Not Processing
+
+**Symptoms:** API returns 202 but transactions not in database
+
+```bash
+# Check RabbitMQ has messages in queue
+sudo rabbitmqctl list_queues name messages
+
+# View consumer details
+sudo rabbitmqctl list_consumers
+
+# Check application logs for errors
+tail -f logs/app.log | grep TRANSACTION_CONSUMER
+
+# Purge queue if needed (WARNING: deletes messages)
+sudo rabbitmqctl purge_queue transaction.pending
+```
+
+### High Message Latency
+
+```bash
+# Check queue backlog
+sudo rabbitmqctl list_queues name messages
+
+# Increase worker count in main.go
+transactionConsumer := worker.NewTransactionConsumer(rmqClient, txService, 10)  // was 5
+
+# Monitor resource usage
+top  # check CPU and memory
+```
+
+### Message Requeue Loop
+
+**Symptoms:** Messages repeatedly requeued but never acknowledged
+
+```bash
+# Check transaction service is working
+# Verify database connectivity
+# Check if signature validation is failing
+
+# View detailed logs
+docker logs <rabbitmq-container> -f
+
+# Enable RabbitMQ debug logs (optional)
+sudo rabbitmq-server -l debug
+```
 
 ```bash
 # Find process using port 3010
@@ -1183,8 +1457,87 @@ Database (MySQL)
 - **models/**: Data structures (Block, Transaction, User)
 - **utils/**: Cryptographic utilities (PoW, Merkle, signatures)
 - **database/**: Connection and migration management
+- **rabbitmq/**: Message queue client and pooling
+- **worker/**: Background workers (block mining, transaction consuming)
+
+### RabbitMQ Integration
+
+```
+HTTP Handler
+    ↓
+Publish to RabbitMQ (202 Accepted)
+    ↓
+Return immediately to client
+    ↓
+        RabbitMQ Queue (transaction.pending)
+            ↓
+        Consumer Workers (5 parallel)
+            ↓
+        Process Transaction
+            ↓
+        Update Database
+            ↓
+        Acknowledge Message
+```
+
+**Benefits:**
+
+- **Non-blocking API** - Requests return immediately
+- **Scalability** - Add more workers for higher throughput
+- **Reliability** - Failed messages are automatically requeued
+- **Monitoring** - RabbitMQ Management UI for queue stats
 
 ## 🧪 Testing with cURL
+
+### Testing RabbitMQ Transaction Processing
+
+**Features tested:**
+
+1. **Non-blocking submission** - API returns immediately (202)
+2. **Async processing** - Message processed in background
+3. **Worker scaling** - Multiple transactions processed in parallel
+
+```bash
+# 1. Register wallet
+WALLET=$(curl -s -X POST http://localhost:3010/register \
+  -H "Content-Type: application/json" \
+  -d '{"initial_balance": 1000}')
+
+ADDR=$(echo $WALLET | jq -r '.data.address')
+echo "Address: $ADDR"
+
+# 2. Get nonce for signing
+NONCE=$(curl -s http://localhost:3010/transaction/generateNonce/$ADDR | jq -r '.data.nonce')
+echo "Nonce: $NONCE"
+
+# 3. Sign transaction (using your favorite crypto library)
+# Example with OpenSSL:
+SIGNATURE=$(echo -n "$NONCE" | openssl dgst -sha256 -sign private_key.pem | base64)
+
+# 4. Submit transaction to RabbitMQ queue (non-blocking)
+RESPONSE=$(curl -s -X POST http://localhost:3010/send \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"from_address\": \"$ADDR\",
+    \"to_address\": \"RECEIVER_ADDR\",
+    \"amount\": 50,
+    \"nonce\": \"$NONCE\",
+    \"signature\": \"$SIGNATURE\"
+  }")
+
+echo "API Response (202 Accepted):"
+echo $RESPONSE | jq
+
+# 5. Monitor RabbitMQ queue
+echo "Checking queue status..."
+sudo rabbitmqctl list_queues name messages
+
+# 6. Monitor transaction consumer logs
+tail -f logs/app.log | grep TRANSACTION_CONSUMER
+
+# 7. Verify transaction was processed
+curl http://localhost:3010/balance/$ADDR | jq
+```
 
 ### Complete Workflow Example
 

@@ -1,10 +1,15 @@
 package handler
 
 import (
+	"encoding/json"
 	"fmt"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/livingdolls/go-blockchain-simulate/app/dto"
 	"github.com/livingdolls/go-blockchain-simulate/app/services"
+	"github.com/livingdolls/go-blockchain-simulate/app/worker"
+	"github.com/livingdolls/go-blockchain-simulate/rabbitmq"
 )
 
 type SendTransactionRequest struct {
@@ -31,11 +36,13 @@ type BuySellTransactionRequest struct {
 
 type TransactionHandler struct {
 	transactionService services.TransactionService
+	rmqClient          *rabbitmq.Client
 }
 
-func NewTransactionHandler(transactionService services.TransactionService) *TransactionHandler {
+func NewTransactionHandler(transactionService services.TransactionService, rmqClient *rabbitmq.Client) *TransactionHandler {
 	return &TransactionHandler{
 		transactionService: transactionService,
+		rmqClient:          rmqClient,
 	}
 }
 
@@ -46,25 +53,30 @@ func (h *TransactionHandler) Send(c *gin.Context) {
 		return
 	}
 
-	tx, err := h.transactionService.SendWithSignature(c.Request.Context(), req.FromAddress, req.ToAddress, req.Amount, req.Nonce, req.Signature)
+	msg := worker.TransactionMessage{
+		Type:      "SEND",
+		Address:   req.FromAddress,
+		ToAddress: req.ToAddress,
+		Amount:    req.Amount,
+		Nonce:     req.Nonce,
+		Signature: req.Signature,
+	}
 
-	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
+	body, _ := json.Marshal(msg)
+
+	if err := h.rmqClient.Publish(
+		c.Request.Context(),
+		rabbitmq.TransactionExchange,
+		rabbitmq.TransactionSubmittedKey,
+		body,
+	); err != nil {
+		c.JSON(http.StatusInternalServerError, dto.NewErrorResponse[string]("failed to publish transaction message"))
 		return
 	}
 
-	c.JSON(200, gin.H{
-		"message":     "Transaction created successfully",
-		"transaction": tx,
-		"breakdown": gin.H{
-			"amount":             tx.Amount,
-			"fee":                tx.Fee,
-			"total_cost":         tx.Amount + tx.Fee,
-			"recipient_receives": tx.Amount,
-		},
-		"status": "PENDING",
-		"note":   "Transaction will be confirmed when included a block",
-	})
+	c.JSON(202, dto.NewSuccessResponse(map[string]interface{}{
+		"message": "Transaction submitted successfully and is being processed",
+	}))
 }
 
 func (h *TransactionHandler) Buy(c *gin.Context) {
@@ -74,25 +86,29 @@ func (h *TransactionHandler) Buy(c *gin.Context) {
 		return
 	}
 
-	tx, err := h.transactionService.Buy(c.Request.Context(), req.Address, req.Nonce, req.Signature, req.Amount)
+	msg := worker.TransactionMessage{
+		Type:      "BUY",
+		Address:   req.Address,
+		Amount:    req.Amount,
+		Nonce:     req.Nonce,
+		Signature: req.Signature,
+	}
 
-	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
+	body, _ := json.Marshal(msg)
+
+	if err := h.rmqClient.Publish(
+		c.Request.Context(),
+		rabbitmq.TransactionExchange,
+		rabbitmq.TransactionSubmittedKey,
+		body,
+	); err != nil {
+		c.JSON(http.StatusInternalServerError, dto.NewErrorResponse[string]("failed to publish buy transaction message"))
 		return
 	}
 
-	c.JSON(200, gin.H{
-		"message":     "Buy transaction created successfully",
-		"transaction": tx,
-		"breakdown": gin.H{
-			"amount":             tx.Amount,
-			"fee":                tx.Fee,
-			"total_cost":         tx.Amount + tx.Fee,
-			"recipient_receives": tx.Amount,
-		},
-		"status": "PENDING",
-		"note":   "Transaction will be confirmed when included a block",
-	})
+	c.JSON(202, dto.NewSuccessResponse(map[string]interface{}{
+		"message": "Buy transaction submitted successfully and is being processed",
+	}))
 }
 
 func (h *TransactionHandler) Sell(c *gin.Context) {
@@ -102,25 +118,29 @@ func (h *TransactionHandler) Sell(c *gin.Context) {
 		return
 	}
 
-	tx, err := h.transactionService.Sell(c.Request.Context(), req.Address, req.Nonce, req.Signature, req.Amount)
+	msg := worker.TransactionMessage{
+		Type:      "SELL",
+		Address:   req.Address,
+		Amount:    req.Amount,
+		Nonce:     req.Nonce,
+		Signature: req.Signature,
+	}
 
-	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
+	body, _ := json.Marshal(msg)
+
+	if err := h.rmqClient.Publish(
+		c.Request.Context(),
+		rabbitmq.TransactionExchange,
+		rabbitmq.TransactionSubmittedKey,
+		body,
+	); err != nil {
+		c.JSON(http.StatusInternalServerError, dto.NewErrorResponse[string]("failed to publish sell transaction message"))
 		return
 	}
 
-	c.JSON(200, gin.H{
-		"message":     "Sell transaction created successfully",
-		"transaction": tx,
-		"breakdown": gin.H{
-			"amount":             tx.Amount,
-			"fee":                tx.Fee,
-			"total_cost":         tx.Amount + tx.Fee,
-			"recipient_receives": tx.Amount,
-		},
-		"status": "PENDING",
-		"note":   "Transaction will be confirmed when included a block",
-	})
+	c.JSON(202, dto.NewSuccessResponse(map[string]interface{}{
+		"message": "Sell transaction submitted successfully and is being processed",
+	}))
 }
 
 func (h *TransactionHandler) GetTransaction(c *gin.Context) {

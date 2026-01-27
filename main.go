@@ -11,12 +11,14 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/livingdolls/go-blockchain-simulate/app/handler"
+	"github.com/livingdolls/go-blockchain-simulate/app/models"
 	"github.com/livingdolls/go-blockchain-simulate/app/publisher"
 	"github.com/livingdolls/go-blockchain-simulate/app/repository"
 	"github.com/livingdolls/go-blockchain-simulate/app/services"
 	"github.com/livingdolls/go-blockchain-simulate/app/websocket"
 	"github.com/livingdolls/go-blockchain-simulate/app/worker"
 	"github.com/livingdolls/go-blockchain-simulate/database"
+	"github.com/livingdolls/go-blockchain-simulate/rabbitmq"
 	"github.com/livingdolls/go-blockchain-simulate/redis"
 	"github.com/livingdolls/go-blockchain-simulate/security"
 )
@@ -45,6 +47,56 @@ func main() {
 		panic(err)
 	}
 
+	rmqClient, err := rabbitmq.NewClient("amqp://guest:guest@localhost:5672/", 10)
+
+	if err != nil {
+		panic(err)
+	}
+	defer rmqClient.Close()
+
+	//setup queue topology
+	queues := []models.QueueDef{
+		{Name: rabbitmq.TransactionPendingQueue, Durable: true, AutoDelete: false},
+		{Name: rabbitmq.TransactionConfirmedQueue, Durable: true, AutoDelete: false},
+		{Name: rabbitmq.BlockGenerationQueue, Durable: true, AutoDelete: false},
+		{Name: rabbitmq.BlockMinedQueue, Durable: true, AutoDelete: false},
+		{Name: rabbitmq.MarketPricingQueue, Durable: true, AutoDelete: false},
+	}
+
+	exchanges := []models.ExchangeDef{
+		{Name: rabbitmq.TransactionExchange, Kind: "topic", Durable: true},
+		{Name: rabbitmq.BlockExchange, Kind: "topic", Durable: true},
+		{Name: rabbitmq.MarketExchange, Kind: "topic", Durable: true},
+	}
+
+	binds := []models.BindDef{
+		{Queue: rabbitmq.TransactionPendingQueue, Exchange: rabbitmq.TransactionExchange, RoutingKey: rabbitmq.TransactionSubmittedKey},
+		{Queue: rabbitmq.TransactionConfirmedQueue, Exchange: rabbitmq.TransactionExchange, RoutingKey: rabbitmq.TransactionConfirmedKey},
+		{Queue: rabbitmq.BlockGenerationQueue, Exchange: rabbitmq.BlockExchange, RoutingKey: rabbitmq.BlockGenerateKey},
+		{Queue: rabbitmq.BlockMinedQueue, Exchange: rabbitmq.BlockExchange, RoutingKey: rabbitmq.BlockMinedKey},
+		{Queue: rabbitmq.MarketPricingQueue, Exchange: rabbitmq.MarketExchange, RoutingKey: rabbitmq.MarketPricingKey},
+	}
+
+	for _, q := range queues {
+		if err := rmqClient.DeclareQueue(q); err != nil {
+			log.Printf("Warning: Failed to declare queue %s: %v\n", q.Name, err)
+		}
+	}
+
+	for _, e := range exchanges {
+		if err := rmqClient.DeclareExchange(e); err != nil {
+			log.Printf("Warning: Failed to declare exchange %s: %v\n", e.Name, err)
+		}
+	}
+
+	for _, b := range binds {
+		if err := rmqClient.Bind(b); err != nil {
+			log.Printf("Warning: Failed to bind queue %s to exchange %s with key %s: %v\n", b.Queue, b.Exchange, b.RoutingKey, err)
+		}
+	}
+
+	log.Println("[RABBITMQ] Topology initialized")
+
 	hub := websocket.NewHub()
 	go hub.Run()
 
@@ -64,7 +116,7 @@ func main() {
 	txVerify := services.NewVerifyTxService(redisServices)
 
 	transactionService := services.NewTransactionService(userRepo, walletRepo, userBalanceRepository, txRepo, ledgerRepo, redisServices, txVerify)
-	transactionHandler := handler.NewTransactionHandler(transactionService)
+	transactionHandler := handler.NewTransactionHandler(transactionService, rmqClient)
 
 	balanceService := services.NewBalanceService(userRepo, txRepo, userBalanceRepository, publisherWS)
 	balanceHandler := handler.NewBalanceHandler(balanceService)
@@ -162,6 +214,16 @@ func main() {
 		protected.GET("", profileHandler.Me)
 	}
 
+	// initalize consumer transaction
+	transactionConsumer := worker.NewTransactionConsumer(rmqClient, transactionService, 5)
+
+	// start consumer
+	go func() {
+		if err := transactionConsumer.Start(context.Background()); err != nil {
+			log.Println("[TRANSACTION_CONSUMER] Error starting:", err)
+		}
+	}()
+
 	// setup gracefull shutdown
 	go func() {
 		log.Println("Server starting on port :3010")
@@ -184,7 +246,7 @@ func main() {
 
 	// stop workers
 
-	stopWorkers(ctx, generateBlockWorker, candleWorker)
+	stopWorkers(ctx, generateBlockWorker, candleWorker, transactionConsumer)
 
 	// close websocket hub
 	closeHub(hub, 15*time.Second)
@@ -211,6 +273,9 @@ func stopWorkers(ctx context.Context, workers ...interface{}) {
 				case *worker.GenerateCandleWorker:
 					v.Stop()
 					log.Println("candle worker stopped")
+				case *worker.TransactionConsumer:
+					v.Stop()
+					log.Println("transaction consumer stopped")
 				}
 			}(w)
 		}

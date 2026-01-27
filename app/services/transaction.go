@@ -147,7 +147,7 @@ func (s *transactionService) SendWithSignature(ctx context.Context, fromAddress,
 	return tx, nil
 }
 
-func (s *transactionService) Buy(ctx context.Context, address, nonce, signature string, amount float64) (models.Transaction, error) {
+func (s *transactionService) Buy(ctx context.Context, address, signature, nonce string, amount float64) (models.Transaction, error) {
 	// validate inputs amount
 	if amount <= 0 {
 		return models.Transaction{}, fmt.Errorf("amount must be greater than zero")

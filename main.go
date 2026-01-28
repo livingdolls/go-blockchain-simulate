@@ -61,6 +61,8 @@ func main() {
 		{Name: rabbitmq.BlockGenerationQueue, Durable: true, AutoDelete: false},
 		{Name: rabbitmq.BlockMinedQueue, Durable: true, AutoDelete: false},
 		{Name: rabbitmq.MarketPricingQueue, Durable: true, AutoDelete: false},
+		{Name: rabbitmq.MarketPricingQueue, Durable: true, AutoDelete: false},
+		{Name: rabbitmq.MarketVolumeQueue, Durable: true, AutoDelete: false},
 	}
 
 	exchanges := []models.ExchangeDef{
@@ -75,6 +77,7 @@ func main() {
 		{Queue: rabbitmq.BlockGenerationQueue, Exchange: rabbitmq.BlockExchange, RoutingKey: rabbitmq.BlockGenerateKey},
 		{Queue: rabbitmq.BlockMinedQueue, Exchange: rabbitmq.BlockExchange, RoutingKey: rabbitmq.BlockMinedKey},
 		{Queue: rabbitmq.MarketPricingQueue, Exchange: rabbitmq.MarketExchange, RoutingKey: rabbitmq.MarketPricingKey},
+		{Queue: rabbitmq.MarketVolumeQueue, Exchange: rabbitmq.MarketExchange, RoutingKey: rabbitmq.MarketVolumeUpdateKey},
 	}
 
 	for _, q := range queues {
@@ -106,6 +109,8 @@ func main() {
 	userBalanceRepository := repository.NewUserBalanceRepository(db.GetDB())
 	walletRepo := repository.NewUserWalletRepository(db.GetDB())
 
+	pricingPublisher := services.NewMarketPricingPublisher(rmqClient)
+
 	userRepo := repository.NewUserRepository(db.GetDB())
 	userService := services.NewRegisterService(userRepo, walletRepo, userBalanceRepository, jwt, redisServices)
 	userHandler := handler.NewRegisterHandler(userService)
@@ -131,7 +136,7 @@ func main() {
 	candleStreamHandler := handler.NewCandleStreamHandler(candleStreamServices, candleService)
 
 	blockRepo := repository.NewBlockRepository(db.GetDB())
-	blockService := services.NewBlockService(blockRepo, walletRepo, userBalanceRepository, txRepo, userRepo, ledgerRepo, candleService, marketService, publisherWS)
+	blockService := services.NewBlockService(blockRepo, walletRepo, userBalanceRepository, txRepo, userRepo, ledgerRepo, candleService, marketService, publisherWS, pricingPublisher)
 	blockHandler := handler.NewBlockHandler(blockService)
 
 	rewardService := services.NewRewardHandler(blockRepo)
@@ -214,13 +219,27 @@ func main() {
 		protected.GET("", profileHandler.Me)
 	}
 
-	// initalize consumer transaction
+	// initalize consumer
 	transactionConsumer := worker.NewTransactionConsumer(rmqClient, transactionService, 5)
+	marketPricingConsumer := worker.NewMarketPricingConsumer(rmqClient, marketRepo, publisherWS, 3)
+	marketVolumeConsumer := worker.NewMarketVolumeConsumer(rmqClient, marketRepo, 2)
 
 	// start consumer
 	go func() {
 		if err := transactionConsumer.Start(context.Background()); err != nil {
 			log.Println("[TRANSACTION_CONSUMER] Error starting:", err)
+		}
+	}()
+
+	go func() {
+		if err := marketPricingConsumer.Start(); err != nil {
+			log.Println("[MARKET_PRICING_CONSUMER] Error starting:", err)
+		}
+	}()
+
+	go func() {
+		if err := marketVolumeConsumer.Start(); err != nil {
+			log.Println("[MARKET_VOLUME_CONSUMER] Error starting:", err)
 		}
 	}()
 
@@ -246,7 +265,7 @@ func main() {
 
 	// stop workers
 
-	stopWorkers(ctx, generateBlockWorker, candleWorker, transactionConsumer)
+	stopWorkers(ctx, generateBlockWorker, candleWorker, transactionConsumer, marketPricingConsumer, marketVolumeConsumer)
 
 	// close websocket hub
 	closeHub(hub, 15*time.Second)
@@ -276,6 +295,12 @@ func stopWorkers(ctx context.Context, workers ...interface{}) {
 				case *worker.TransactionConsumer:
 					v.Stop()
 					log.Println("transaction consumer stopped")
+				case *worker.MarketPricingConsumer:
+					v.Stop()
+					log.Println("market pricing consumer stopped")
+				case *worker.MarketVolumeConsumer:
+					v.Stop()
+					log.Println("market volume consumer stopped")
 				}
 			}(w)
 		}

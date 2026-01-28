@@ -19,6 +19,7 @@ Benefits:
 - Prevent double-spending dengan queue serialization
 - Transaction confirmation updates via WebSocket
 
+[DONE]
 Queue: market.pricing
 Queue: market.volume.updates
 Purpose: Async price updates berdasarkan block data
@@ -28,6 +29,7 @@ Benefits:
 - Multiple consumers (WebSocket, storage)
 - Historical price tracking
 
+[ONWORKING]
 Queue: ledger.entries
 Purpose: Audit trail & balance reconciliation
 Benefits:

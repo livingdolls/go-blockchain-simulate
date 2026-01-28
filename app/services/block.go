@@ -1,7 +1,9 @@
 package services
 
 import (
+	"context"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -22,28 +24,30 @@ type BlockService interface {
 }
 
 type blockService struct {
-	blockRepo   repository.BlockRepository
-	walletRepo  repository.UserWalletRepository
-	balanceRepo repository.UserBalanceRepository
-	txRepo      repository.TransactionRepository
-	userRepo    repository.UserRepository
-	ledgerRepo  repository.LedgerRepository
-	candle      CandleService
-	market      MarketEngineService
-	publisherWS *publisher.PublisherWS
+	blockRepo        repository.BlockRepository
+	walletRepo       repository.UserWalletRepository
+	balanceRepo      repository.UserBalanceRepository
+	txRepo           repository.TransactionRepository
+	userRepo         repository.UserRepository
+	ledgerRepo       repository.LedgerRepository
+	candle           CandleService
+	market           MarketEngineService
+	publisherWS      *publisher.PublisherWS
+	pricingPublisher MarketPricingPublisher
 }
 
-func NewBlockService(blockRepo repository.BlockRepository, walletRepo repository.UserWalletRepository, balanceRepo repository.UserBalanceRepository, txRepo repository.TransactionRepository, userRepo repository.UserRepository, ledgerRepo repository.LedgerRepository, candle CandleService, market MarketEngineService, publisherWS *publisher.PublisherWS) BlockService {
+func NewBlockService(blockRepo repository.BlockRepository, walletRepo repository.UserWalletRepository, balanceRepo repository.UserBalanceRepository, txRepo repository.TransactionRepository, userRepo repository.UserRepository, ledgerRepo repository.LedgerRepository, candle CandleService, market MarketEngineService, publisherWS *publisher.PublisherWS, pricingPublisher MarketPricingPublisher) BlockService {
 	return &blockService{
-		blockRepo:   blockRepo,
-		walletRepo:  walletRepo,
-		balanceRepo: balanceRepo,
-		txRepo:      txRepo,
-		userRepo:    userRepo,
-		ledgerRepo:  ledgerRepo,
-		candle:      candle,
-		market:      market,
-		publisherWS: publisherWS,
+		blockRepo:        blockRepo,
+		walletRepo:       walletRepo,
+		balanceRepo:      balanceRepo,
+		txRepo:           txRepo,
+		userRepo:         userRepo,
+		ledgerRepo:       ledgerRepo,
+		candle:           candle,
+		market:           market,
+		publisherWS:      publisherWS,
+		pricingPublisher: pricingPublisher,
 	}
 }
 
@@ -88,7 +92,6 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 	}
 
 	var buyVolume, sellVolume float64
-	marketState := currentMarket
 
 	for _, t := range pendingTxs {
 		if strings.EqualFold(t.Type, "BUY") {
@@ -352,18 +355,15 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 	// Process USD Balance Updates For BUY and SELL tx
 
 	var buyerAddresses, sellerAddresses []string
-	var totalBuyUSD, totalSellUSD float64
 	usdBalances := make(map[string]models.UserBalance)
 
 	for _, t := range pendingTxs {
 		if strings.EqualFold(t.Type, "BUY") {
 			// Buyer to_address receives YTE Pays USD
 			buyerAddresses = append(buyerAddresses, t.ToAddress)
-			totalBuyUSD += t.Amount + t.Fee
 		} else if strings.EqualFold(t.Type, "SELL") {
 			// seller : from_address selss YTE receives USD
 			sellerAddresses = append(sellerAddresses, t.FromAddress)
-			totalSellUSD += t.Amount + t.Fee
 		}
 	}
 
@@ -405,8 +405,7 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 			totalCost := t.Amount + t.Fee
 
 			buyerBalance := usdBalances[buyerAddr]
-			balanceBefore := buyerBalance.USDBalance
-			balanceAfter := balanceBefore - totalCost
+			balanceAfter := buyerBalance.USDBalance - totalCost
 
 			usdBalances[buyerAddr] = models.UserBalance{
 				UserAddress:     buyerAddr,
@@ -431,8 +430,7 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 			usdFee := t.Fee * currentMarket.Price
 
 			sellerBalance := usdBalances[sellerAddr]
-			balanceBefore := sellerBalance.USDBalance
-			balanceAfter := balanceBefore + usdAmount
+			balanceAfter := sellerBalance.USDBalance + usdAmount
 
 			usdBalances[sellerAddr] = models.UserBalance{
 				UserAddress:     sellerAddr,
@@ -458,9 +456,23 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 
 	// End process USD
 
+	var marketState models.MarketEngine
 	if s.market != nil {
 		if marketState, err = s.market.ApplyBlockPricingWithTx(tx, blockID, buyVolume, sellVolume, len(pendingTxs)); err != nil {
 			return models.Block{}, fmt.Errorf("apply market pricing: %w", err)
+		}
+	}
+
+	// store market tick
+	var marketTick models.MarketTick
+	if s.market != nil {
+		marketTick = models.MarketTick{
+			BlockID:    blockID,
+			Price:      marketState.Price,
+			BuyVolume:  buyVolume,
+			SellVolume: sellVolume,
+			TxCount:    len(pendingTxs),
+			CreatedAt:  time.Now().Unix(),
 		}
 	}
 
@@ -469,18 +481,38 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 		return models.Block{}, fmt.Errorf("commit transaction: %w", err)
 	}
 
+	// publish market pricing event
+	ctx := context.Background()
+	if s.pricingPublisher != nil && marketState.ID != 0 {
+		if err := s.pricingPublisher.PublishPricingEvent(
+			ctx,
+			blockID,
+			newBlock.BlockNumber,
+			marketState,
+			marketTick,
+			newBlock.MinerAddress,
+		); err != nil {
+			log.Printf("[BLOCK_SERVICE] Warning: failed to publish market pricing event: %v", err)
+		}
+
+		// publish volume update
+		if err := s.pricingPublisher.PublishVolumeUpdate(ctx, marketTick, newBlock.BlockNumber); err != nil {
+			log.Printf("[BLOCK_SERVICE] Warning: failed to publish market volume update: %v", err)
+		}
+	}
+
 	//broadcast new block mined
 	if s.publisherWS != nil {
 		s.publisherWS.Publish(entity.EventTypeBlockMined, newBlock)
 	}
 
-	// Broadcast market update
-	if s.publisherWS != nil && marketState.ID != 0 {
-		s.publisherWS.Publish(entity.EventMarketUpdate, marketState)
-	}
-
 	// load transactions
-	newBlock.Transactions, _ = s.txRepo.GetTransactionsByBlockID(blockID)
+	transactions, err := s.txRepo.GetTransactionsByBlockID(blockID)
+	if err != nil {
+		log.Printf("[BLOCK_SERVICE] Warning: Failed to load transactions: %v", err)
+	} else {
+		newBlock.Transactions = transactions
+	}
 
 	// send notifycation to websocket
 	if s.publisherWS != nil && len(newBlock.Transactions) > 0 {

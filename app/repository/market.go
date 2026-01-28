@@ -10,6 +10,10 @@ type MarketRepository interface {
 	GetStateForUpdateWithTx(tx *sqlx.Tx) (models.MarketEngine, error)
 	UpdateStateWithTx(tx *sqlx.Tx, market models.MarketEngine) error
 	InsertTickWithTx(tx *sqlx.Tx, tick models.MarketTick) (int64, error)
+	GetTickByBlockID(blockID int64) (models.MarketTick, error)
+	GetVolumeHistory(limit, offset int) ([]models.MarketTick, error)
+	GetVolumeBlockRange(startBlock, endBlock int64) ([]models.MarketTick, error)
+	GetAverateVolume(blockRange int64) (float64, float64, error)
 }
 
 type marketRepository struct {
@@ -20,6 +24,50 @@ func NewMarketRepository(db *sqlx.DB) MarketRepository {
 	return &marketRepository{
 		db: db,
 	}
+}
+
+func (m *marketRepository) GetTickByBlockID(blockID int64) (models.MarketTick, error) {
+	var tick models.MarketTick
+
+	err := m.db.Get(&tick, `SELECT id, block_id, price, buy_volume, sell_volume, tx_count, UNIX_TIMESTAMP(created_at) as created_at FROM market_ticks WHERE block_id = ?`, blockID)
+	return tick, err
+}
+
+func (m *marketRepository) GetVolumeHistory(limit, offset int) ([]models.MarketTick, error) {
+	var ticks []models.MarketTick
+	err := m.db.Select(&ticks, `SELECT id, block_id, price, buy_volume, sell_volume, tx_count, UNIX_TIMESTAMP(created_at) as created_at FROM market_ticks ORDER BY block_id DESC LIMIT ? OFFSET ?`, limit, offset)
+	return ticks, err
+}
+
+func (m *marketRepository) GetVolumeBlockRange(startBlock, endBlock int64) ([]models.MarketTick, error) {
+	var ticks []models.MarketTick
+	err := m.db.Select(&ticks, `SELECT id, block_id, price, buy_volume, sell_volume, tx_count, UNIX_TIMESTAMP(created_at) as created_at FROM market_ticks WHERE block_id BETWEEN ? AND ? ORDER BY block_id ASC`, startBlock, endBlock)
+	return ticks, err
+}
+
+func (m *marketRepository) GetAverateVolume(blockRange int64) (float64, float64, error) {
+	var buyAvg, sellAvg float64
+	result := struct {
+		BuyAvg  float64 `db:"buy_avg"`
+		SellAvg float64 `db:"sell_avg"`
+	}{}
+	err := m.db.Get(
+		&result,
+		`SELECT 
+			AVG(buy_volume) as buy_avg,
+			AVG(sell_volume) as sell_avg
+		 FROM market_ticks 
+		 WHERE block_id > (SELECT MAX(block_id) - ? FROM market_ticks)`,
+		blockRange)
+
+	if err != nil {
+		return 0, 0, err
+	}
+
+	buyAvg = result.BuyAvg
+	sellAvg = result.SellAvg
+
+	return buyAvg, sellAvg, nil
 }
 
 // GetState implements MarketRepository.

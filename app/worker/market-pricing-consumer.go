@@ -147,8 +147,10 @@ func (m *MarketPricingConsumer) monitorMarketMetrics(ctx context.Context, event 
 		return err
 	}
 
+	const priceEpsilon = 1e-8
+
 	// validate consistency data
-	if tick.Price != event.Price {
+	if !floatEqual(tick.Price, event.Price, priceEpsilon) {
 		log.Printf("[MARKET_PRICING_CONSUMER] data inconsistency for block %d: tick price %.2f != event price %.2f", event.BlockID, tick.Price, event.Price)
 	}
 
@@ -304,4 +306,32 @@ func (m *MarketPricingConsumer) IsRunning() bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.isRunning
+}
+
+func floatEqual(a, b, epsilon float64) bool {
+	if a == b {
+		return true
+	}
+
+	absA := a
+	if absA < 0 {
+		absA = -absA
+	}
+
+	absB := b
+	if absB < 0 {
+		absB = -absB
+	}
+
+	maxAbs := absA
+	if absB > maxAbs {
+		maxAbs = absB
+	}
+
+	// relative tolerance
+	if maxAbs > 1.0 {
+		return (a-b)/(maxAbs) < epsilon
+	}
+
+	return a-b < epsilon
 }

@@ -29,7 +29,7 @@ Benefits:
 - Multiple consumers (WebSocket, storage)
 - Historical price tracking
 
-[ONWORKING]
+[DONE]
 Queue: ledger.entries
 Purpose: Audit trail & balance reconciliation
 Benefits:

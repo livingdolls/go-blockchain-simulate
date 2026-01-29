@@ -10,296 +10,77 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/livingdolls/go-blockchain-simulate/app/handler"
-	"github.com/livingdolls/go-blockchain-simulate/app/models"
-	"github.com/livingdolls/go-blockchain-simulate/app/publisher"
-	"github.com/livingdolls/go-blockchain-simulate/app/repository"
-	"github.com/livingdolls/go-blockchain-simulate/app/services"
+	"github.com/livingdolls/go-blockchain-simulate/app"
 	"github.com/livingdolls/go-blockchain-simulate/app/websocket"
 	"github.com/livingdolls/go-blockchain-simulate/app/worker"
-	"github.com/livingdolls/go-blockchain-simulate/database"
-	"github.com/livingdolls/go-blockchain-simulate/rabbitmq"
-	"github.com/livingdolls/go-blockchain-simulate/redis"
-	"github.com/livingdolls/go-blockchain-simulate/security"
 )
 
 func main() {
+	// Initialize application configuration and dependencies
+	appConfig := &app.AppConfig{}
 
-	// initialize database
-	db, err := database.NewDBConn()
-
-	if err != nil {
-		panic(err)
-	}
-	defer db.Close()
-
-	jwt := security.NewJWTAdapter("yurinahirate-verysecret", 24*time.Hour)
-
-	redisClient, err := redis.NewRedisMemory()
-	if err != nil {
-		panic(err)
-	}
-	defer redisClient.Close()
-
-	redisServices, err := redis.NewMemoryAdapter(redisClient, 1024)
-
-	if err != nil {
-		panic(err)
+	// Initialize infrastructure (database, redis, rabbitmq, auth)
+	if err := appConfig.InitializeInfrastructure(); err != nil {
+		log.Fatalf("[INIT] Failed to initialize infrastructure: %v\n", err)
 	}
 
-	rmqClient, err := rabbitmq.NewClient("amqp://guest:guest@localhost:5672/", 10)
-
-	if err != nil {
-		panic(err)
-	}
-	defer rmqClient.Close()
-
-	//setup queue topology
-	queues := []models.QueueDef{
-		{Name: rabbitmq.TransactionPendingQueue, Durable: true, AutoDelete: false},
-		{Name: rabbitmq.TransactionConfirmedQueue, Durable: true, AutoDelete: false},
-		{Name: rabbitmq.BlockGenerationQueue, Durable: true, AutoDelete: false},
-		{Name: rabbitmq.BlockMinedQueue, Durable: true, AutoDelete: false},
-		{Name: rabbitmq.MarketPricingQueue, Durable: true, AutoDelete: false},
-		{Name: rabbitmq.MarketPricingQueue, Durable: true, AutoDelete: false},
-		{Name: rabbitmq.MarketVolumeQueue, Durable: true, AutoDelete: false},
-		{Name: rabbitmq.LedgerEntriesQueue, Durable: true, AutoDelete: false},
+	// Setup RabbitMQ topology (queues, exchanges, bindings)
+	if err := appConfig.SetupRabbitMQTopology(); err != nil {
+		log.Fatalf("[INIT] Failed to setup RabbitMQ topology: %v\n", err)
 	}
 
-	exchanges := []models.ExchangeDef{
-		{Name: rabbitmq.TransactionExchange, Kind: "topic", Durable: true},
-		{Name: rabbitmq.BlockExchange, Kind: "topic", Durable: true},
-		{Name: rabbitmq.MarketExchange, Kind: "topic", Durable: true},
-		{Name: rabbitmq.LedgerExchange, Kind: "topic", Durable: true},
-	}
+	// Initialize WebSocket hub
+	appConfig.InitializeWebSocket()
 
-	binds := []models.BindDef{
-		{Queue: rabbitmq.TransactionPendingQueue, Exchange: rabbitmq.TransactionExchange, RoutingKey: rabbitmq.TransactionSubmittedKey},
-		{Queue: rabbitmq.TransactionConfirmedQueue, Exchange: rabbitmq.TransactionExchange, RoutingKey: rabbitmq.TransactionConfirmedKey},
-		{Queue: rabbitmq.BlockGenerationQueue, Exchange: rabbitmq.BlockExchange, RoutingKey: rabbitmq.BlockGenerateKey},
-		{Queue: rabbitmq.BlockMinedQueue, Exchange: rabbitmq.BlockExchange, RoutingKey: rabbitmq.BlockMinedKey},
-		{Queue: rabbitmq.MarketPricingQueue, Exchange: rabbitmq.MarketExchange, RoutingKey: rabbitmq.MarketPricingKey},
-		{Queue: rabbitmq.MarketVolumeQueue, Exchange: rabbitmq.MarketExchange, RoutingKey: rabbitmq.MarketVolumeUpdateKey},
-		{Queue: rabbitmq.LedgerEntriesQueue, Exchange: rabbitmq.LedgerExchange, RoutingKey: rabbitmq.LedgerEntryKey},
-	}
+	// Initialize all repositories
+	appConfig.InitializeRepositories()
 
-	for _, q := range queues {
-		if err := rmqClient.DeclareQueue(q); err != nil {
-			log.Printf("Warning: Failed to declare queue %s: %v\n", q.Name, err)
-		}
-	}
+	// Initialize publishers (market pricing, ledger)
+	appConfig.InitializePublishers()
 
-	for _, e := range exchanges {
-		if err := rmqClient.DeclareExchange(e); err != nil {
-			log.Printf("Warning: Failed to declare exchange %s: %v\n", e.Name, err)
-		}
-	}
+	// Initialize services
+	appConfig.InitializeServices()
 
-	for _, b := range binds {
-		if err := rmqClient.Bind(b); err != nil {
-			log.Printf("Warning: Failed to bind queue %s to exchange %s with key %s: %v\n", b.Queue, b.Exchange, b.RoutingKey, err)
-		}
-	}
+	// Initialize HTTP handlers
+	appConfig.InitializeHandlers()
 
-	log.Println("[RABBITMQ] Topology initialized")
+	// Initialize background workers (block generation, candle generation)
+	appConfig.InitializeWorkers()
 
-	hub := websocket.NewHub()
-	go hub.Run()
+	// Initialize message consumers
+	appConfig.InitializeConsumers()
 
-	hubHandler := websocket.GinHandler(hub, jwt)
-	publisherWS := publisher.NewPublisherWS(hub)
+	// Start all message consumers
+	appConfig.StartConsumers()
 
-	userBalanceRepository := repository.NewUserBalanceRepository(db.GetDB())
-	walletRepo := repository.NewUserWalletRepository(db.GetDB())
-
-	pricingPublisher := services.NewMarketPricingPublisher(rmqClient)
-	ledgerPublisher := services.NewLedgerPublisher(rmqClient)
-
-	userRepo := repository.NewUserRepository(db.GetDB())
-	userService := services.NewRegisterService(userRepo, walletRepo, userBalanceRepository, jwt, redisServices)
-	userHandler := handler.NewRegisterHandler(userService)
-
-	txRepo := repository.NewTransactionRepository(db.GetDB())
-	ledgerRepo := repository.NewLedgerRepository(db.GetDB())
-
-	txVerify := services.NewVerifyTxService(redisServices)
-
-	transactionService := services.NewTransactionService(userRepo, walletRepo, userBalanceRepository, txRepo, ledgerRepo, redisServices, txVerify)
-	transactionHandler := handler.NewTransactionHandler(transactionService, rmqClient)
-
-	balanceService := services.NewBalanceService(userRepo, txRepo, userBalanceRepository, publisherWS)
-	balanceHandler := handler.NewBalanceHandler(balanceService)
-
-	marketRepo := repository.NewMarketRepository(db.GetDB())
-	marketService := services.NewMarketEngineService(marketRepo)
-
-	candleStreamServices := services.NewCandleStreamService(redisServices)
-	candleRepo := repository.NewCandleRepository(db.GetDB())
-	candleService := services.NewCandleService(candleRepo, candleStreamServices)
-	candleHandler := handler.NewCandleHandler(candleService)
-	candleStreamHandler := handler.NewCandleStreamHandler(candleStreamServices, candleService)
-
-	blockRepo := repository.NewBlockRepository(db.GetDB())
-	blockService := services.NewBlockService(blockRepo, walletRepo, userBalanceRepository, txRepo, userRepo, candleService, marketService, publisherWS, pricingPublisher, ledgerPublisher)
-	blockHandler := handler.NewBlockHandler(blockService)
-
-	rewardService := services.NewRewardHandler(blockRepo)
-	rewardHandler := handler.NewRewardHandler(rewardService, blockService)
-
-	profileService := services.NewProfileService(userRepo)
-	profileHandler := handler.NewUserHandler(profileService, jwt)
-
-	marketHandler := handler.NewMarketHandler(marketService)
-
-	// start worker
-	generateBlockWorker := worker.NewGenerateBlockWorker(blockService)
-	generateBlockWorker.Start(10 * time.Second)
-
-	candleWorker := worker.NewGenerateCandlesWorker(candleService, 4)
-	candleWorker.SetJobTimeout(45 * time.Second)
-	candleWorker.Start(1 * time.Second)
-
+	// Setup HTTP router with all routes
 	r := gin.Default()
+	r.Use(app.CORSMiddleware())
+	appConfig.SetupRoutes(r)
 
-	allowedOrigins := map[string]bool{
-		"http://192.168.88.178:3001": true,
-		"http://localhost:3001":      true,
-		"http://192.168.88.178:3000": true,
-		"http://192.168.88.178:3002": true,
-	}
-
-	r.Use(func(c *gin.Context) {
-		origin := c.GetHeader("Origin")
-		if origin != "" && allowedOrigins[origin] {
-			c.Header("Access-Control-Allow-Origin", origin)
-			c.Header("Vary", "Origin")
-		}
-
-		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-		c.Header("Access-Control-Allow-Headers", "Origin, Content-Type, Accept, Authorization")
-		c.Header("Access-Control-Allow-Credentials", "true")
-
-		if c.Request.Method == "OPTIONS" {
-			c.AbortWithStatus(204)
-			return
-		}
-
-		c.Next()
-	})
-
-	r.POST("/register", userHandler.Register)
-	r.POST("/challenge/:address", userHandler.Challenge)
-	r.POST("/challenge/verify", userHandler.Verify)
-	r.POST("/send", transactionHandler.Send)
-	r.GET("/generate-tx-nonce/:address", transactionHandler.GenerateNonce)
-	r.GET("/transaction/:id", transactionHandler.GetTransaction)
-	r.POST("/transaction/buy", transactionHandler.Buy)
-	r.POST("/transaction/sell", transactionHandler.Sell)
-	r.GET("/balance/:address", balanceHandler.GetUserWithUSDBalance)
-	r.POST("/balance/topup", balanceHandler.TopUpUSDBalance)
-	r.GET("/wallet/:address", balanceHandler.GetWalletBalance)
-	r.POST("/generate-block", blockHandler.GenerateBlock)
-	r.GET("/blocks", blockHandler.GetBlocks)
-	r.GET("/blocks/:id", blockHandler.GetBlockByID)
-	r.GET("/blocks/detail/:number", blockHandler.GetBlockByBlockNumber)
-	r.GET("/blocks/integrity", blockHandler.CheckBlockchainIntegrity)
-	r.GET("/reward/schedule/:number", rewardHandler.GetRewardSchedule)
-	r.GET("/reward/block/:number", rewardHandler.GetBlockReward)
-	r.GET("/reward/info", rewardHandler.GetRewardInfo)
-	r.GET("/ws/market", hubHandler)
-	r.GET("/market", marketHandler.GetMarketEngineState)
-	r.GET("/sse/candles", candleStreamHandler.StreamCandles)
-	r.GET("/sse/ping", candleStreamHandler.Ping)
-
-	candleGroup := r.Group("/candles")
-	{
-		candleGroup.GET("", candleHandler.GetCandle)
-		candleGroup.GET("/range", candleHandler.GetCandleFrom)
-	}
-
-	protected := r.Group("/profile")
-	protected.Use(handler.JWTMiddleware(jwt))
-	{
-		protected.GET("", profileHandler.Me)
-	}
-
-	reconcileConfig := worker.RecoilConfig{
-		WorkerCount:       5,
-		ReconcileWorkers:  3,
-		ProcessingTimeout: 30 * time.Second,
-		MaxDiscrepancies:  100000,
-	}
-
-	// initalize consumer
-	transactionConsumer := worker.NewTransactionConsumer(rmqClient, transactionService, 5)
-	marketPricingConsumer := worker.NewMarketPricingConsumer(rmqClient, marketRepo, publisherWS, 3)
-	marketVolumeConsumer := worker.NewMarketVolumeConsumer(rmqClient, marketRepo, 2)
-	auditConsumer := worker.NewLedgerAuditConsumer(rmqClient, 3)
-	reconcileConsumer := worker.NewLedgerReconcileConsumer(rmqClient, walletRepo, ledgerRepo, reconcileConfig)
-
-	// start consumer
-	go func() {
-		if err := transactionConsumer.Start(context.Background()); err != nil {
-			log.Println("[TRANSACTION_CONSUMER] Error starting:", err)
-		}
-	}()
-
-	go func() {
-		if err := marketPricingConsumer.Start(); err != nil {
-			log.Println("[MARKET_PRICING_CONSUMER] Error starting:", err)
-		}
-	}()
-
-	go func() {
-		if err := marketVolumeConsumer.Start(); err != nil {
-			log.Println("[MARKET_VOLUME_CONSUMER] Error starting:", err)
-		}
-	}()
-
-	go func() {
-		if err := auditConsumer.Start(); err != nil {
-			log.Println("[LEDGER_AUDIT_CONSUMER] Error starting:", err)
-		}
-	}()
-
-	go func() {
-		if err := reconcileConsumer.Start(); err != nil {
-			log.Println("[LEDGER_RECONCILE_CONSUMER] Error starting:", err)
-		}
-	}()
-
-	// setup gracefull shutdown
+	// Start HTTP server
 	go func() {
 		log.Println("Server starting on port :3010")
-
 		if err := r.Run(":3010"); err != nil && err.Error() != "http: Server closed" {
-			log.Printf("Server error: %v", err)
+			log.Printf("Server error: %v\n", err)
 		}
 	}()
 
+	// Wait for shutdown signal
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
-	// wait signal
 	sig := <-sigChan
 	log.Printf("Received signal: %v. Shutting down...\n", sig)
 
-	// gracefull shutdown
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	// stop workers
-
-	stopWorkers(ctx, generateBlockWorker, candleWorker, transactionConsumer, marketPricingConsumer, marketVolumeConsumer, auditConsumer, reconcileConsumer)
-
-	// close websocket hub
-	closeHub(hub, 15*time.Second)
+	// Graceful shutdown with timeout
+	appConfig.Shutdown()
 
 	log.Println("Server gracefully stopped")
 	os.Exit(0)
-
 }
 
+// stopWorkers stops all workers gracefully with timeout
 func stopWorkers(ctx context.Context, workers ...interface{}) {
 	var wg sync.WaitGroup
 	stopChan := make(chan struct{})
@@ -347,13 +128,12 @@ func stopWorkers(ctx context.Context, workers ...interface{}) {
 	}
 }
 
+// closeHub closes WebSocket hub connections with timeout
 func closeHub(hub *websocket.Hub, timeout time.Duration) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	// close client connections
 	done := make(chan struct{})
-
 	go func() {
 		hub.Close()
 		close(done)

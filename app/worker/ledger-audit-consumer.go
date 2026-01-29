@@ -79,5 +79,79 @@ func (l *LedgerAuditConsumer) handleMessage(msg amqp091.Delivery) {
 }
 
 func (l *LedgerAuditConsumer) processAuditTrail(ctx context.Context, batch dto.LedgerBatchEvent) {
-	panic("unimplement")
+	l.auditTrailMu.Lock()
+	defer l.auditTrailMu.Unlock()
+
+	for _, entry := range batch.Entries {
+		action := l.determineAction(entry)
+
+		auditEntry := dto.AuditTrailEntry{
+			EntryID:     batch.BlockID,
+			Action:      action,
+			FromAddress: entry.Address,
+			ToAddress:   entry.Address,
+			Amount:      entry.Amount,
+			BlockNumber: batch.BlockNumber,
+			Timestamp:   entry.Timestamp,
+			Reconciled:  false,
+		}
+
+		l.auditTrail = append(l.auditTrail, auditEntry)
+
+		if entry.Amount < -1000 || entry.Amount > 1000 {
+			log.Printf(
+				"[LEDGER_AUDIT_CONSUMER] ALERT: Large transaction detected in block #%d for address %s amount %f",
+				batch.BlockNumber,
+				entry.Address,
+				entry.Amount,
+			)
+		}
+	}
+
+	// periodic audit log
+	if batch.BlockNumber%100 == 0 {
+		log.Printf(
+			"[LEDGER_AUDIT_CONSUMER] Audit log at block #%d: total audit entries %d",
+			batch.BlockNumber,
+			len(l.auditTrail),
+		)
+	}
+}
+
+func (l *LedgerAuditConsumer) determineAction(entry dto.LedgerEntryEvent) string {
+	if entry.TxID == nil {
+		return "REWARD"
+	}
+	if entry.Amount > 0 {
+		return "CREDIT"
+	}
+
+	return "DEBIT"
+}
+
+func (l *LedgerAuditConsumer) GetAuditTrail(limit int) []dto.AuditTrailEntry {
+	l.auditTrailMu.RLock()
+	defer l.auditTrailMu.RUnlock()
+
+	if limit > len(l.auditTrail) {
+		limit = len(l.auditTrail)
+	}
+
+	return l.auditTrail[len(l.auditTrail)-limit:]
+}
+
+func (l *LedgerAuditConsumer) Stop() {
+	l.mu.Lock()
+
+	if !l.isRunning {
+		l.mu.Unlock()
+		return
+	}
+
+	l.isRunning = false
+	l.mu.Unlock()
+
+	log.Println("[LEDGER_AUDIT_CONSUMER] Stopping ledger audit consumer...")
+	close(l.stopChan)
+	log.Println("[LEDGER_AUDIT_CONSUMER] Ledger audit consumer stopped.")
 }

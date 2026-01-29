@@ -63,12 +63,14 @@ func main() {
 		{Name: rabbitmq.MarketPricingQueue, Durable: true, AutoDelete: false},
 		{Name: rabbitmq.MarketPricingQueue, Durable: true, AutoDelete: false},
 		{Name: rabbitmq.MarketVolumeQueue, Durable: true, AutoDelete: false},
+		{Name: rabbitmq.LedgerEntriesQueue, Durable: true, AutoDelete: false},
 	}
 
 	exchanges := []models.ExchangeDef{
 		{Name: rabbitmq.TransactionExchange, Kind: "topic", Durable: true},
 		{Name: rabbitmq.BlockExchange, Kind: "topic", Durable: true},
 		{Name: rabbitmq.MarketExchange, Kind: "topic", Durable: true},
+		{Name: rabbitmq.LedgerExchange, Kind: "topic", Durable: true},
 	}
 
 	binds := []models.BindDef{
@@ -78,6 +80,7 @@ func main() {
 		{Queue: rabbitmq.BlockMinedQueue, Exchange: rabbitmq.BlockExchange, RoutingKey: rabbitmq.BlockMinedKey},
 		{Queue: rabbitmq.MarketPricingQueue, Exchange: rabbitmq.MarketExchange, RoutingKey: rabbitmq.MarketPricingKey},
 		{Queue: rabbitmq.MarketVolumeQueue, Exchange: rabbitmq.MarketExchange, RoutingKey: rabbitmq.MarketVolumeUpdateKey},
+		{Queue: rabbitmq.LedgerEntriesQueue, Exchange: rabbitmq.LedgerExchange, RoutingKey: rabbitmq.LedgerEntryKey},
 	}
 
 	for _, q := range queues {
@@ -110,6 +113,7 @@ func main() {
 	walletRepo := repository.NewUserWalletRepository(db.GetDB())
 
 	pricingPublisher := services.NewMarketPricingPublisher(rmqClient)
+	ledgerPublisher := services.NewLedgerPublisher(rmqClient)
 
 	userRepo := repository.NewUserRepository(db.GetDB())
 	userService := services.NewRegisterService(userRepo, walletRepo, userBalanceRepository, jwt, redisServices)
@@ -136,7 +140,7 @@ func main() {
 	candleStreamHandler := handler.NewCandleStreamHandler(candleStreamServices, candleService)
 
 	blockRepo := repository.NewBlockRepository(db.GetDB())
-	blockService := services.NewBlockService(blockRepo, walletRepo, userBalanceRepository, txRepo, userRepo, ledgerRepo, candleService, marketService, publisherWS, pricingPublisher)
+	blockService := services.NewBlockService(blockRepo, walletRepo, userBalanceRepository, txRepo, userRepo, candleService, marketService, publisherWS, pricingPublisher, ledgerPublisher)
 	blockHandler := handler.NewBlockHandler(blockService)
 
 	rewardService := services.NewRewardHandler(blockRepo)
@@ -219,10 +223,19 @@ func main() {
 		protected.GET("", profileHandler.Me)
 	}
 
+	reconcileConfig := worker.RecoilConfig{
+		WorkerCount:       5,
+		ReconcileWorkers:  3,
+		ProcessingTimeout: 30 * time.Second,
+		MaxDiscrepancies:  100000,
+	}
+
 	// initalize consumer
 	transactionConsumer := worker.NewTransactionConsumer(rmqClient, transactionService, 5)
 	marketPricingConsumer := worker.NewMarketPricingConsumer(rmqClient, marketRepo, publisherWS, 3)
 	marketVolumeConsumer := worker.NewMarketVolumeConsumer(rmqClient, marketRepo, 2)
+	auditConsumer := worker.NewLedgerAuditConsumer(rmqClient, 3)
+	reconcileConsumer := worker.NewLedgerReconcileConsumer(rmqClient, walletRepo, ledgerRepo, reconcileConfig)
 
 	// start consumer
 	go func() {
@@ -240,6 +253,18 @@ func main() {
 	go func() {
 		if err := marketVolumeConsumer.Start(); err != nil {
 			log.Println("[MARKET_VOLUME_CONSUMER] Error starting:", err)
+		}
+	}()
+
+	go func() {
+		if err := auditConsumer.Start(); err != nil {
+			log.Println("[LEDGER_AUDIT_CONSUMER] Error starting:", err)
+		}
+	}()
+
+	go func() {
+		if err := reconcileConsumer.Start(); err != nil {
+			log.Println("[LEDGER_RECONCILE_CONSUMER] Error starting:", err)
 		}
 	}()
 
@@ -265,7 +290,7 @@ func main() {
 
 	// stop workers
 
-	stopWorkers(ctx, generateBlockWorker, candleWorker, transactionConsumer, marketPricingConsumer, marketVolumeConsumer)
+	stopWorkers(ctx, generateBlockWorker, candleWorker, transactionConsumer, marketPricingConsumer, marketVolumeConsumer, auditConsumer, reconcileConsumer)
 
 	// close websocket hub
 	closeHub(hub, 15*time.Second)
@@ -288,19 +313,25 @@ func stopWorkers(ctx context.Context, workers ...interface{}) {
 				switch v := workerInstance.(type) {
 				case *worker.GenerateBlockWorker:
 					v.Stop()
-					log.Println("block worker stopped")
+					log.Println("[WORKER] block worker stopped")
 				case *worker.GenerateCandleWorker:
 					v.Stop()
-					log.Println("candle worker stopped")
+					log.Println("[WORKER] candle worker stopped")
 				case *worker.TransactionConsumer:
 					v.Stop()
-					log.Println("transaction consumer stopped")
+					log.Println("[WORKER] transaction consumer stopped")
 				case *worker.MarketPricingConsumer:
 					v.Stop()
-					log.Println("market pricing consumer stopped")
+					log.Println("[WORKER] market pricing consumer stopped")
 				case *worker.MarketVolumeConsumer:
 					v.Stop()
-					log.Println("market volume consumer stopped")
+					log.Println("[WORKER] market volume consumer stopped")
+				case *worker.LedgerAuditConsumer:
+					v.Stop()
+					log.Println("[WORKER] ledger audit consumer stopped")
+				case *worker.LedgerReconcileConsumer:
+					v.Stop()
+					log.Println("[WORKER] ledger reconcile consumer stopped")
 				}
 			}(w)
 		}
@@ -310,9 +341,9 @@ func stopWorkers(ctx context.Context, workers ...interface{}) {
 
 	select {
 	case <-stopChan:
-		log.Println("All workers stopped")
+		log.Println("[WORKER] All workers stopped")
 	case <-ctx.Done():
-		log.Println("Timeout while stopping workers")
+		log.Println("[WORKER] Timeout while stopping workers")
 	}
 }
 
@@ -330,8 +361,8 @@ func closeHub(hub *websocket.Hub, timeout time.Duration) {
 
 	select {
 	case <-done:
-		log.Println("WebSocket hub closed all connections")
+		log.Println("[WEBSOCKET] WebSocket hub closed all connections")
 	case <-ctx.Done():
-		log.Println("Timeout while closing WebSocket hub connections")
+		log.Println("[WEBSOCKET] Timeout while closing WebSocket hub connections")
 	}
 }

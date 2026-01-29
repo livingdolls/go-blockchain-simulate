@@ -11,8 +11,18 @@ type LedgerEntry struct {
 	BalanceAfter float64
 }
 
+type LedgerEntryWithID struct {
+	ID           int64
+	TxID         *int64
+	Address      string
+	Amount       float64
+	BalanceAfter float64
+}
+
 type LedgerRepository interface {
 	BulkCreateWithTx(dbTx *sqlx.Tx, entries []LedgerEntry) error
+	GetEntriesByBlockID(blockID int64) ([]LedgerEntryWithID, error)
+	GetEntriesByAddress(address string, limit int) ([]LedgerEntryWithID, error)
 }
 
 type ledgerRepository struct {
@@ -43,4 +53,18 @@ func (l *ledgerRepository) BulkCreateWithTx(dbTx *sqlx.Tx, entries []LedgerEntry
 	}
 	_, err := dbTx.Exec(query, values...)
 	return err
+}
+
+func (l *ledgerRepository) GetEntriesByBlockID(blockID int64) ([]LedgerEntryWithID, error) {
+	var entries []LedgerEntryWithID
+	query := `SELECT id, tx_id, address, change_amount, balance_after FROM ledger WHERE block_id = ? ORDER BY id ASC`
+	err := l.db.Select(&entries, query, blockID)
+	return entries, err
+}
+
+func (l *ledgerRepository) GetEntriesByAddress(address string, limit int) ([]LedgerEntryWithID, error) {
+	var entries []LedgerEntryWithID
+	query := `SELECT id, tx_id, address, change_amount, balance_after FROM ledger WHERE address = ? ORDER BY id DESC LIMIT ?`
+	err := l.db.Select(&entries, query, address, limit)
+	return entries, err
 }

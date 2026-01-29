@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/livingdolls/go-blockchain-simulate/app/dto"
 	"github.com/livingdolls/go-blockchain-simulate/app/entity"
 	"github.com/livingdolls/go-blockchain-simulate/app/models"
 	"github.com/livingdolls/go-blockchain-simulate/app/publisher"
@@ -29,25 +30,25 @@ type blockService struct {
 	balanceRepo      repository.UserBalanceRepository
 	txRepo           repository.TransactionRepository
 	userRepo         repository.UserRepository
-	ledgerRepo       repository.LedgerRepository
 	candle           CandleService
 	market           MarketEngineService
 	publisherWS      *publisher.PublisherWS
 	pricingPublisher MarketPricingPublisher
+	ledgerPublisher  LedgerPublisher
 }
 
-func NewBlockService(blockRepo repository.BlockRepository, walletRepo repository.UserWalletRepository, balanceRepo repository.UserBalanceRepository, txRepo repository.TransactionRepository, userRepo repository.UserRepository, ledgerRepo repository.LedgerRepository, candle CandleService, market MarketEngineService, publisherWS *publisher.PublisherWS, pricingPublisher MarketPricingPublisher) BlockService {
+func NewBlockService(blockRepo repository.BlockRepository, walletRepo repository.UserWalletRepository, balanceRepo repository.UserBalanceRepository, txRepo repository.TransactionRepository, userRepo repository.UserRepository, candle CandleService, market MarketEngineService, publisherWS *publisher.PublisherWS, pricingPublisher MarketPricingPublisher, ledgerPublisher LedgerPublisher) BlockService {
 	return &blockService{
 		blockRepo:        blockRepo,
 		walletRepo:       walletRepo,
 		balanceRepo:      balanceRepo,
 		txRepo:           txRepo,
 		userRepo:         userRepo,
-		ledgerRepo:       ledgerRepo,
 		candle:           candle,
 		market:           market,
 		publisherWS:      publisherWS,
 		pricingPublisher: pricingPublisher,
+		ledgerPublisher:  ledgerPublisher,
 	}
 }
 
@@ -267,7 +268,7 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 		currentBalances["MINER_ACCOUNT"] += t.Fee
 		totalFees += t.Fee
 
-		// Prepare ledger entries
+		// Prepare ledger entries (for event publishing & audit trail)
 		ledgerEntries = append(ledgerEntries,
 			repository.LedgerEntry{
 				TxID:         txIDPtr,
@@ -322,12 +323,6 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 		return models.Block{}, fmt.Errorf("create block: %w", err)
 	}
 	newBlock.ID = blockID
-
-	// Bulk insert ledger entries (1 query instead of N*2)
-	err = s.ledgerRepo.BulkCreateWithTx(tx, ledgerEntries)
-	if err != nil {
-		return models.Block{}, fmt.Errorf("bulk create ledger: %w", err)
-	}
 
 	// Bulk insert block-transaction links (1 query instead of N)
 	err = s.blockRepo.BulkInsertBlockTransactionsWithTx(tx, blockID, txIDs)
@@ -481,8 +476,25 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 		return models.Block{}, fmt.Errorf("commit transaction: %w", err)
 	}
 
-	// publish market pricing event
 	ctx := context.Background()
+
+	// PHASE 3: Async Event Publishing (POST-COMMIT)
+
+	// publish ledger batch event
+	if s.ledgerPublisher != nil {
+		ledgerEvents := make([]dto.LedgerEntryEvent, 0, len(ledgerEntries))
+		if err := s.ledgerPublisher.PublishLedgerBatch(
+			ctx,
+			blockID,
+			newBlock.BlockNumber,
+			ledgerEvents,
+			newBlock.MinerAddress,
+		); err != nil {
+			log.Printf("[BLOCK_SERVICE] Warning: failed to publish ledger batch: %v", err)
+		}
+	}
+
+	// publish market pricing event
 	if s.pricingPublisher != nil && marketState.ID != 0 {
 		if err := s.pricingPublisher.PublishPricingEvent(
 			ctx,

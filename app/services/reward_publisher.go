@@ -4,9 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 
 	"github.com/livingdolls/go-blockchain-simulate/app/dto"
+	"github.com/livingdolls/go-blockchain-simulate/logger"
 	"github.com/livingdolls/go-blockchain-simulate/rabbitmq"
 )
 
@@ -38,12 +38,11 @@ func (rp *rewardPublisher) PublishRewardCalculation(ctx context.Context, event d
 	)
 
 	if err != nil {
-		log.Printf("[REWARD_PUBLISHER] Failed to publish reward calculation event: %v", err)
+		logger.LogError("[REWARD_PUBLISHER] Failed to publish reward calculation event", err)
 		return err
 	}
 
-	log.Printf("[REWARD_PUBLISHER] Published reward calculation event for block %d", event.BlockNumber)
-
+	logger.LogInfo(fmt.Sprintf("[REWARD_PUBLISHER] Published reward calculation event for block %d", event.BlockNumber))
 	return nil
 }
 
@@ -62,11 +61,10 @@ func (rp *rewardPublisher) PublishRewardDistribution(ctx context.Context, event 
 	)
 
 	if err != nil {
-		log.Printf("[REWARD_PUBLISHER] Failed to publish reward distribution event: %v", err)
+		logger.LogError("[REWARD_PUBLISHER] Failed to publish reward distribution event", err)
 		return err
 	}
 
-	log.Printf("[REWARD_PUBLISHER] Published reward distribution event for block %d", event.BlockNumber)
-
+	logger.LogInfo(fmt.Sprintf("[REWARD_PUBLISHER] Published reward distribution event for block %d", event.BlockNumber))
 	return nil
 }

@@ -3,13 +3,14 @@ package worker
 import (
 	"context"
 	"encoding/json"
-	"log"
 	"sync"
 	"time"
 
 	"github.com/livingdolls/go-blockchain-simulate/app/dto"
+	"github.com/livingdolls/go-blockchain-simulate/logger"
 	"github.com/livingdolls/go-blockchain-simulate/rabbitmq"
 	"github.com/rabbitmq/amqp091-go"
+	"go.uber.org/zap"
 )
 
 type LedgerAuditConsumer struct {
@@ -43,7 +44,7 @@ func (l *LedgerAuditConsumer) Start() error {
 	l.isRunning = true
 	l.mu.Unlock()
 
-	log.Println("[LEDGER_AUDIT_CONSUMER] Starting ledger audit consumer...")
+	logger.LogInfo("Starting ledger audit consumer")
 
 	return l.client.Consume(
 		rabbitmq.LedgerAuditQueue,
@@ -55,14 +56,14 @@ func (l *LedgerAuditConsumer) Start() error {
 func (l *LedgerAuditConsumer) handleMessage(msg amqp091.Delivery) {
 	defer func() {
 		if err := msg.Ack(false); err != nil {
-			log.Printf("[LEDGER_AUDIT_CONSUMER] Failed to ack message: %v", err)
+			logger.LogError("Failed to ack message", err)
 		}
 	}()
 
 	var batch dto.LedgerBatchEvent
 
 	if err := json.Unmarshal(msg.Body, &batch); err != nil {
-		log.Printf("[LEDGER_AUDIT_CONSUMER] Failed to unmarshal ledger batch: %v", err)
+		logger.LogError("Failed to unmarshal ledger batch", err)
 		return
 	}
 
@@ -71,10 +72,9 @@ func (l *LedgerAuditConsumer) handleMessage(msg amqp091.Delivery) {
 
 	go l.processAuditTrail(ctx, batch)
 
-	log.Printf(
-		"[LEDGER_AUDIT_CONSUMER] Processed block #%d with %d entries",
-		batch.BlockNumber,
-		batch.TotalEntries,
+	logger.LogInfo("Processed block",
+		zap.Int("block_number", batch.BlockNumber),
+		zap.Int("entries", batch.TotalEntries),
 	)
 }
 
@@ -99,21 +99,19 @@ func (l *LedgerAuditConsumer) processAuditTrail(ctx context.Context, batch dto.L
 		l.auditTrail = append(l.auditTrail, auditEntry)
 
 		if entry.Amount < -1000 || entry.Amount > 1000 {
-			log.Printf(
-				"[LEDGER_AUDIT_CONSUMER] ALERT: Large transaction detected in block #%d for address %s amount %f",
-				batch.BlockNumber,
-				entry.Address,
-				entry.Amount,
+			logger.LogWarn("Large transaction detected",
+				zap.Int("block_number", batch.BlockNumber),
+				zap.String("address", entry.Address),
+				zap.Float64("amount", entry.Amount),
 			)
 		}
 	}
 
 	// periodic audit log
 	if batch.BlockNumber%100 == 0 {
-		log.Printf(
-			"[LEDGER_AUDIT_CONSUMER] Audit log at block #%d: total audit entries %d",
-			batch.BlockNumber,
-			len(l.auditTrail),
+		logger.LogInfo("Audit checkpoint",
+			zap.Int("block_number", batch.BlockNumber),
+			zap.Int("total_audit_entries", len(l.auditTrail)),
 		)
 	}
 }
@@ -151,7 +149,7 @@ func (l *LedgerAuditConsumer) Stop() {
 	l.isRunning = false
 	l.mu.Unlock()
 
-	log.Println("[LEDGER_AUDIT_CONSUMER] Stopping ledger audit consumer...")
+	logger.LogInfo("Stopping ledger audit consumer")
 	close(l.stopChan)
-	log.Println("[LEDGER_AUDIT_CONSUMER] Ledger audit consumer stopped.")
+	logger.LogInfo("Ledger audit consumer stopped")
 }

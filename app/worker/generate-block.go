@@ -2,8 +2,9 @@ package worker
 
 import (
 	"errors"
-	"log"
 	"time"
+
+	"github.com/livingdolls/go-blockchain-simulate/logger"
 
 	"github.com/livingdolls/go-blockchain-simulate/app/entity"
 	"github.com/livingdolls/go-blockchain-simulate/app/services"
@@ -36,10 +37,10 @@ func (w *GenerateBlockWorker) Start(interval time.Duration) {
 					if errors.Is(err, entity.ErrNoPendingTransactions) {
 						continue
 					}
-					log.Printf("generate block error : %v", err)
+					logger.LogError("Generate block error", err)
 				}
 			case <-w.stopChan:
-				log.Println("GenerateBlockWorker: Stopping ticker...")
+				logger.LogInfo("GenerateBlockWorker: Stopping ticker")
 				return
 			}
 		}
@@ -47,7 +48,7 @@ func (w *GenerateBlockWorker) Start(interval time.Duration) {
 }
 
 func (w *GenerateBlockWorker) Stop() {
-	log.Println("GenerateBlockWorker: Stopping worker...")
+	logger.LogInfo("GenerateBlockWorker: Stopping worker")
 	close(w.stopChan)
-	log.Println("GenerateBlockWorker: Worker stopped.")
+	logger.LogInfo("GenerateBlockWorker: Worker stopped")
 }

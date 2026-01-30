@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
-	"log"
 	"math/big"
 	"strings"
 	"time"
@@ -13,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/livingdolls/go-blockchain-simulate/app/models"
 	"github.com/livingdolls/go-blockchain-simulate/app/repository"
+	"github.com/livingdolls/go-blockchain-simulate/logger"
 	"github.com/livingdolls/go-blockchain-simulate/redis"
 	"github.com/livingdolls/go-blockchain-simulate/security"
 )
@@ -82,7 +82,7 @@ func (r *registerService) Challenge(contex context.Context, address string) (str
 
 	nonce := uuid.NewString()
 	r.redis.Set(contex, addr, []byte(nonce), 10*time.Minute)
-	log.Printf("Challenge created : address=%s, nonce=%s", addr, nonce)
+	logger.LogInfo(fmt.Sprintf("Challenge created : address=%s, nonce=%s", addr, nonce))
 
 	return nonce, nil
 }

@@ -3,9 +3,11 @@ package worker
 import (
 	"context"
 	"encoding/json"
-	"log"
+	"fmt"
 	"sync"
 	"time"
+
+	"github.com/livingdolls/go-blockchain-simulate/logger"
 
 	"github.com/livingdolls/go-blockchain-simulate/app/dto"
 	"github.com/livingdolls/go-blockchain-simulate/app/services"
@@ -74,7 +76,7 @@ func (r *RewardCalculationConsumer) Start() error {
 	r.isRunning = true
 	r.mu.Unlock()
 
-	log.Println("[REWARD_CALCULATION_CONSUMER] Starting reward calculation consumer")
+	logger.LogInfo("Starting reward calculation consumer")
 
 	for i := 0; i < r.cfg.CalcWorkers; i++ {
 		go r.calcWorker(i)
@@ -96,46 +98,46 @@ func (r *RewardCalculationConsumer) Start() error {
 func (r *RewardCalculationConsumer) handleMessage(msg amqp091.Delivery) {
 	defer func() {
 		if err := msg.Ack(false); err != nil {
-			log.Printf("[REWARD_CALCULATION_CONSUMER] Failed to ack message: %v", err)
+			logger.LogError("Failed to ack message", err)
 		}
 	}()
 
 	var event dto.RewardCalculationEvent
 	if err := json.Unmarshal(msg.Body, &event); err != nil {
-		log.Printf("[REWARD_CALCULATION_CONSUMER] Failed to unmarshal message: %v", err)
+		logger.LogError("Failed to unmarshal message", err)
 		return
 	}
 
 	if r.isProcessed(event.BlockID) {
-		log.Printf("[REWARD_CALCULATION_CONSUMER] Block %d already processed, skipping", event.BlockNumber)
+		logger.LogInfo(fmt.Sprintf("Block %d already processed, skipping", event.BlockNumber))
 		return
 	}
 
 	select {
 	case r.calcQueue <- event:
-		log.Printf("[REWARD_CALCULATION_CONSUMER] Enqueued reward calculation for block %d", event.BlockNumber)
+		logger.LogInfo(fmt.Sprintf("Enqueued reward calculation for block %d", event.BlockNumber))
 	default:
 		// durbality retry
 		r.pendingBlocksMu.Lock()
 		r.pendingBlocks[event.BlockID] = event
 		r.pendingBlocksMu.Unlock()
 
-		log.Printf("[REWARD_CALCULATION_CONSUMER] Calculation queue full, storing block %d for retry", event.BlockNumber)
+		logger.LogInfo(fmt.Sprintf("Calculation queue full, storing block %d for retry", event.BlockNumber))
 	}
 }
 
 func (r *RewardCalculationConsumer) calcWorker(workerID int) {
-	log.Printf("[REWARD_CALCULATION_CONSUMER] Calculation worker %d started", workerID)
+	logger.LogInfo(fmt.Sprintf("Calculation worker %d started", workerID))
 
 	for {
 		select {
 		case <-r.stopCtx.Done():
-			log.Printf("[REWARD_CALCULATION_CONSUMER] Calculation worker %d stopping", workerID)
+			logger.LogInfo(fmt.Sprintf("Calculation worker %d stopping", workerID))
 			return
 
 		case event, ok := <-r.calcQueue:
 			if !ok {
-				log.Printf("[REWARD_CALCULATION_CONSUMER] Calculation worker %d stopping - queue closed", workerID)
+				logger.LogInfo(fmt.Sprintf("Calculation worker %d stopping - queue closed", workerID))
 				return
 			}
 
@@ -150,12 +152,12 @@ func (r *RewardCalculationConsumer) retryPendingBlocksWorker() {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
-	log.Println("[REWARD_CALCULATION_CONSUMER] Starting retry pending blocks worker")
+	logger.LogInfo("Starting retry pending blocks worker")
 
 	for {
 		select {
 		case <-r.stopCtx.Done():
-			log.Println("[REWARD_CALCULATION_CONSUMER] Retry pending blocks worker stopping")
+			logger.LogInfo("Retry pending blocks worker stopping")
 			return
 		case <-ticker.C:
 			r.retryPendingBlocks()
@@ -183,10 +185,10 @@ func (r *RewardCalculationConsumer) retryPendingBlocks() {
 			delete(r.pendingBlocks, pendingIDs[i])
 			r.pendingBlocksMu.Unlock()
 			r.recordRetry()
-			log.Printf("[REWARD_CALCULATION_CONSUMER] Retry success for block %d", event.BlockNumber)
+			logger.LogInfo(fmt.Sprintf("Retry success for block %d", event.BlockNumber))
 		default:
 			// queue full, will retry later
-			log.Printf("[REWARD_CALCULATION_CONSUMER] Calculation queue full, will retry block %d later", event.BlockNumber)
+			logger.LogInfo(fmt.Sprintf("Calculation queue full, will retry block %d later", event.BlockNumber))
 		}
 	}
 }
@@ -201,12 +203,12 @@ func (r *RewardCalculationConsumer) cleanUpWorker() {
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
 
-	log.Println("[REWARD_CALCULATION_CONSUMER] Cleanup worker started")
+	logger.LogInfo("Cleanup worker started")
 
 	for {
 		select {
 		case <-r.stopCtx.Done():
-			log.Println("[REWARD_CALCULATION_CONSUMER] Cleanup worker stopping")
+			logger.LogInfo("Cleanup worker stopping")
 			return
 		case <-ticker.C:
 			r.cleanupOldEntries()
@@ -224,7 +226,7 @@ func (r *RewardCalculationConsumer) cleanupOldEntries() {
 	for id, entry := range r.processed {
 		if now-entry.ProcessedAt > ttlSeconds {
 			delete(r.processed, id)
-			log.Printf("[REWARD_CALCULATION_CONSUMER] Cleaned up processed entry for block ID %d", id)
+			logger.LogInfo(fmt.Sprintf("Cleaned up processed entry for block ID %d", id))
 		}
 	}
 }
@@ -232,7 +234,7 @@ func (r *RewardCalculationConsumer) cleanupOldEntries() {
 func (r *RewardCalculationConsumer) process(ctx context.Context, event dto.RewardCalculationEvent) {
 	select {
 	case <-ctx.Done():
-		log.Printf("[REWARD_CALCULATION_CONSUMER] Context cancelled for block %d", event.BlockNumber)
+		logger.LogInfo(fmt.Sprintf("Context cancelled for block %d", event.BlockNumber))
 		r.recordFailure()
 		r.addPending(event)
 		return
@@ -253,22 +255,22 @@ func (r *RewardCalculationConsumer) process(ctx context.Context, event dto.Rewar
 
 	//validate calculations
 	if breakdown.TotalReward < 0 {
-		log.Printf(
-			"[REWARD_CALCULATION_CONSUMER] ERROR: Negative total reward for block #%d: %.8f",
+		logger.LogInfo(fmt.Sprintf(
+			"ERROR: Negative total reward for block #%d: %.8f",
 			event.BlockNumber,
 			breakdown.TotalReward,
-		)
+		))
 		r.recordFailure()
 		r.addPending(event)
 		return
 	}
 
 	if breakdown.EstimatedUSDValue < 0 {
-		log.Printf(
-			"[REWARD_CALCULATION_CONSUMER] ERROR: Negative USD value for block #%d: %.2f",
+		logger.LogInfo(fmt.Sprintf(
+			"ERROR: Negative USD value for block #%d: %.2f",
 			event.BlockNumber,
 			breakdown.EstimatedUSDValue,
-		)
+		))
 		r.recordFailure()
 		r.addPending(event)
 		return
@@ -289,7 +291,7 @@ func (r *RewardCalculationConsumer) process(ctx context.Context, event dto.Rewar
 
 	// Publish reward distribution event
 	if err := r.rewardPublisher.PublishRewardDistribution(publishCtx, distributionEvent); err != nil {
-		log.Printf("[REWARD_CALCULATION_CONSUMER] Failed to publish reward distribution for block %d: %v", event.BlockNumber, err)
+		logger.LogError("Failed to publish reward distribution", err)
 		r.recordFailure()
 		r.addPending(event)
 		return
@@ -298,7 +300,7 @@ func (r *RewardCalculationConsumer) process(ctx context.Context, event dto.Rewar
 	r.markProcessed(event.BlockID)
 	r.recordSuccess(breakdown.TotalReward, breakdown.EstimatedUSDValue)
 
-	log.Printf("[REWARD_CALCULATION_CONSUMER] Completed reward calculation for block %d", event.BlockNumber)
+	logger.LogInfo(fmt.Sprintf("Completed reward calculation for block %d", event.BlockNumber))
 }
 
 // bonus reward calculation rules
@@ -401,7 +403,7 @@ func (r *RewardCalculationConsumer) Stop() {
 		return
 	}
 
-	log.Println("[REWARD_CALCULATION_CONSUMER] Stopping reward calculation consumer")
+	logger.LogInfo("Stopping reward calculation consumer")
 
 	// Cancel context terlebih dahulu (triggers all workers to stop)
 	r.stopCancel()
@@ -411,5 +413,5 @@ func (r *RewardCalculationConsumer) Stop() {
 
 	r.isRunning = false
 
-	log.Println("[REWARD_CALCULATION_CONSUMER] Reward calculation consumer stopped")
+	logger.LogInfo("Reward calculation consumer stopped")
 }

@@ -2,9 +2,11 @@ package worker
 
 import (
 	"context"
-	"log"
+	"fmt"
 	"sync"
 	"time"
+
+	"github.com/livingdolls/go-blockchain-simulate/logger"
 
 	"github.com/livingdolls/go-blockchain-simulate/app/services"
 )
@@ -80,13 +82,11 @@ func (w *GenerateCandleWorker) worker(id int) {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		if err := w.candleService.AggregateCandle(ctx, job.Interval, job.Timestamp); err != nil {
 			if ctx.Err() == context.DeadlineExceeded {
-				log.Printf("[worker-%d] timeout: interval %s took > %v\n", id, job.Interval, w.jobTimeout)
+				logger.LogInfo(fmt.Sprintf("[worker-%d] timeout: interval %s took > %v", id, job.Interval, w.jobTimeout))
 
 			} else {
-				log.Printf(
-					"[worker-%d] error interval %s: %w",
-					id,
-					job.Interval,
+				logger.LogError(
+					fmt.Sprintf("[worker-%d] error interval %s", id, job.Interval),
 					err,
 				)
 			}
@@ -99,7 +99,7 @@ func (w *GenerateCandleWorker) worker(id int) {
 func (w *GenerateCandleWorker) Stop() {
 	close(w.stopChan)
 	w.wg.Wait()
-	log.Println("candles worker gracefully stopped")
+	logger.LogInfo("Candles worker gracefully stopped")
 }
 
 func (w *GenerateCandleWorker) SetJobTimeout(timeout time.Duration) {

@@ -4,11 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"sync/atomic"
 
 	"github.com/livingdolls/go-blockchain-simulate/app/models"
+	"github.com/livingdolls/go-blockchain-simulate/logger"
 	"github.com/livingdolls/go-blockchain-simulate/redis"
+	"go.uber.org/zap"
 )
 
 type CandleStreamService interface {
@@ -37,7 +38,7 @@ func (c *candleStreamService) PublishAllIntervals(ctx context.Context, candle mo
 		candleCopy.IntervalType = interval
 
 		if err := c.PublishCandle(ctx, candleCopy); err != nil {
-			log.Printf("PublishAllIntervals error: %v\n", err)
+			logger.LogError("PublishAllIntervals error", err)
 			return err
 		}
 	}
@@ -51,13 +52,13 @@ func (c *candleStreamService) PublishCandle(ctx context.Context, candle models.C
 
 	payload, err := json.Marshal(candle)
 	if err != nil {
-		log.Printf("Marshal Candle error: %v\n", err)
+		logger.LogError("Marshal Candle error", err)
 		return err
 	}
 
 	// publish to redis
 	if err := c.redis.Publish(ctx, channel, payload); err != nil {
-		log.Printf("Publish Candle error: %v\n", err)
+		logger.LogError("Publish Candle error", err)
 		return err
 	}
 
@@ -70,18 +71,18 @@ func (c *candleStreamService) SubscribeCandle(ctx context.Context, interval stri
 
 	// increment counter
 	count := c.subscriberCount.Add(1)
-	log.Printf("CandleStreamService SubscribeCandle: New subscriber to interval=%s, total subscribers=%d\n", interval, count)
+	logger.LogInfo("CandleStreamService SubscribeCandle: New subscriber", zap.String("interval", interval), zap.Int32("total_subscribers", count))
 
 	defer func() {
 		count := c.subscriberCount.Add(-1)
-		log.Printf("CandleStreamService SubscribeCandle: Subscriber left interval=%s, total subscribers=%d\n", interval, count)
+		logger.LogInfo("CandleStreamService SubscribeCandle: Subscriber left", zap.String("interval", interval), zap.Int32("total_subscribers", count))
 	}()
 
 	return c.redis.Subscribe(ctx, channel, func(message []byte) error {
 		var candle models.Candle
 
 		if err := json.Unmarshal(message, &candle); err != nil {
-			log.Printf("Unmarshal Candle error: %v\n", err)
+			logger.LogError("Unmarshal Candle error", err)
 			return err
 		}
 

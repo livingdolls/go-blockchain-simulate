@@ -4,9 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"sync"
 	"time"
+
+	"github.com/livingdolls/go-blockchain-simulate/logger"
 
 	"github.com/livingdolls/go-blockchain-simulate/app/dto"
 	"github.com/livingdolls/go-blockchain-simulate/app/models"
@@ -93,7 +94,7 @@ func (rdc *RewardDistributionConsumer) Start() error {
 	rdc.isRunning = true
 	rdc.mu.Unlock()
 
-	log.Println("[REWARD_DISTRIBUTION_CONSUMER] Starting reward distribution consumer")
+	logger.LogInfo("Starting reward distribution consumer")
 
 	// Start worker pool before consuming messages
 	for i := 0; i < rdc.cfg.DistWorkers; i++ {
@@ -117,9 +118,9 @@ func (rdc *RewardDistributionConsumer) handleMessage(msg amqp091.Delivery) {
 	var event dto.RewardDistributionEvent
 
 	if err := json.Unmarshal(msg.Body, &event); err != nil {
-		log.Println("[REWARD_DISTRIBUTION_CONSUMER] Failed to unmarshal message:", err)
+		logger.LogError("Failed to unmarshal message", err)
 		if err := msg.Nack(false, false); err != nil {
-			log.Println("[REWARD_DISTRIBUTION_CONSUMER] Failed to nack message:", err)
+			logger.LogError("Failed to nack message", err)
 		}
 		return
 	}
@@ -127,31 +128,31 @@ func (rdc *RewardDistributionConsumer) handleMessage(msg amqp091.Delivery) {
 	// Proper queue full handling with nack for retry
 	select {
 	case rdc.distQueue <- event:
-		log.Printf("[REWARD_DISTRIBUTION_CONSUMER] Enqueued reward distribution event for block %d, miner %s", event.BlockNumber, event.MinerAddress)
+		logger.LogInfo(fmt.Sprintf("Enqueued reward distribution event for block %d, miner %s", event.BlockNumber, event.MinerAddress))
 		if err := msg.Ack(false); err != nil {
-			log.Println("[REWARD_DISTRIBUTION_CONSUMER] Failed to ack message:", err)
+			logger.LogError("Failed to ack message", err)
 		}
 	default:
-		log.Printf("[REWARD_DISTRIBUTION_CONSUMER] Distribution queue full for block %d, nacking for retry", event.BlockNumber)
+		logger.LogInfo(fmt.Sprintf("Distribution queue full for block %d, nacking for retry", event.BlockNumber))
 		// Nack without requeue to send to dead letter queue, will be retried by retry worker
 		if err := msg.Nack(false, true); err != nil {
-			log.Println("[REWARD_DISTRIBUTION_CONSUMER] Failed to nack message:", err)
+			logger.LogError("Failed to nack message", err)
 		}
 	}
 }
 
 // distWorker processes rewards from the distribution queue
 func (rdc *RewardDistributionConsumer) distWorker(id int) {
-	log.Printf("[REWARD_DISTRIBUTION_CONSUMER] Distribution worker %d started", id)
+	logger.LogInfo(fmt.Sprintf("Distribution worker %d started", id))
 
 	for {
 		select {
 		case <-rdc.stopCtx.Done():
-			log.Printf("[REWARD_DISTRIBUTION_CONSUMER] Distribution worker %d stopping", id)
+			logger.LogInfo(fmt.Sprintf("Distribution worker %d stopping", id))
 			return
 		case event, ok := <-rdc.distQueue:
 			if !ok {
-				log.Printf("[REWARD_DISTRIBUTION_CONSUMER] Distribution worker %d stopping - queue closed", id)
+				logger.LogInfo(fmt.Sprintf("Distribution worker %d stopping - queue closed", id))
 				return
 			}
 			// ✅ FIX #3: Use stopCtx instead of Background
@@ -167,21 +168,21 @@ func (rdc *RewardDistributionConsumer) process(ctx context.Context, event dto.Re
 	// Check context timeout before processing
 	select {
 	case <-ctx.Done():
-		log.Printf("[REWARD_DISTRIBUTION_CONSUMER] Context cancelled for block %d", event.BlockNumber)
+		logger.LogInfo(fmt.Sprintf("Context cancelled for block %d", event.BlockNumber))
 		return
 	default:
 	}
 
 	// Check idempotency - prevent duplicate distribution
 	if rdc.isProcessed(event.BlockNumber, event.MinerAddress) {
-		log.Printf("[REWARD_DISTRIBUTION_CONSUMER] Reward already distributed for block %d, miner %s (skipping)", event.BlockNumber, event.MinerAddress)
+		logger.LogInfo(fmt.Sprintf("Reward already distributed for block %d, miner %s (skipping)", event.BlockNumber, event.MinerAddress))
 		return
 	}
 
 	// Implement transactional wallet update with persistence
 	tx, err := rdc.walletRepo.BeginTx()
 	if err != nil {
-		log.Printf("[REWARD_DISTRIBUTION_CONSUMER] Failed to begin transaction: %v, retrying", err)
+		logger.LogError("Failed to begin transaction, retrying", err)
 		rdc.enqueueForRetry(event)
 		return
 	}
@@ -190,7 +191,7 @@ func (rdc *RewardDistributionConsumer) process(ctx context.Context, event dto.Re
 	wallets, err := rdc.walletRepo.GetMultipleByAddressWithTx(tx, []string{event.MinerAddress})
 	if err != nil {
 		tx.Rollback()
-		log.Printf("[REWARD_DISTRIBUTION_CONSUMER] Failed to get miner wallet: %v, retrying", err)
+		logger.LogError("Failed to get miner wallet, retrying", err)
 		rdc.enqueueForRetry(event)
 		return
 	}
@@ -203,7 +204,7 @@ func (rdc *RewardDistributionConsumer) process(ctx context.Context, event dto.Re
 		// Create wallet if not exists
 		if err := rdc.walletRepo.UpsertEmptyIfNotExistsWithTx(tx, event.MinerAddress); err != nil {
 			tx.Rollback()
-			log.Printf("[REWARD_DISTRIBUTION_CONSUMER] Failed to create wallet for miner %s: %v, retrying", event.MinerAddress, err)
+			logger.LogError("Failed to create wallet for miner", err)
 			rdc.enqueueForRetry(event)
 			return
 		}
@@ -219,7 +220,7 @@ func (rdc *RewardDistributionConsumer) process(ctx context.Context, event dto.Re
 	// Update wallet balance in database
 	if err := rdc.walletRepo.UpdateWalletWithTx(tx, event.MinerAddress, newBalance); err != nil {
 		tx.Rollback()
-		log.Printf("[REWARD_DISTRIBUTION_CONSUMER] Failed to update wallet balance: %v, retrying", err)
+		logger.LogError("Failed to update wallet balance, retrying", err)
 		rdc.enqueueForRetry(event)
 		return
 	}
@@ -237,14 +238,14 @@ func (rdc *RewardDistributionConsumer) process(ctx context.Context, event dto.Re
 
 	if err := rdc.walletRepo.InsertHistoryWithTx(tx, history); err != nil {
 		tx.Rollback()
-		log.Printf("[REWARD_DISTRIBUTION_CONSUMER] Failed to record wallet history: %v, retrying", err)
+		logger.LogError("Failed to record wallet history, retrying", err)
 		rdc.enqueueForRetry(event)
 		return
 	}
 
 	// Commit transaction
 	if err := tx.Commit(); err != nil {
-		log.Printf("[REWARD_DISTRIBUTION_CONSUMER] Failed to commit transaction: %v, retrying", err)
+		logger.LogError("Failed to commit transaction, retrying", err)
 		rdc.enqueueForRetry(event)
 		return
 	}
@@ -263,9 +264,9 @@ func (rdc *RewardDistributionConsumer) process(ctx context.Context, event dto.Re
 func (rdc *RewardDistributionConsumer) enqueueForRetry(event dto.RewardDistributionEvent) {
 	select {
 	case rdc.retryQueue <- event:
-		log.Printf("[REWARD_DISTRIBUTION_CONSUMER] Queued for retry: block %d, miner %s", event.BlockNumber, event.MinerAddress)
+		logger.LogInfo(fmt.Sprintf("Queued for retry: block %d, miner %s", event.BlockNumber, event.MinerAddress))
 	default:
-		log.Printf("[REWARD_DISTRIBUTION_CONSUMER] Retry queue full, dropping reward for block %d (will be lost)", event.BlockNumber)
+		logger.LogInfo(fmt.Sprintf("Retry queue full, dropping reward for block %d (will be lost)", event.BlockNumber))
 	}
 }
 
@@ -277,12 +278,12 @@ func (rdc *RewardDistributionConsumer) retryPendingRewardsWorker() {
 	retryAttempts := make(map[string]int)
 	maxRetries := 5
 
-	log.Println("[REWARD_DISTRIBUTION_CONSUMER] Retry worker started")
+	logger.LogInfo("Retry worker started")
 
 	for {
 		select {
 		case <-rdc.stopCtx.Done():
-			log.Println("[REWARD_DISTRIBUTION_CONSUMER] Retry worker stopping")
+			logger.LogInfo("Retry worker stopping")
 			return
 		case <-ticker.C:
 			retryBatch := []dto.RewardDistributionEvent{}
@@ -301,7 +302,7 @@ func (rdc *RewardDistributionConsumer) retryPendingRewardsWorker() {
 				attempts := retryAttempts[key]
 
 				if attempts >= maxRetries {
-					log.Printf("[REWARD_DISTRIBUTION_CONSUMER] Max retries exceeded for block %d, miner %s, dropping", event.BlockNumber, event.MinerAddress)
+					logger.LogInfo(fmt.Sprintf("Max retries exceeded for block %d, miner %s, dropping", event.BlockNumber, event.MinerAddress))
 					delete(retryAttempts, key)
 					continue
 				}
@@ -321,12 +322,12 @@ func (rdc *RewardDistributionConsumer) cleanupWorker() {
 	ticker := time.NewTicker(rdc.cfg.CleanupInterval)
 	defer ticker.Stop()
 
-	log.Println("[REWARD_DISTRIBUTION_CONSUMER] Cleanup worker started")
+	logger.LogInfo("Cleanup worker started")
 
 	for {
 		select {
 		case <-rdc.stopCtx.Done():
-			log.Println("[REWARD_DISTRIBUTION_CONSUMER] Cleanup worker stopping")
+			logger.LogInfo("Cleanup worker stopping")
 			return
 		case <-ticker.C:
 			rdc.cleanupProcessedRewards()
@@ -350,7 +351,7 @@ func (rdc *RewardDistributionConsumer) cleanupProcessedRewards() {
 	}
 
 	if removed > 0 {
-		log.Printf("[REWARD_DISTRIBUTION_CONSUMER] Cleaned up %d expired processed reward entries", removed)
+		logger.LogInfo(fmt.Sprintf("Cleaned up %d expired processed reward entries", removed))
 	}
 }
 
@@ -404,25 +405,19 @@ func (rdc *RewardDistributionConsumer) updateStats(event dto.RewardDistributionE
 func (rdc *RewardDistributionConsumer) logResult(event dto.RewardDistributionEvent, prev, now float64) {
 	bd := event.RewardBreakdown
 
-	log.Printf(
-		"[REWARD_DISTRIBUTION_ENGINE] DISTRIBUTED ✅\n"+
-			"Miner: %s\n"+
-			"Block: #%d\n"+
-			"Prev: %.8f YTE\n"+
-			"Reward: %.8f YTE\n"+
-			"New: %.8f YTE\n"+
-			"USD: $%.2f\n"+
-			"Breakdown: Block=%.8f | TxFee=%.8f | Bonus=%.8f",
-		event.MinerAddress,
-		event.BlockNumber,
-		prev,
-		event.MinerReward,
-		now,
-		event.MinerUSDValue,
-		bd.BlockReward,
-		bd.TransactionFees,
-		bd.BonusReward,
-	)
+	logger.LogInfo(
+		fmt.Sprintf(
+			"DISTRIBUTED - Miner: %s, Block: #%d, Prev: %.8f YTE, Reward: %.8f YTE, New: %.8f YTE, USD: $%.2f, Breakdown: Block=%.8f | TxFee=%.8f | Bonus=%.8f",
+			event.MinerAddress,
+			event.BlockNumber,
+			prev,
+			event.MinerReward,
+			now,
+			event.MinerUSDValue,
+			bd.BlockReward,
+			bd.TransactionFees,
+			bd.BonusReward,
+		))
 }
 
 // GetStats retrieves stats for a specific miner address
@@ -454,12 +449,12 @@ func (rdc *RewardDistributionConsumer) Stop() {
 		return
 	}
 
-	log.Println("[REWARD_DISTRIBUTION_CONSUMER] Stopping consumer...")
+	logger.LogInfo("Stopping consumer")
 	rdc.stopCancel()
 	close(rdc.distQueue)
 	close(rdc.retryQueue)
 	rdc.isRunning = false
-	log.Println("[REWARD_DISTRIBUTION_CONSUMER] Consumer stopped")
+	logger.LogInfo("Consumer stopped")
 }
 
 // Helper function to create string pointer

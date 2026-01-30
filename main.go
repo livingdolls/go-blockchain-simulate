@@ -1,27 +1,64 @@
 package main
 
 import (
-	"log"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/livingdolls/go-blockchain-simulate/app"
+	"github.com/livingdolls/go-blockchain-simulate/logger"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 func main() {
+	// Initialize logger based on environment
+	var logCfg logger.Config
+	env := os.Getenv("ENV")
+	if env == "production" {
+		logCfg = logger.ProductionConfig("blockchain", "1.0.0")
+	} else {
+		logCfg = logger.DevelopmentConfig("blockchain", "1.0.0")
+	}
+
+	// Override log level if specified
+	if logLevelStr := os.Getenv("LOG_LEVEL"); logLevelStr != "" {
+		switch logLevelStr {
+		case "debug":
+			logCfg.Level = zapcore.DebugLevel
+		case "info":
+			logCfg.Level = zapcore.InfoLevel
+		case "warn":
+			logCfg.Level = zapcore.WarnLevel
+		case "error":
+			logCfg.Level = zapcore.ErrorLevel
+		}
+	}
+
+	if err := logger.Init(logCfg); err != nil {
+		panic("Failed to initialize logger: " + err.Error())
+	}
+	defer logger.Shutdown(5 * time.Second)
+
+	logger.L.Info("Application starting",
+		zap.String("service", "blockchain"),
+		zap.String("env", env),
+		zap.String("version", "1.0.0"),
+	)
+
 	// Initialize application configuration and dependencies
 	appConfig := &app.AppConfig{}
 
 	// Initialize infrastructure (database, redis, rabbitmq, auth)
 	if err := appConfig.InitializeInfrastructure(); err != nil {
-		log.Fatalf("[INIT] Failed to initialize infrastructure: %v\n", err)
+		logger.LogError("[INIT] Failed to initialize infrastructure: %v\n", err)
 	}
 
 	// Setup RabbitMQ topology (queues, exchanges, bindings)
 	if err := appConfig.SetupRabbitMQTopology(); err != nil {
-		log.Fatalf("[INIT] Failed to setup RabbitMQ topology: %v\n", err)
+		logger.LogError("[INIT] Failed to setup RabbitMQ topology: %v\n", err)
 	}
 
 	// Initialize WebSocket hub
@@ -55,9 +92,9 @@ func main() {
 
 	// Start HTTP server
 	go func() {
-		log.Println("Server starting on port :3010")
+		logger.LogInfo("Server starting on port :3010")
 		if err := r.Run(":3010"); err != nil && err.Error() != "http: Server closed" {
-			log.Printf("Server error: %v\n", err)
+			logger.LogError("Server error", err)
 		}
 	}()
 
@@ -66,11 +103,11 @@ func main() {
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
 	sig := <-sigChan
-	log.Printf("Received signal: %v. Shutting down...\n", sig)
+	logger.LogInfo("Received signal: " + sig.String() + ". Shutting down...")
 
 	// Graceful shutdown with timeout
 	appConfig.Shutdown()
 
-	log.Println("Server gracefully stopped")
+	logger.LogInfo("Server gracefully stopped")
 	os.Exit(0)
 }

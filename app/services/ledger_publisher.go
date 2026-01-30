@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/livingdolls/go-blockchain-simulate/app/dto"
+	"github.com/livingdolls/go-blockchain-simulate/logger"
 	"github.com/livingdolls/go-blockchain-simulate/rabbitmq"
 )
 
@@ -54,7 +54,7 @@ func (l *ledgerPublisher) PublishLedgerBatch(ctx context.Context, blockID int64,
 		return fmt.Errorf("[LEDGER_PUBLISHER] failed to publish ledger batch: %w", err)
 	}
 
-	log.Printf("[LEDGER_PUBLISHER] Published batch for block #%d with %d entries", blockNumber, len(entries))
+	logger.LogInfo(fmt.Sprintf("[LEDGER_PUBLISHER] Published batch for block #%d with %d entries", blockNumber, len(entries)))
 
 	return nil
 }
@@ -76,7 +76,7 @@ func (l *ledgerPublisher) PublishLedgerEntry(ctx context.Context, entry dto.Ledg
 		return fmt.Errorf("[LEDGER_PUBLISHER] failed to publish ledger entry: %w", err)
 	}
 
-	log.Printf("[LEDGER_PUBLISHER] Published ledger entry for address %s with amount %f", entry.Address, entry.Amount)
+	logger.LogInfo(fmt.Sprintf("[LEDGER_PUBLISHER] Published ledger entry for address %s, amount %.4f", entry.Address, entry.Amount))
 
 	return nil
 }

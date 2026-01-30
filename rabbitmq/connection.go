@@ -6,6 +6,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/livingdolls/go-blockchain-simulate/logger"
+
 	"github.com/livingdolls/go-blockchain-simulate/app/models"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
@@ -50,7 +52,7 @@ func (c *RabbitMQConn) connect() error {
 	c.conn = conn
 	c.mu.Unlock()
 
-	log.Println("[RABBITMQ] Connected")
+	logger.LogInfo("RabbitMQ connected")
 
 	return nil
 }
@@ -62,7 +64,7 @@ func (c *RabbitMQConn) reconnectLoop() {
 		select {
 		case err := <-notify:
 			if err != nil {
-				log.Printf("[RABBITMQ] connection closed: %v", err)
+				logger.LogError("RabbitMQ connection closed", err)
 				c.reconnect()
 			}
 		case <-c.close:

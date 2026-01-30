@@ -3,7 +3,6 @@ package worker
 import (
 	"context"
 	"encoding/json"
-	"log"
 	"sync"
 	"time"
 
@@ -11,8 +10,10 @@ import (
 	"github.com/livingdolls/go-blockchain-simulate/app/entity"
 	"github.com/livingdolls/go-blockchain-simulate/app/publisher"
 	"github.com/livingdolls/go-blockchain-simulate/app/repository"
+	"github.com/livingdolls/go-blockchain-simulate/logger"
 	"github.com/livingdolls/go-blockchain-simulate/rabbitmq"
 	"github.com/rabbitmq/amqp091-go"
+	"go.uber.org/zap"
 )
 
 // MarketPricingConsumer - Konsumer untuk market pricing events
@@ -63,10 +64,10 @@ func (m *MarketPricingConsumer) Start() error {
 	m.isRunning = true
 	m.mu.Unlock()
 
-	log.Println("[MARKET_PRICING_CONSUMER] starting consumer...")
+	logger.LogInfo("Starting market pricing consumer")
 
 	if err := m.LoadInitialPriceCache(1000); err != nil {
-		log.Printf("[MARKET_PRICING_CONSUMER] Warning: failed to initial load cache")
+		logger.LogWarn("Failed to load initial price cache", zap.Error(err))
 	}
 
 	return m.client.Consume(
@@ -86,14 +87,14 @@ func (m *MarketPricingConsumer) Start() error {
 func (m *MarketPricingConsumer) handleMessage(msg amqp091.Delivery) {
 	defer func() {
 		if err := msg.Ack(false); err != nil {
-			log.Printf("[MARKET_PRICING_CONSUMER] failed to ack message: %v", err)
+			logger.LogError("Failed to ack message", err)
 		}
 	}()
 
 	var event dto.MarketPricingEvent
 
 	if err := json.Unmarshal(msg.Body, &event); err != nil {
-		log.Printf("[MARKET_PRICING_CONSUMER] failed to unmarshal message: %v", err)
+		logger.LogError("Failed to unmarshal message", err)
 		return
 	}
 
@@ -135,7 +136,7 @@ func (m *MarketPricingConsumer) handleMessage(msg amqp091.Delivery) {
 	// simpan historical data ke database
 	go func() {
 		if err := m.monitorMarketMetrics(ctx, event); err != nil {
-			log.Printf("[MARKET_PRICING_CONSUMER] failed to store market snapshot: %v", err)
+			logger.LogError("Failed to store market snapshot", err)
 		}
 	}()
 }
@@ -151,7 +152,11 @@ func (m *MarketPricingConsumer) monitorMarketMetrics(ctx context.Context, event 
 
 	// validate consistency data
 	if !floatEqual(tick.Price, event.Price, priceEpsilon) {
-		log.Printf("[MARKET_PRICING_CONSUMER] data inconsistency for block %d: tick price %.2f != event price %.2f", event.BlockID, tick.Price, event.Price)
+		logger.LogWarn("Data inconsistency detected",
+			zap.Int64("block_id", event.BlockID),
+			zap.Float64("tick_price", tick.Price),
+			zap.Float64("event_price", event.Price),
+		)
 	}
 
 	// calculate price metrics untuk monitoring
@@ -168,24 +173,22 @@ func (m *MarketPricingConsumer) monitorMarketMetrics(ctx context.Context, event 
 
 	// detect significant price changes
 	if priceChangePercent > 5.0 || priceChangePercent < -5.0 {
-		log.Printf(
-			"[MARKET_PRICING_CONSUMER] 🚨 Significant price movement detected! Block #%d: %.2f%% (%.2f -> %.2f)",
-			event.BlockNumber,
-			priceChangePercent,
-			previousPirce,
-			event.Price,
+		logger.LogWarn("Significant price movement detected",
+			zap.Int("block_number", event.BlockNumber),
+			zap.Float64("price_change_percent", priceChangePercent),
+			zap.Float64("previous_price", previousPirce),
+			zap.Float64("current_price", event.Price),
 		)
 	}
 
 	// log successful verification with metrics
-	log.Printf(
-		"[MARKET_PRICING_CONSUMER] Market snapshot stored - Block #%d, Price: %.2f, Change: %.2f (%.2f%%), Liquidity: %.2f, TxCount: %d",
-		event.BlockNumber,
-		event.Price,
-		priceChange,
-		priceChangePercent,
-		event.Liquidity,
-		event.TxCount,
+	logger.LogInfo("Market snapshot stored",
+		zap.Int("block_number", event.BlockNumber),
+		zap.Float64("price", event.Price),
+		zap.Float64("price_change", priceChange),
+		zap.Float64("price_change_percent", priceChangePercent),
+		zap.Float64("liquidity", event.Liquidity),
+		zap.Int("tx_count", event.TxCount),
 	)
 
 	m.triggerPriceAlerts(ctx, event, priceChangePercent)
@@ -206,28 +209,25 @@ func (m *MarketPricingConsumer) triggerPriceAlerts(ctx context.Context, event dt
 	}
 
 	if absChange >= CriticalAlert {
-		log.Printf(
-			"[MARKET_PRICING_CONSUMER] 🚨 CRITICAL ALERT: Price changed by %.2f%% at Block #%d (%.2f -> %.2f)",
-			priceChangePercent,
-			event.BlockNumber,
-			event.Price-(event.Price*float64(priceChangePercent)/100),
-			event.Price,
+		logger.LogWarn("CRITICAL ALERT: Extreme price change",
+			zap.Float64("price_change_percent", priceChangePercent),
+			zap.Int("block_number", event.BlockNumber),
+			zap.Float64("previous_price", event.Price-(event.Price*float64(priceChangePercent)/100)),
+			zap.Float64("current_price", event.Price),
 		)
 	} else if absChange >= MajorAlert {
-		log.Printf(
-			"[MARKET_PRICING_CONSUMER] ⚠️ MAJOR ALERT: Price changed by %.2f%% at Block #%d (%.2f -> %.2f)",
-			priceChangePercent,
-			event.BlockNumber,
-			event.Price-(event.Price*float64(priceChangePercent)/100),
-			event.Price,
+		logger.LogWarn("MAJOR ALERT: Significant price change",
+			zap.Float64("price_change_percent", priceChangePercent),
+			zap.Int("block_number", event.BlockNumber),
+			zap.Float64("previous_price", event.Price-(event.Price*float64(priceChangePercent)/100)),
+			zap.Float64("current_price", event.Price),
 		)
 	} else if absChange >= MinorAlert {
-		log.Printf(
-			"[MARKET_PRICING_CONSUMER] ℹ️ Minor Alert: Price changed by %.2f%% at Block #%d (%.2f -> %.2f)",
-			priceChangePercent,
-			event.BlockNumber,
-			event.Price-(event.Price*float64(priceChangePercent)/100),
-			event.Price,
+		logger.LogInfo("Minor price change alert",
+			zap.Float64("price_change_percent", priceChangePercent),
+			zap.Int("block_number", event.BlockNumber),
+			zap.Float64("previous_price", event.Price-(event.Price*float64(priceChangePercent)/100)),
+			zap.Float64("current_price", event.Price),
 		)
 	}
 }
@@ -282,7 +282,9 @@ func (m *MarketPricingConsumer) LoadInitialPriceCache(limit int) error {
 		m.priceCache[int64(tick.BlockID)] = tick.Price
 	}
 
-	log.Printf("[MARKET_PRICING_CONSUMER] Loaded initial price cache for %d blocks", len(ticks))
+	logger.LogInfo("Loaded initial price cache",
+		zap.Int("blocks_loaded", len(ticks)),
+	)
 	return nil
 }
 
@@ -297,9 +299,9 @@ func (m *MarketPricingConsumer) Stop() {
 	m.isRunning = false
 	m.mu.Unlock()
 
-	log.Println("[MARKET_PRICING_CONSUMER] stopping consumer...")
+	logger.LogInfo("Stopping market pricing consumer")
 	close(m.stopChan)
-	log.Println("[MARKET_PRICING_CONSUMER] consumer stopped")
+	logger.LogInfo("Market pricing consumer stopped")
 }
 
 func (m *MarketPricingConsumer) IsRunning() bool {

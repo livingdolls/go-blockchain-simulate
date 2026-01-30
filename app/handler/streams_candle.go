@@ -4,9 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"time"
+
+	"github.com/livingdolls/go-blockchain-simulate/logger"
 
 	"github.com/gin-gonic/gin"
 	"github.com/livingdolls/go-blockchain-simulate/app/dto"
@@ -51,7 +52,7 @@ func (h *CandleStreamHandler) StreamCandles(c *gin.Context) {
 	defer cancel()
 
 	// listen untuk client
-	log.Printf("SSE connected for interval: %s\n", interval)
+	logger.LogInfo("SSE connected for interval: " + interval)
 
 	// write initial candle
 	go func() {
@@ -62,7 +63,7 @@ func (h *CandleStreamHandler) StreamCandles(c *gin.Context) {
 			if err == nil {
 				fmt.Fprintf(w, "data: %s\n\n", string(data))
 				flusher.Flush()
-				log.Printf("Initial candle sent for interval: %s\n", interval)
+				logger.LogInfo("Initial candle sent for interval: " + interval)
 			}
 		}
 	}()
@@ -85,22 +86,20 @@ func (h *CandleStreamHandler) StreamCandles(c *gin.Context) {
 			data, err := json.Marshal(candle)
 
 			if err != nil {
-				log.Printf("Marshal candle error: %v\n", err)
+				logger.LogError("Marshal candle error", err)
 				return err
 			}
 
 			// recover panic
 			defer func() {
 				if r := recover(); r != nil {
-					log.Printf("Recovered in candle stream SSE: %v", r)
-					cancel()
+					logger.LogInfo(fmt.Sprintf("Recovered in candle stream SSE: %v", r))
 				}
 			}()
-
 			// safe write
 
 			if _, err := fmt.Fprintf(w, "data: %s\n\n", string(data)); err != nil {
-				log.Printf("Write to SSE error: %v\n", err)
+				logger.LogError("Write to SSE error", err)
 				return err
 			}
 
@@ -119,15 +118,15 @@ func (h *CandleStreamHandler) StreamCandles(c *gin.Context) {
 	// handle disconnection
 	select {
 	case <-c.Request.Context().Done():
-		log.Printf("SSE disconnected for interval: %s\n", interval)
+		logger.LogInfo("SSE disconnected for interval: " + interval)
 		cancel()
 	case err := <-errChan:
-		log.Printf("SSE error for interval %s: %v\n", interval, err)
+		logger.LogError("SSE error for interval "+interval, err)
 		cancel()
 	}
 
 	<-doneChan
-	log.Printf("SSE routine ended for interval: %s\n", interval)
+	logger.LogInfo("SSE routine ended for interval: " + interval)
 }
 
 func (h *CandleStreamHandler) Ping(c *gin.Context) {
@@ -149,7 +148,7 @@ func (h *CandleStreamHandler) Ping(c *gin.Context) {
 			fmt.Fprintf(w, "data: %s\n\n", "ping")
 			flusher.Flush()
 		case <-c.Request.Context().Done():
-			log.Println("SSE ping disconnected")
+			logger.LogInfo("SSE ping disconnected")
 			return
 		}
 	}

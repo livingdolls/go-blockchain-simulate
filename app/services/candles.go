@@ -2,12 +2,13 @@ package services
 
 import (
 	"context"
-	"log"
+	"fmt"
 	"time"
 
 	"github.com/jmoiron/sqlx"
 	"github.com/livingdolls/go-blockchain-simulate/app/models"
 	"github.com/livingdolls/go-blockchain-simulate/app/repository"
+	"github.com/livingdolls/go-blockchain-simulate/logger"
 	"github.com/livingdolls/go-blockchain-simulate/utils"
 )
 
@@ -140,14 +141,14 @@ func (c *candleService) AggregateCandle(ctx context.Context, interval string, ti
 	}
 
 	if rowsAffected > 0 {
-		log.Printf("Aggregated candle for interval=%s, start=%d\n", interval, start)
+		logger.LogInfo(fmt.Sprintf("Aggregated candle for interval=%s, start=%d", interval, start))
 		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		defer cancel()
 
 		if err := c.stream.PublishCandle(ctx, candle); err != nil {
-			log.Printf("PublishCandle error: %v\n", err)
+			logger.LogError("PublishCandle error", err)
 		} else {
-			log.Printf("Published candle for interval=%s, start=%d\n", interval, start)
+			logger.LogInfo(fmt.Sprintf("Published candle for interval=%s, start=%d", interval, start))
 		}
 	} else {
 		// log.Printf("Candle for interval=%s, start=%d already up-to-date, skipped publish\n", interval, start)

@@ -8,6 +8,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/livingdolls/go-blockchain-simulate/logger"
+
 	"github.com/livingdolls/go-blockchain-simulate/app/services"
 	"github.com/livingdolls/go-blockchain-simulate/rabbitmq"
 	"github.com/rabbitmq/amqp091-go"
@@ -59,7 +61,7 @@ func (tc *TransactionConsumer) Start(ctx context.Context) error {
 	tc.isRunning = true
 	tc.mu.Unlock()
 
-	log.Println("[TRANSACTION_CONSUMER] Starting with", tc.workerCount, "workers")
+	logger.LogInfo(fmt.Sprintf("Starting with %d workers", tc.workerCount))
 
 	handler := func(delivery amqp091.Delivery) {
 		ctx, cancel := context.WithTimeout(context.Background(), tc.processingTimeout)
@@ -70,15 +72,15 @@ func (tc *TransactionConsumer) Start(ctx context.Context) error {
 		var msg TransactionMessage
 
 		if err := json.Unmarshal(delivery.Body, &msg); err != nil {
-			log.Println("[TRANSACTION_CONSUMER] Failed to parse message:", err)
+			logger.LogError("Failed to parse message", err)
 
 			// negative acknowledge, without requeue (discard message)
 			delivery.Nack(false, false)
 			return
 		}
 
-		log.Printf("[TRANSACTION_CONSUMER] receiver transaction: type=%s, From=%s, Amount=%.8f\n",
-			msg.Type, msg.Address, msg.Amount)
+		logger.LogInfo(fmt.Sprintf("Receiver transaction: type=%s, From=%s, Amount=%.8f",
+			msg.Type, msg.Address, msg.Amount))
 		// proses transaksi
 
 		var err error
@@ -114,14 +116,14 @@ func (tc *TransactionConsumer) Start(ctx context.Context) error {
 		}
 
 		if err != nil {
-			log.Printf("[TRANSACTION_CONSUMER] error processing %s transaction: %v\n", msg.Type, err)
+			logger.LogError(fmt.Sprintf("Error processing %s transaction", msg.Type), err)
 			// negative acknowledge, with requeue
 			delivery.Nack(false, true)
 			return
 		}
 
 		// successfully processed
-		log.Printf("[TRANSACTION_CONSUMER] successfully processed %s transaction from %s\n", msg.Type, msg.Address)
+		logger.LogInfo(fmt.Sprintf("Successfully processed %s transaction from %s", msg.Type, msg.Address))
 
 		// Positive acknowledge
 		delivery.Ack(false)
@@ -133,7 +135,7 @@ func (tc *TransactionConsumer) Start(ctx context.Context) error {
 		return fmt.Errorf("[TRANSACTION_CONSUMER] failed to start consuming: %w", err)
 	}
 
-	log.Println("[TRANSACTION_CONSUMER] Started")
+	logger.LogInfo("Transaction consumer started")
 	return nil
 }
 
@@ -142,14 +144,14 @@ func (tc *TransactionConsumer) Stop() {
 	defer tc.mu.Unlock()
 
 	if !tc.isRunning {
-		log.Println("[TRANSACTION_CONSUMER] is not running")
+		logger.LogInfo("Transaction consumer is not running")
 		return
 	}
 
 	tc.isRunning = false
 	close(tc.stopChan)
 
-	log.Println("[TRANSACTION_CONSUMER] Stopped")
+	logger.LogInfo("Transaction consumer stopped")
 }
 
 func (tc *TransactionConsumer) IsRunning() bool {

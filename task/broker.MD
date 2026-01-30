@@ -49,6 +49,7 @@ Routing Keys:
 - Offline message queue
 - Multiple notification channels (email, SMS)
 
+[DONE]
 Queue: reward.calculation
 Queue: reward.distribution
 Purpose: Async reward processing for users & miner

@@ -3,14 +3,15 @@ package worker
 import (
 	"context"
 	"encoding/json"
-	"log"
 	"sync"
 	"time"
 
 	"github.com/livingdolls/go-blockchain-simulate/app/dto"
 	"github.com/livingdolls/go-blockchain-simulate/app/repository"
+	"github.com/livingdolls/go-blockchain-simulate/logger"
 	"github.com/livingdolls/go-blockchain-simulate/rabbitmq"
 	"github.com/rabbitmq/amqp091-go"
+	"go.uber.org/zap"
 )
 
 // MarketVolumeConsumer - Konsumer untuk market volume updates
@@ -71,7 +72,7 @@ func (m *MarketVolumeConsumer) Start() error {
 	m.isRunning = true
 	m.mu.Unlock()
 
-	log.Println("[MARKET_VOLUME_CONSUMER] starting consumer...")
+	logger.LogInfo("Starting market volume consumer")
 
 	return m.client.Consume(
 		rabbitmq.MarketVolumeQueue,
@@ -83,14 +84,14 @@ func (m *MarketVolumeConsumer) Start() error {
 func (m *MarketVolumeConsumer) handleMessage(msg amqp091.Delivery) {
 	defer func() {
 		if err := msg.Ack(false); err != nil {
-			log.Printf("[MARKET_VOLUME_CONSUMER] failed to ack message: %v", err)
+			logger.LogError("Failed to ack message", err)
 		}
 	}()
 
 	var volumeUpdate dto.MarketVolumeUpdate
 
 	if err := json.Unmarshal(msg.Body, &volumeUpdate); err != nil {
-		log.Printf("[MARKET_VOLUME_CONSUMER] failed to unmarshal message: %v", err)
+		logger.LogError("Failed to unmarshal message", err)
 		return
 	}
 
@@ -98,7 +99,9 @@ func (m *MarketVolumeConsumer) handleMessage(msg amqp091.Delivery) {
 	m.processedBlocksMu.RLock()
 	if m.processedBlocks[volumeUpdate.BlockID] {
 		m.processedBlocksMu.RUnlock()
-		log.Printf("[MARKET_VOLUME_CONSUMER] duplicate block_id %d, skipping...", volumeUpdate.BlockID)
+		logger.LogWarn("Duplicate block, skipping",
+			zap.Int64("block_id", volumeUpdate.BlockID),
+		)
 		return
 	}
 
@@ -111,7 +114,7 @@ func (m *MarketVolumeConsumer) handleMessage(msg amqp091.Delivery) {
 
 	go func() {
 		if err := m.storeVolumeData(ctx, volumeUpdate); err != nil {
-			log.Printf("[MARKET_VOLUME_CONSUMER] failed to store volume data: %v", err)
+			logger.LogError("Failed to store volume data", err)
 		}
 
 		// mark as processed setelah sukses store
@@ -120,12 +123,11 @@ func (m *MarketVolumeConsumer) handleMessage(msg amqp091.Delivery) {
 		m.processedBlocksMu.Unlock()
 	}()
 
-	log.Printf(
-		"[MARKET_VOLUME_CONSUMER] Processed volume update - Block #%d, Buy: %.2f, Sell: %.2f, Ratio: %.2f%%",
-		volumeUpdate.BlockID,
-		volumeUpdate.BuyVolume,
-		volumeUpdate.SellVolume,
-		volumeUpdate.VolumeRatio*100,
+	logger.LogInfo("Processed volume update",
+		zap.Int64("block_id", volumeUpdate.BlockID),
+		zap.Float64("buy_volume", volumeUpdate.BuyVolume),
+		zap.Float64("sell_volume", volumeUpdate.SellVolume),
+		zap.Float64("volume_ratio_percent", volumeUpdate.VolumeRatio*100),
 	)
 }
 
@@ -159,22 +161,22 @@ func (m *MarketVolumeConsumer) storeVolumeData(ctx context.Context, update dto.M
 
 	// validate consitency data
 	if tick.BuyVolume != update.BuyVolume || tick.SellVolume != update.SellVolume {
-		log.Printf(
-			"[MARKET_VOLUME_CONSUMER] Warning: Data mismatch for block #%d - DB: (%.2f, %.2f), Event: (%.2f, %.2f)",
-			update.BlockID,
-			tick.BuyVolume, tick.SellVolume,
-			update.BuyVolume, update.SellVolume,
+		logger.LogWarn("Data mismatch detected",
+			zap.Int64("block_id", update.BlockID),
+			zap.Float64("db_buy_volume", tick.BuyVolume),
+			zap.Float64("db_sell_volume", tick.SellVolume),
+			zap.Float64("event_buy_volume", update.BuyVolume),
+			zap.Float64("event_sell_volume", update.SellVolume),
 		)
 	}
 
 	// Log successful storage
-	log.Printf(
-		"[MARKET_VOLUME_CONSUMER] Volume data verified - Block #%d, Buy: %.2f, Sell: %.2f, TxCount: %d, Timestamp: %d",
-		tick.BlockID,
-		tick.BuyVolume,
-		tick.SellVolume,
-		tick.TxCount,
-		tick.CreatedAt,
+	logger.LogInfo("Volume data verified",
+		zap.Int64("block_id", tick.BlockID),
+		zap.Float64("buy_volume", tick.BuyVolume),
+		zap.Float64("sell_volume", tick.SellVolume),
+		zap.Int("tx_count", tick.TxCount),
+		zap.Int64("timestamp", tick.CreatedAt),
 	)
 
 	//trigger aggregation
@@ -190,12 +192,15 @@ func (m *MarketVolumeConsumer) triggerAggregation(ctx context.Context, blockID i
 
 	ticks, err := m.marketRepo.GetVolumeBlockRange(startBlock, blockID)
 	if err != nil {
-		log.Printf("[MARKET_VOLUME_CONSUMER] failed to get volume block range: %v", err)
+		logger.LogError("Failed to get volume block range", err)
 		return
 	}
 
 	if len(ticks) == 0 {
-		log.Printf("[MARKET_VOLUME_CONSUMER] no ticks found for aggregation in range %d - %d", startBlock, blockID)
+		logger.LogWarn("No ticks found for aggregation",
+			zap.Int64("start_block", startBlock),
+			zap.Int64("end_block", blockID),
+		)
 		return
 	}
 
@@ -218,15 +223,14 @@ func (m *MarketVolumeConsumer) triggerAggregation(ctx context.Context, blockID i
 		}
 
 		if i == len(ticks)-1 {
-			log.Printf(
-				"[MARKET_VOLUME_CONSUMER] Aggregated Volume Data - Blocks %d to %d: Total Buy: %.2f, Total Sell: %.2f, Avg Price: %.2f, Min Price: %.2f, Max Price: %.2f",
-				startBlock,
-				blockID,
-				totalBuyVol,
-				totalSellVol,
-				avgPrice/float64(len(ticks)),
-				minPrice,
-				maxPrice,
+			logger.LogInfo("Aggregated volume data",
+				zap.Int64("start_block", startBlock),
+				zap.Int64("end_block", blockID),
+				zap.Float64("total_buy_volume", totalBuyVol),
+				zap.Float64("total_sell_volume", totalSellVol),
+				zap.Float64("avg_price", avgPrice/float64(len(ticks))),
+				zap.Float64("min_price", minPrice),
+				zap.Float64("max_price", maxPrice),
 			)
 		}
 	}
@@ -280,9 +284,9 @@ func (m *MarketVolumeConsumer) Stop() {
 	m.isRunning = false
 	m.mu.Unlock()
 
-	log.Println("[MARKET_VOLUME_CONSUMER] stopping consumer...")
+	logger.LogInfo("Stopping market volume consumer")
 	close(m.stopChan)
-	log.Println("[MARKET_VOLUME_CONSUMER] consumer stopped.")
+	logger.LogInfo("Market volume consumer stopped")
 }
 
 func (m *MarketVolumeConsumer) IsRunning() bool {

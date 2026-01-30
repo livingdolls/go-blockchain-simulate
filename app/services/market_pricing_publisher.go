@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 
 	"github.com/livingdolls/go-blockchain-simulate/app/dto"
 	"github.com/livingdolls/go-blockchain-simulate/app/models"
+	"github.com/livingdolls/go-blockchain-simulate/logger"
 	"github.com/livingdolls/go-blockchain-simulate/rabbitmq"
 )
 
@@ -62,8 +62,8 @@ func (m *marketPricingPublisher) PublishVolumeUpdate(ctx context.Context, volume
 		return fmt.Errorf("failed to publish market volume update: %w", err)
 	}
 
-	log.Printf("[MARKET_VOLUME] Publisher volume update - Buy: %.2f, Sell: %.2f, Ratio: %.2f%%",
-		volumeData.BuyVolume, volumeData.SellVolume, volumeRatio*100)
+	logger.LogInfo(fmt.Sprintf("[MARKET_VOLUME] Publisher volume update - Buy: %.2f, Sell: %.2f, Ratio: %.2f%%",
+		volumeData.BuyVolume, volumeData.SellVolume, volumeRatio*100))
 
 	return nil
 }
@@ -100,7 +100,7 @@ func (m *marketPricingPublisher) PublishPricingEvent(ctx context.Context, blockI
 		return fmt.Errorf("failed to publish market pricing event: %w", err)
 	}
 
-	log.Printf("[MARKET_PRICING] Published pricing event for block #%d at price %.2f", blockNumber, priceData.Price)
+	logger.LogInfo(fmt.Sprintf("[MARKET_PRICING] Published pricing event for block #%d at price %.2f", blockNumber, priceData.Price))
 
 	return nil
 }

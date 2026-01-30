@@ -4,13 +4,14 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
-	"log"
 	"math/big"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/livingdolls/go-blockchain-simulate/logger"
 	"github.com/livingdolls/go-blockchain-simulate/redis"
 	"github.com/livingdolls/go-blockchain-simulate/utils"
+	"go.uber.org/zap"
 )
 
 type TransactionType string
@@ -39,11 +40,12 @@ func (s *verifyTxService) VerifyTransactionSignature(ctx context.Context, fromAd
 	from := strings.ToLower(strings.TrimSpace(fromAddr))
 	to := strings.ToLower(strings.TrimSpace(toAddr))
 
-	log.Printf("=== Transaction Verification Start ===")
-	log.Printf("From: %s", from)
-	log.Printf("To: %s", to)
-	log.Printf("Amount: %.2f", amount)
-	log.Printf("Nonce: %s", nonce)
+	logger.LogDebug("Transaction verification started",
+		zap.String("from", from),
+		zap.String("to", to),
+		zap.Float64("amount", amount),
+		zap.String("nonce", nonce),
+	)
 
 	// verify nonce
 	key := "tx_nonce:" + from
@@ -56,10 +58,11 @@ func (s *verifyTxService) VerifyTransactionSignature(ctx context.Context, fromAd
 	// build cannonical message same on frontend
 	msg := fmt.Sprintf("Send %.2f to %s nonce:%s", amount, to, nonce)
 
-	log.Printf("=== Message Details ===")
-	log.Printf("Message: %s", msg)
-	log.Printf("Message length: %d", len(msg))
-	log.Printf("Message bytes: %x", []byte(msg))
+	logger.LogDebug("Message details",
+		zap.String("message", msg),
+		zap.Int("message_length", len(msg)),
+		zap.String("message_bytes", fmt.Sprintf("%x", []byte(msg))),
+	)
 
 	// parse signature
 	sigHex := strings.TrimPrefix(strings.TrimSpace(signature), "0x")
@@ -128,10 +131,11 @@ func (s *verifyTxService) VerifyTransactionSignature(ctx context.Context, fromAd
 
 	recovered := strings.ToLower(string(crypto.PubkeyToAddress(*pubKey).Hex()))
 
-	log.Printf("=== Recovery Result ===")
-	log.Printf("Recovered address: %s", recovered)
-	log.Printf("Expected address: %s", from)
-	log.Printf("Match: %v", recovered == from)
+	logger.LogDebug("Recovery result",
+		zap.String("recovered_address", recovered),
+		zap.String("expected_address", from),
+		zap.Bool("match", recovered == from),
+	)
 
 	// verify recovered address matches from address
 	if recovered != from {
@@ -147,10 +151,12 @@ func (s *verifyTxService) VerifyTransactionSignature(ctx context.Context, fromAd
 func (s *verifyTxService) VerifyBuySellSignature(ctx context.Context, address string, amount float64, nonce, signature string, txType TransactionType) error {
 	addr := strings.ToLower(strings.TrimSpace(address))
 
-	log.Printf("=== Transaction Verification Start ===")
-	log.Printf("From: %s", addr)
-	log.Printf("Amount: %.2f", amount)
-	log.Printf("Nonce: %s", nonce)
+	logger.LogDebug("BUY/SELL transaction verification started",
+		zap.String("address", addr),
+		zap.Float64("amount", amount),
+		zap.String("nonce", nonce),
+		zap.String("type", string(txType)),
+	)
 
 	// verify nonce
 	key := "tx_nonce:" + addr
@@ -163,10 +169,11 @@ func (s *verifyTxService) VerifyBuySellSignature(ctx context.Context, address st
 	// build cannonical message same on frontend
 	msg := fmt.Sprintf(" %s %.2f nonce:%s", txType, amount, nonce)
 
-	log.Printf("=== Message Details ===")
-	log.Printf("Message: %s", msg)
-	log.Printf("Message length: %d", len(msg))
-	log.Printf("Message bytes: %x", []byte(msg))
+	logger.LogDebug("Message details",
+		zap.String("message", msg),
+		zap.Int("message_length", len(msg)),
+		zap.String("message_bytes", fmt.Sprintf("%x", []byte(msg))),
+	)
 
 	// parse signature
 	sigHex := strings.TrimPrefix(strings.TrimSpace(signature), "0x")
@@ -235,8 +242,11 @@ func (s *verifyTxService) VerifyBuySellSignature(ctx context.Context, address st
 
 	recovered := strings.ToLower(string(crypto.PubkeyToAddress(*pubKey).Hex()))
 
-	log.Printf("=== Recovery Result ===")
-	log.Printf("Recovered address: %s", recovered)
+	logger.LogDebug("Recovery result",
+		zap.String("recovered_address", recovered),
+		zap.String("expected_address", addr),
+		zap.Bool("match", recovered == addr),
+	)
 
 	// verify recovered address matches from address
 	if recovered != addr {

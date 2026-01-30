@@ -3,7 +3,6 @@ package services
 import (
 	"context"
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
@@ -12,7 +11,9 @@ import (
 	"github.com/livingdolls/go-blockchain-simulate/app/models"
 	"github.com/livingdolls/go-blockchain-simulate/app/publisher"
 	"github.com/livingdolls/go-blockchain-simulate/app/repository"
+	"github.com/livingdolls/go-blockchain-simulate/logger"
 	"github.com/livingdolls/go-blockchain-simulate/utils"
+	"go.uber.org/zap"
 )
 
 type BlockService interface {
@@ -186,18 +187,19 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 
 	// calculate merkle root
 	merkleRoot := utils.CalculateMerkleRoot(pendingTxs)
-	fmt.Printf("Calculated Merkle Root: %s\n", merkleRoot)
+	logger.LogDebug("Calculated Merkle Root", zap.String("merkle_root", merkleRoot))
 
 	// Calculate block reward
 	nextBlockNumber := lastBlock.BlockNumber + 1
 	blockReward := utils.CalculateBlockReward(int64(nextBlockNumber))
 
 	// Perform mining (this can take 5-60 seconds depending on difficulty)
-	fmt.Printf("Starting mining process...\n")
-	fmt.Printf("Block Number: %d\n", nextBlockNumber)
-	fmt.Printf("Difficulty: %d\n", difficulty)
-	fmt.Printf("Merkle Root: %s\n", merkleRoot)
-	fmt.Printf("Block Reward: %.8f\n", blockReward)
+	logger.LogInfo("Starting mining process",
+		zap.Int64("block_number", int64(nextBlockNumber)),
+		zap.Int64("difficulty", int64(difficulty)),
+		zap.String("merkle_root", merkleRoot),
+		zap.Float64("block_reward", blockReward),
+	)
 
 	miningResult := utils.MineBlock(lastBlock.BlockNumber+1, lastBlock.CurrentHash, pendingTxs, difficulty)
 
@@ -206,7 +208,7 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 		return models.Block{}, fmt.Errorf("mining failed to find a valid nonce")
 	}
 
-	fmt.Printf("Mining complete! hash: %s\n", miningResult.Hash)
+	logger.LogInfo("Mining complete", zap.String("hash", miningResult.Hash))
 
 	// ========================================
 	// PHASE 2: Write operations (SHORT TRANSACTION)
@@ -509,7 +511,7 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 			ledgerEvents,
 			newBlock.MinerAddress,
 		); err != nil {
-			log.Printf("[BLOCK_SERVICE] Warning: failed to publish ledger batch: %v", err)
+			logger.LogWarn("Failed to publish ledger batch", zap.Error(err))
 		}
 	}
 
@@ -523,12 +525,7 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 			marketTick,
 			newBlock.MinerAddress,
 		); err != nil {
-			log.Printf("[BLOCK_SERVICE] Warning: failed to publish market pricing event: %v", err)
-		}
-
-		// publish volume update
-		if err := s.pricingPublisher.PublishVolumeUpdate(ctx, marketTick, newBlock.BlockNumber); err != nil {
-			log.Printf("[BLOCK_SERVICE] Warning: failed to publish market volume update: %v", err)
+			logger.LogWarn("Failed to publish market pricing event", zap.Error(err))
 		}
 	}
 
@@ -551,14 +548,14 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 		}
 
 		if err := s.rewardPublisher.PublishRewardCalculation(ctx, rewardCalcEvent); err != nil {
-			log.Printf("[BLOCK_SERVICE] Warning: failed to publish reward calculation event: %v", err)
+			logger.LogWarn("Failed to publish reward calculation event", zap.Error(err))
 		}
 	}
 
 	// load transactions
 	transactions, err := s.txRepo.GetTransactionsByBlockID(blockID)
 	if err != nil {
-		log.Printf("[BLOCK_SERVICE] Warning: Failed to load transactions: %v", err)
+		logger.LogWarn("Failed to load transactions", zap.Error(err))
 	} else {
 		newBlock.Transactions = transactions
 	}
@@ -577,38 +574,25 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 		}
 	}
 
-	fmt.Printf("\n" + strings.Repeat("=", 60) + "\n")
-	fmt.Printf("✅ BLOCK #%d SUCCESSFULLY MINED\n", newBlock.BlockNumber)
-	fmt.Printf(strings.Repeat("=", 60) + "\n\n")
-	fmt.Printf(strings.Repeat("=", 60) + "\n\n")
-
-	fmt.Printf("📦 Block Information:\n")
-	fmt.Printf("   Hash:             %s\n", newBlock.CurrentHash)
-	fmt.Printf("   Merkle Root:      %s\n", newBlock.MerkleRoot)
-	fmt.Printf("   Nonce:            %d\n", newBlock.Nonce)
-	fmt.Printf("   Difficulty:       %d\n", newBlock.Difficulty)
-
-	fmt.Printf("\n💰 Transaction Summary:\n")
-	fmt.Printf("   Transactions:     %d\n", len(pendingTxs))
-	fmt.Printf("   Total Fees:       %.8f\n", totalFees)
-
-	fmt.Printf("\n🏆 Mining Reward:\n")
-	fmt.Printf("   Block Reward:     %.8f\n", blockReward)
-	fmt.Printf("   Transaction Fees: %.8f\n", totalFees)
-	fmt.Printf("   Total Earned:     %.8f\n", blockReward+totalFees)
 	minerWallet, _ := s.walletRepo.GetByAddress("MINER_ACCOUNT")
-	fmt.Printf("   Miner Balance:    %.8f (before reward distribution)\n", minerWallet.YTEBalance)
-
-	fmt.Printf("\n📊 Network Statistics:\n")
-	fmt.Printf("   Current Supply:   %.8f\n", utils.GetCurrentSupply(int64(nextBlockNumber)))
-	fmt.Printf("   Max Supply:       %.8f\n", utils.GetMaxSupply())
-	fmt.Printf("   Next Halving:     Block #%d\n", utils.GetNextHalvingBlock(int64(nextBlockNumber)))
-	fmt.Printf("   Blocks Until:     %d\n", utils.GetBlocksUntilHalving(int64(nextBlockNumber)))
-
-	fmt.Printf("\n⛏️  Mining Performance:\n")
-	fmt.Printf("   Mining Time:      %v\n", miningResult.Duration)
-
-	fmt.Printf("\n" + strings.Repeat("=", 60) + "\n\n")
+	logger.LogBlockEvent(
+		int64(newBlock.BlockNumber),
+		"mined",
+		zap.String("hash", newBlock.CurrentHash),
+		zap.String("merkle_root", newBlock.MerkleRoot),
+		zap.Int64("nonce", newBlock.Nonce),
+		zap.Int64("difficulty", int64(newBlock.Difficulty)),
+		zap.Int("transaction_count", len(pendingTxs)),
+		zap.Float64("total_fees", totalFees),
+		zap.Float64("block_reward", blockReward),
+		zap.Float64("total_earned", blockReward+totalFees),
+		zap.Float64("miner_balance_before", minerWallet.YTEBalance),
+		zap.Float64("current_supply", utils.GetCurrentSupply(int64(nextBlockNumber))),
+		zap.Float64("max_supply", utils.GetMaxSupply()),
+		zap.Int64("next_halving_block", utils.GetNextHalvingBlock(int64(nextBlockNumber))),
+		zap.Int64("blocks_until_halving", utils.GetBlocksUntilHalving(int64(nextBlockNumber))),
+		zap.Duration("mining_time", miningResult.Duration),
+	)
 
 	return newBlock, nil
 }

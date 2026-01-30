@@ -3,9 +3,11 @@ package worker
 import (
 	"context"
 	"encoding/json"
-	"log"
+	"fmt"
 	"sync"
 	"time"
+
+	"github.com/livingdolls/go-blockchain-simulate/logger"
 
 	"github.com/livingdolls/go-blockchain-simulate/app/dto"
 	"github.com/livingdolls/go-blockchain-simulate/app/repository"
@@ -43,7 +45,7 @@ func (l *LedgerPersistenceConsumer) Start() error {
 	l.isRunning = true
 	l.mu.Unlock()
 
-	log.Println("[LEDGER_PERSISTENCE_CONSUMER] Starting ledger persistence consumer...")
+	logger.LogInfo("Starting ledger persistence consumer")
 
 	return l.client.Consume(
 		rabbitmq.LedgerPresistenceQueue,
@@ -55,14 +57,14 @@ func (l *LedgerPersistenceConsumer) Start() error {
 func (l *LedgerPersistenceConsumer) handleMessage(msg amqp091.Delivery) {
 	defer func() {
 		if err := msg.Ack(false); err != nil {
-			log.Printf("[LEDGER_PERSISTENCE_CONSUMER] Failed to ack message: %v", err)
+			logger.LogError("Failed to ack message", err)
 		}
 	}()
 
 	var batch dto.LedgerBatchEvent
 
 	if err := json.Unmarshal(msg.Body, &batch); err != nil {
-		log.Printf("[LEDGER_PERSISTENCE_CONSUMER] Failed to unmarshal ledger batch event: %v", err)
+		logger.LogError("Failed to unmarshal ledger batch event", err)
 		return
 	}
 
@@ -70,11 +72,11 @@ func (l *LedgerPersistenceConsumer) handleMessage(msg amqp091.Delivery) {
 	defer cancel()
 
 	if err := l.persistLedgerEntries(ctx, batch); err != nil {
-		log.Printf("[LEDGER_PERSISTENCE_CONSUMER] Failed to persist ledger entries for block %d: %v", batch.BlockNumber, err)
+		logger.LogError("Failed to persist ledger entries", err)
 		return
 	}
 
-	log.Printf("[LEDGER_PERSISTENCE_CONSUMER] Successfully persisted ledger entries for block %d", batch.BlockNumber)
+	logger.LogInfo(fmt.Sprintf("Successfully persisted ledger entries for block %d", batch.BlockNumber))
 }
 
 func (l *LedgerPersistenceConsumer) persistLedgerEntries(ctx context.Context, batch dto.LedgerBatchEvent) error {
@@ -85,7 +87,7 @@ func (l *LedgerPersistenceConsumer) persistLedgerEntries(ctx context.Context, ba
 	}
 
 	if len(batch.Entries) == 0 {
-		log.Printf("[LEDGER_PRESISTENCE_CONSUMER] No entries to presist for block %d", batch.BlockNumber)
+		logger.LogInfo(fmt.Sprintf("No entries to persist for block %d", batch.BlockNumber))
 		return nil
 	}
 
@@ -100,15 +102,15 @@ func (l *LedgerPersistenceConsumer) persistLedgerEntries(ctx context.Context, ba
 		})
 	}
 
-	log.Printf("[LEDGER_PRESISTENCE_CONSUMER] Persisting %d ledger entries for block %d", len(entries), batch.BlockNumber)
+	logger.LogInfo(fmt.Sprintf("Persisting %d ledger entries for block %d", len(entries), batch.BlockNumber))
 
 	err := l.ledgerRepo.BulkCreate(entries)
 	if err != nil {
-		log.Printf("[LEDGER_PRESISTENCE_CONSUMER] Error presisting entries : %v", err)
+		logger.LogError("Error persisting entries", err)
 		return err
 	}
 
-	log.Printf("[LEDGER_PERSISTENCE_CONSUMER] ✅ Successfully inserted %d ledger entries (blockID=%d)", len(entries), batch.BlockID)
+	logger.LogInfo(fmt.Sprintf("Successfully inserted %d ledger entries (blockID=%d)", len(entries), batch.BlockID))
 	return nil
 }
 
@@ -123,7 +125,7 @@ func (l *LedgerPersistenceConsumer) Stop() {
 	l.isRunning = false
 	l.mu.Unlock()
 
-	log.Println("[LEDGER_PRESISTENCE_CONSUMER] stoping ledger presistence...")
+	logger.LogInfo("Stopping ledger persistence")
 	close(l.stopChan)
-	log.Println("[LEDGER_PERSISTENCE_CONSUMER] Stopped ledger persistence consumer.")
+	logger.LogInfo("Stopped ledger persistence consumer")
 }

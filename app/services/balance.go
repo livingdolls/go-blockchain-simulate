@@ -9,6 +9,8 @@ import (
 	"github.com/livingdolls/go-blockchain-simulate/app/models"
 	"github.com/livingdolls/go-blockchain-simulate/app/publisher"
 	"github.com/livingdolls/go-blockchain-simulate/app/repository"
+	"github.com/livingdolls/go-blockchain-simulate/logger"
+	"go.uber.org/zap"
 )
 
 type BalanceService interface {
@@ -145,9 +147,9 @@ func (s *balanceService) TopUpUSDBalance(address string, amount float64, referen
 	data, err := s.users.GetByAddressWithBalance(address)
 	if err != nil {
 		// don't fail the top-up just because notification fails
-		fmt.Printf("failed to get user data for notification: %v\n", err)
+		logger.LogError("failed to get user data for notification", err)
 	} else {
-		fmt.Printf("Publishing balance update for address %s: %+v\n", address, data)
+		logger.LogInfo("Publishing balance update for address", zap.String("address", address), zap.Any("data", data))
 		dtoResult := dto.DTOUserWithBalance{
 			Name:       data.Name,
 			Address:    data.Address,

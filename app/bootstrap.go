@@ -2,9 +2,10 @@ package app
 
 import (
 	"context"
-	"log"
 	"sync"
 	"time"
+
+	"github.com/livingdolls/go-blockchain-simulate/logger"
 
 	"github.com/livingdolls/go-blockchain-simulate/app/handler"
 	"github.com/livingdolls/go-blockchain-simulate/app/publisher"
@@ -48,7 +49,7 @@ func (a *AppConfig) InitializeInfrastructure() error {
 	// JWT
 	a.JWT = security.NewJWTAdapter("yurinahirate-verysecret", 24*time.Hour)
 
-	log.Println("[BOOTSTRAP] Infrastructure initialized successfully")
+	logger.LogInfo("Infrastructure initialized successfully")
 	return nil
 }
 
@@ -60,23 +61,23 @@ func (a *AppConfig) SetupRabbitMQTopology() error {
 
 	for _, q := range queues {
 		if err := a.RMQClient.DeclareQueue(q); err != nil {
-			log.Printf("Warning: Failed to declare queue %s: %v\n", q.Name, err)
+			logger.LogError("Failed to declare queue", err)
 		}
 	}
 
 	for _, e := range exchanges {
 		if err := a.RMQClient.DeclareExchange(e); err != nil {
-			log.Printf("Warning: Failed to declare exchange %s: %v\n", e.Name, err)
+			logger.LogError("Failed to declare exchange", err)
 		}
 	}
 
 	for _, b := range binds {
 		if err := a.RMQClient.Bind(b); err != nil {
-			log.Printf("Warning: Failed to bind queue %s: %v\n", b.Queue, err)
+			logger.LogError("Failed to bind queue", err)
 		}
 	}
 
-	log.Println("[RABBITMQ] Topology initialized successfully")
+	logger.LogInfo("RabbitMQ topology initialized successfully")
 	return nil
 }
 
@@ -85,7 +86,7 @@ func (a *AppConfig) InitializeWebSocket() {
 	a.Hub = websocket.NewHub()
 	go a.Hub.Run()
 	a.PublisherWS = publisher.NewPublisherWS(a.Hub)
-	log.Println("[WEBSOCKET] Hub initialized successfully")
+	logger.LogInfo("WebSocket hub initialized successfully")
 }
 
 // InitializeRepositories initializes all data repositories
@@ -99,7 +100,7 @@ func (a *AppConfig) InitializeRepositories() {
 	a.BlockRepo = repository.NewBlockRepository(a.DB)
 	a.CandleRepo = repository.NewCandleRepository(a.DB)
 	a.DiscrepancyRepo = repository.NewDiscrepancyRepository(a.DB)
-	log.Println("[REPOSITORIES] All repositories initialized successfully")
+	logger.LogInfo("All repositories initialized successfully")
 }
 
 // InitializePublishers initializes message publishers
@@ -142,7 +143,7 @@ func (a *AppConfig) InitializeServices() {
 
 	a.RewardPublisher = services.NewRewardPublisher(a.RMQClient)
 
-	log.Println("[SERVICES] All services initialized successfully")
+	logger.LogInfo("All services initialized successfully")
 }
 
 // InitializeHandlers initializes all HTTP request handlers
@@ -156,7 +157,7 @@ func (a *AppConfig) InitializeHandlers() {
 	a.MarketHandler = handler.NewMarketHandler(a.MarketService)
 	a.CandleHandler = handler.NewCandleHandler(a.CandleService)
 	a.CandleStreamHandler = handler.NewCandleStreamHandler(services.NewCandleStreamService(a.RedisServices), a.CandleService)
-	log.Println("[HANDLERS] All handlers initialized successfully")
+	logger.LogInfo("All handlers initialized successfully")
 }
 
 // InitializeWorkers initializes background workers
@@ -170,7 +171,7 @@ func (a *AppConfig) InitializeWorkers() {
 	a.CandleWorker.SetJobTimeout(45 * time.Second)
 	a.CandleWorker.Start(1 * time.Second)
 
-	log.Println("[WORKERS] All background workers initialized successfully")
+	logger.LogInfo("All background workers initialized successfully")
 }
 
 // InitializeConsumers initializes all message consumers
@@ -210,65 +211,65 @@ func (a *AppConfig) InitializeConsumers() {
 
 	a.RewardDistributionConsumer = worker.NewRewardDistributionConsumer(a.RMQClient, a.WalletRepo, rewardDistConfig)
 
-	log.Println("[CONSUMERS] All message consumers initialized successfully")
+	logger.LogInfo("All message consumers initialized successfully")
 }
 
 // StartConsumers starts all message consumers asynchronously
 func (a *AppConfig) StartConsumers() {
 	go func() {
 		if err := a.TransactionConsumer.Start(context.Background()); err != nil {
-			log.Println("[TRANSACTION_CONSUMER] Error starting:", err)
+			logger.LogError("Error starting transaction consumer", err)
 		}
 	}()
 
 	go func() {
 		if err := a.PricingConsumer.Start(); err != nil {
-			log.Println("[PRICING_CONSUMER] Error starting:", err)
+			logger.LogError("Error starting pricing consumer", err)
 		}
 	}()
 
 	go func() {
 		if err := a.VolumeConsumer.Start(); err != nil {
-			log.Println("[VOLUME_CONSUMER] Error starting:", err)
+			logger.LogError("Error starting volume consumer", err)
 		}
 	}()
 
 	go func() {
 		if err := a.LedgerPersistenceConsumer.Start(); err != nil {
-			log.Println("[LEDGER_PERSISTENCE_CONSUMER] Error starting:", err)
+			logger.LogError("Error starting ledger persistence consumer", err)
 		}
 	}()
 
 	go func() {
 		if err := a.AuditConsumer.Start(); err != nil {
-			log.Println("[AUDIT_CONSUMER] Error starting:", err)
+			logger.LogError("Error starting audit consumer", err)
 		}
 	}()
 
 	go func() {
 		if err := a.ReconcileConsumer.Start(); err != nil {
-			log.Println("[RECONCILE_CONSUMER] Error starting:", err)
+			logger.LogError("Error starting reconcile consumer", err)
 		}
 	}()
 
 	go func() {
 		if err := a.RewardCalculationConsumer.Start(); err != nil {
-			log.Println("[REWARD_CALCULATION_CONSUMER] Error starting:", err)
+			logger.LogError("Error starting reward calculation consumer", err)
 		}
 	}()
 
 	go func() {
 		if err := a.RewardDistributionConsumer.Start(); err != nil {
-			log.Println("[REWARD_DISTRIBUTION_CONSUMER] Error starting:", err)
+			logger.LogError("Error starting reward distribution consumer", err)
 		}
 	}()
 
-	log.Println("[CONSUMERS] All message consumers started successfully")
+	logger.LogInfo("All message consumers started successfully")
 }
 
 // Shutdown gracefully shuts down all components
 func (a *AppConfig) Shutdown() {
-	log.Println("[BOOTSTRAP] Starting graceful shutdown...")
+	logger.LogInfo("Starting graceful shutdown...")
 
 	stopWorkers(
 		a.BlockWorker,
@@ -290,7 +291,7 @@ func (a *AppConfig) Shutdown() {
 		a.RMQClient.Close()
 	}
 
-	log.Println("[BOOTSTRAP] Shutdown complete")
+	logger.LogInfo("Shutdown complete")
 }
 
 // stopWorkers stops all workers gracefully
@@ -310,31 +311,31 @@ func stopWorkers(workers ...interface{}) {
 				switch v := workerInstance.(type) {
 				case *worker.GenerateBlockWorker:
 					v.Stop()
-					log.Println("[WORKER] block worker stopped")
+					logger.LogInfo("Block worker stopped")
 				case *worker.GenerateCandleWorker:
 					v.Stop()
-					log.Println("[WORKER] candle worker stopped")
+					logger.LogInfo("Candle worker stopped")
 				case *worker.TransactionConsumer:
 					v.Stop()
-					log.Println("[WORKER] transaction consumer stopped")
+					logger.LogInfo("Transaction consumer stopped")
 				case *worker.MarketPricingConsumer:
 					v.Stop()
-					log.Println("[WORKER] market pricing consumer stopped")
+					logger.LogInfo("Market pricing consumer stopped")
 				case *worker.MarketVolumeConsumer:
 					v.Stop()
-					log.Println("[WORKER] market volume consumer stopped")
+					logger.LogInfo("Market volume consumer stopped")
 				case *worker.LedgerAuditConsumer:
 					v.Stop()
-					log.Println("[WORKER] ledger audit consumer stopped")
+					logger.LogInfo("Ledger audit consumer stopped")
 				case *worker.LedgerReconcileConsumer:
 					v.Stop()
-					log.Println("[WORKER] ledger reconcile consumer stopped")
+					logger.LogInfo("Ledger reconcile consumer stopped")
 				case *worker.RewardCalculationConsumer:
 					v.Stop()
-					log.Println("[WORKER] reward calculation consumer stopped")
+					logger.LogInfo("Reward calculation consumer stopped")
 				case *worker.RewardDistributionConsumer:
 					v.Stop()
-					log.Println("[WORKER] reward distribution consumer stopped")
+					logger.LogInfo("Reward distribution consumer stopped")
 				}
 			}(w)
 		}
@@ -344,9 +345,9 @@ func stopWorkers(workers ...interface{}) {
 
 	select {
 	case <-stopChan:
-		log.Println("[WORKER] All workers stopped")
+		logger.LogInfo("All workers stopped")
 	case <-ctx.Done():
-		log.Println("[WORKER] Timeout while stopping workers")
+		logger.LogInfo("Timeout while stopping workers")
 	}
 }
 
@@ -363,8 +364,8 @@ func closeHub(hub *websocket.Hub, timeout time.Duration) {
 
 	select {
 	case <-done:
-		log.Println("[WEBSOCKET] WebSocket hub closed all connections")
+		logger.LogInfo("WebSocket hub closed all connections")
 	case <-ctx.Done():
-		log.Println("[WEBSOCKET] Timeout while closing WebSocket hub connections")
+		logger.LogInfo("Timeout while closing WebSocket hub connections")
 	}
 }

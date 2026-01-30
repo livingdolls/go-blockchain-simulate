@@ -32,18 +32,20 @@ type AppConfig struct {
 	PublisherWS *publisher.PublisherWS
 
 	// Repositories
-	UserRepo    repository.UserRepository
-	WalletRepo  repository.UserWalletRepository
-	BalanceRepo repository.UserBalanceRepository
-	TxRepo      repository.TransactionRepository
-	LedgerRepo  repository.LedgerRepository
-	MarketRepo  repository.MarketRepository
-	BlockRepo   repository.BlockRepository
-	CandleRepo  repository.CandlesRepository
+	UserRepo        repository.UserRepository
+	WalletRepo      repository.UserWalletRepository
+	BalanceRepo     repository.UserBalanceRepository
+	TxRepo          repository.TransactionRepository
+	LedgerRepo      repository.LedgerRepository
+	MarketRepo      repository.MarketRepository
+	BlockRepo       repository.BlockRepository
+	CandleRepo      repository.CandlesRepository
+	DiscrepancyRepo repository.DiscrepancyRepository
 
 	// Publishers
 	PricingPublisher services.MarketPricingPublisher
 	LedgerPublisher  services.LedgerPublisher
+	RewardPublisher  services.RewardPublisher
 
 	// Services
 	UserService        services.RegisterService
@@ -71,9 +73,12 @@ type AppConfig struct {
 	CandleWorker *worker.GenerateCandleWorker
 
 	// Consumers
-	TransactionConsumer *worker.TransactionConsumer
-	PricingConsumer     *worker.MarketPricingConsumer
-	VolumeConsumer      *worker.MarketVolumeConsumer
-	AuditConsumer       *worker.LedgerAuditConsumer
-	ReconcileConsumer   *worker.LedgerReconcileConsumer
+	TransactionConsumer        *worker.TransactionConsumer
+	PricingConsumer            *worker.MarketPricingConsumer
+	VolumeConsumer             *worker.MarketVolumeConsumer
+	LedgerPersistenceConsumer  *worker.LedgerPersistenceConsumer
+	AuditConsumer              *worker.LedgerAuditConsumer
+	ReconcileConsumer          *worker.LedgerReconcileConsumer
+	RewardCalculationConsumer  *worker.RewardCalculationConsumer
+	RewardDistributionConsumer *worker.RewardDistributionConsumer
 }

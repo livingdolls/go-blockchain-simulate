@@ -6,7 +6,6 @@ const (
 	BlockExchange       = "blocks"
 	MarketExchange      = "market"
 	LedgerExchange      = "ledger"
-	LedgerEntriesQueue  = "ledger.entries"
 	RewardExchange      = "rewards"
 
 	// Queue Names
@@ -14,10 +13,14 @@ const (
 	TransactionConfirmedQueue = "transaction.confirmed"
 	BlockGenerationQueue      = "block.generation"
 	BlockMinedQueue           = "block.mined"
+	LedgerEntriesQueue        = "ledger.entries"
 	MarketPricingQueue        = "market.pricing"
 	MarketVolumeQueue         = "market.volume.updates"
 	RewardCalculationQueue    = "reward.calculation"
 	RewardDistributionQueue   = "reward.distribution"
+	LedgerPresistenceQueue    = "ledger.persistence"
+	LedgerAuditQueue          = "ledger.audit"
+	LedgerReconcileQueue      = "ledger.reconcile"
 
 	// Routing Keys
 	TransactionSubmittedKey = "transaction.submitted"

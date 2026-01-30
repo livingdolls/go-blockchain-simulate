@@ -227,7 +227,7 @@ func (rdc *RewardDistributionConsumer) process(ctx context.Context, event dto.Re
 	// Record wallet history for audit
 	history := models.WalletHistory{
 		UserAddress:   event.MinerAddress,
-		ChangeType:    "REWARD_DISTRIBUTION",
+		ChangeType:    "MINING",
 		Amount:        event.MinerReward,
 		BalanceBefore: prev,
 		BalanceAfter:  newBalance,

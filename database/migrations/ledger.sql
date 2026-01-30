@@ -13,3 +13,7 @@ ALTER TABLE ledger MODIFY COLUMN balance_after DECIMAL(20, 8) NOT NULL;
 ALTER TABLE ledger MODIFY COLUMN change_amount DECIMAL(20, 8) NOT NULL;
 
 ALTER TABLE ledger MODIFY COLUMN tx_id BIGINT NULL;
+
+ALTER TABLE ledger ADD COLUMN block_id BIGINT NOT NULL AFTER id;
+ALTER TABLE ledger ADD INDEX idx_block_id (block_id);
+ALTER TABLE ledger ADD FOREIGN KEY (block_id) REFERENCES blocks(id);

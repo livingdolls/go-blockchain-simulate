@@ -15,6 +15,11 @@ func getQueueDefinitions() []models.QueueDef {
 		{Name: rabbitmq.MarketPricingQueue, Durable: true, AutoDelete: false},
 		{Name: rabbitmq.MarketVolumeQueue, Durable: true, AutoDelete: false},
 		{Name: rabbitmq.LedgerEntriesQueue, Durable: true, AutoDelete: false},
+		{Name: rabbitmq.RewardCalculationQueue, Durable: true, AutoDelete: false},
+		{Name: rabbitmq.RewardDistributionQueue, Durable: true, AutoDelete: false},
+		{Name: rabbitmq.LedgerPresistenceQueue, Durable: true, AutoDelete: false},
+		{Name: rabbitmq.LedgerAuditQueue, Durable: true, AutoDelete: false},
+		{Name: rabbitmq.LedgerReconcileQueue, Durable: true, AutoDelete: false},
 	}
 }
 
@@ -25,6 +30,7 @@ func getExchangeDefinitions() []models.ExchangeDef {
 		{Name: rabbitmq.BlockExchange, Kind: "topic", Durable: true},
 		{Name: rabbitmq.MarketExchange, Kind: "topic", Durable: true},
 		{Name: rabbitmq.LedgerExchange, Kind: "topic", Durable: true},
+		{Name: rabbitmq.RewardExchange, Kind: "topic", Durable: true},
 	}
 }
 
@@ -37,6 +43,11 @@ func getBindingDefinitions() []models.BindDef {
 		{Queue: rabbitmq.BlockMinedQueue, Exchange: rabbitmq.BlockExchange, RoutingKey: rabbitmq.BlockMinedKey},
 		{Queue: rabbitmq.MarketPricingQueue, Exchange: rabbitmq.MarketExchange, RoutingKey: rabbitmq.MarketPricingKey},
 		{Queue: rabbitmq.MarketVolumeQueue, Exchange: rabbitmq.MarketExchange, RoutingKey: rabbitmq.MarketVolumeUpdateKey},
-		{Queue: rabbitmq.LedgerEntriesQueue, Exchange: rabbitmq.LedgerExchange, RoutingKey: rabbitmq.LedgerEntryKey},
+		{Queue: rabbitmq.LedgerEntriesQueue, Exchange: rabbitmq.LedgerExchange, RoutingKey: rabbitmq.LedgerBatchKey},
+		{Queue: rabbitmq.RewardCalculationQueue, Exchange: rabbitmq.RewardExchange, RoutingKey: rabbitmq.RewardCalculationKey},
+		{Queue: rabbitmq.RewardDistributionQueue, Exchange: rabbitmq.RewardExchange, RoutingKey: rabbitmq.RewardDistributionKey},
+		{Queue: rabbitmq.LedgerPresistenceQueue, Exchange: rabbitmq.LedgerExchange, RoutingKey: rabbitmq.LedgerBatchKey},
+		{Queue: rabbitmq.LedgerAuditQueue, Exchange: rabbitmq.LedgerExchange, RoutingKey: rabbitmq.LedgerBatchKey},
+		{Queue: rabbitmq.LedgerReconcileQueue, Exchange: rabbitmq.LedgerExchange, RoutingKey: rabbitmq.LedgerBatchKey},
 	}
 }

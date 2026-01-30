@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/livingdolls/go-blockchain-simulate/app/dto"
+	"github.com/livingdolls/go-blockchain-simulate/app/models"
 	"github.com/livingdolls/go-blockchain-simulate/app/repository"
 	"github.com/livingdolls/go-blockchain-simulate/rabbitmq"
 	"github.com/rabbitmq/amqp091-go"
@@ -25,6 +26,7 @@ type LedgerReconcileConsumer struct {
 	client          *rabbitmq.Client
 	walletRepo      repository.UserWalletRepository
 	ledgerRepo      repository.LedgerRepository
+	discrepancyRepo repository.DiscrepancyRepository
 	mu              sync.Mutex
 	isRunning       bool
 	stopCtx         context.Context
@@ -33,22 +35,20 @@ type LedgerReconcileConsumer struct {
 	reconcileQueue  chan dto.LedgerBatchEvent
 	discrepancies   []dto.BalanceReconciliation
 	discrepanciesMu sync.RWMutex
-	pendingBlocks   map[int64]dto.LedgerBatchEvent
-	pendingBlocksMu sync.RWMutex
 }
 
-func NewLedgerReconcileConsumer(rmqClient *rabbitmq.Client, walletRepo repository.UserWalletRepository, ledgerRepo repository.LedgerRepository, cfg RecoilConfig) *LedgerReconcileConsumer {
+func NewLedgerReconcileConsumer(rmqClient *rabbitmq.Client, walletRepo repository.UserWalletRepository, ledgerRepo repository.LedgerRepository, discrepancyRepo repository.DiscrepancyRepository, cfg RecoilConfig) *LedgerReconcileConsumer {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &LedgerReconcileConsumer{
-		client:         rmqClient,
-		walletRepo:     walletRepo,
-		ledgerRepo:     ledgerRepo,
-		stopCtx:        ctx,
-		stopCancel:     cancel,
-		cfg:            cfg,
-		reconcileQueue: make(chan dto.LedgerBatchEvent, 1000),
-		discrepancies:  make([]dto.BalanceReconciliation, 0, cfg.MaxDiscrepancies),
-		pendingBlocks:  make(map[int64]dto.LedgerBatchEvent),
+		client:          rmqClient,
+		walletRepo:      walletRepo,
+		ledgerRepo:      ledgerRepo,
+		discrepancyRepo: discrepancyRepo,
+		stopCtx:         ctx,
+		stopCancel:      cancel,
+		cfg:             cfg,
+		reconcileQueue:  make(chan dto.LedgerBatchEvent, 1000),
+		discrepancies:   make([]dto.BalanceReconciliation, 0, cfg.MaxDiscrepancies),
 	}
 }
 
@@ -69,11 +69,8 @@ func (l *LedgerReconcileConsumer) Start() error {
 		go l.reconcileWorker(i)
 	}
 
-	// start retry worker for handle pending blocks
-	go l.retryPendingBlocksWorker()
-
 	return l.client.Consume(
-		rabbitmq.LedgerEntriesQueue,
+		rabbitmq.LedgerReconcileQueue,
 		l.cfg.WorkerCount,
 		l.handleMessage,
 	)
@@ -96,11 +93,9 @@ func (l *LedgerReconcileConsumer) handleMessage(msg amqp091.Delivery) {
 	if batch.BlockNumber%50 == 0 {
 		select {
 		case l.reconcileQueue <- batch:
+			log.Printf("[LEDGER_RECOIL_CONSUMER] Reconciliation enqueued for block #%d", batch.BlockNumber)
 		default:
-			log.Printf("[LEDGER_RECOIL_CONSUMER] reconcile queue is full, storing block for retry #%d", batch.BlockNumber)
-			l.pendingBlocksMu.Lock()
-			l.pendingBlocks[batch.BlockID] = batch
-			l.pendingBlocksMu.Unlock()
+			log.Printf("[LEDGER_RECOIL_CONSUMER] Reconciliation queue full for block #%d (will reconcile at next checkpoint)", batch.BlockNumber)
 		}
 	}
 
@@ -124,37 +119,6 @@ func (l *LedgerReconcileConsumer) reconcileWorker(id int) {
 			ctx, cancel := context.WithTimeout(l.stopCtx, l.cfg.ProcessingTimeout)
 			l.reconcileBalances(ctx, batch)
 			cancel()
-		}
-	}
-}
-
-// retry worker untuk handle pending blocks
-func (l *LedgerReconcileConsumer) retryPendingBlocksWorker() {
-	ticker := time.NewTicker(5 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-l.stopCtx.Done():
-			log.Println("[LEDGER_RECOIL_CONSUMER] retry pending blocks worker stopping")
-			return
-		case <-ticker.C:
-			l.pendingBlocksMu.Lock()
-			for len(l.pendingBlocks) > 0 {
-				for blockID, batch := range l.pendingBlocks {
-					select {
-					case l.reconcileQueue <- batch:
-						// retry berhasil, hapus dari pending
-						delete(l.pendingBlocks, blockID)
-						log.Printf("[LEDGER_RECOIL_CONSUMER] retry success")
-					default:
-						// queue penuh, tunggu retry berikutnya
-						log.Printf("[LEDGER_RECOIL_CONSUMER] reconcile queue full, will retry later")
-
-					}
-				}
-			}
-			l.pendingBlocksMu.Unlock()
 		}
 	}
 }
@@ -194,6 +158,8 @@ func (l *LedgerReconcileConsumer) reconcileBalances(ctx context.Context, batch d
 		log.Printf("[LEDGER_RECONCILE_CONSUMER] failed to get ledger entries by block ID: %v", err)
 
 		// fallback: gunakan entries dari batch
+		log.Printf("[LEDGER_RECONCILE_CONSUMER] Falling back to batch entries (%d entries)", len(batch.Entries))
+
 		ledgerEntries = l.batchEntriesToLedgerEntries(batch.Entries)
 		l.flagBlockForManualReview(batch.BlockID, batch.BlockNumber, "LEDGER_QUERY_FAILED")
 
@@ -286,6 +252,15 @@ func (l *LedgerReconcileConsumer) storeDiscrepancy(discrepancy dto.BalanceReconc
 	l.discrepanciesMu.Lock()
 	defer l.discrepanciesMu.Unlock()
 
+	// check if discrepancy already exists
+	for _, existing := range l.discrepancies {
+		if existing.Address == discrepancy.Address && existing.BlockNumber == discrepancy.BlockNumber && existing.ExpectedBalance == discrepancy.ExpectedBalance && existing.ActualBalance == discrepancy.ActualBalance {
+			log.Printf("[LEDGER_RECOIL_CONSUMER] Discrepancy already recorded for %s at block #%d, skipping duplicate",
+				discrepancy.Address, discrepancy.BlockNumber)
+			return
+		}
+	}
+
 	// bounded slice
 	if len(l.discrepancies) >= l.cfg.MaxDiscrepancies {
 		// remove oldest
@@ -295,6 +270,21 @@ func (l *LedgerReconcileConsumer) storeDiscrepancy(discrepancy dto.BalanceReconc
 	} else {
 		l.discrepancies = append(l.discrepancies, discrepancy)
 	}
+
+	// simpan ke db
+	dbDiscrepancy := models.BalanceDiscrepancy{
+		Address:         discrepancy.Address,
+		BlockNumber:     discrepancy.BlockNumber,
+		ExpectedBalance: discrepancy.ExpectedBalance,
+		ActualBalance:   discrepancy.ActualBalance,
+		Timestamp:       discrepancy.Timestamp,
+	}
+
+	if err := l.discrepancyRepo.StoreDiscrepancy(dbDiscrepancy); err != nil {
+		log.Printf("[LEDGER_RECOIL_CONSUMER] failed to store discrepancy to db: %v", err)
+	}
+
+	log.Printf("[LEDGER_RECOIL_CONSUMER] stored discrepancy for address %s at block #%d", discrepancy.Address, discrepancy.BlockNumber)
 }
 
 func (l *LedgerReconcileConsumer) batchEntriesToLedgerEntries(entries []dto.LedgerEntryEvent) []repository.LedgerEntryWithID {
@@ -303,6 +293,7 @@ func (l *LedgerReconcileConsumer) batchEntriesToLedgerEntries(entries []dto.Ledg
 	for _, entry := range entries {
 		ledgerEntries = append(ledgerEntries, repository.LedgerEntryWithID{
 			ID:           entry.EntryID,
+			BlockID:      entry.BlockID,
 			TxID:         entry.TxID,
 			Address:      entry.Address,
 			Amount:       entry.Amount,

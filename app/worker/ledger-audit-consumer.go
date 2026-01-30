@@ -46,7 +46,7 @@ func (l *LedgerAuditConsumer) Start() error {
 	log.Println("[LEDGER_AUDIT_CONSUMER] Starting ledger audit consumer...")
 
 	return l.client.Consume(
-		rabbitmq.LedgerEntriesQueue,
+		rabbitmq.LedgerAuditQueue,
 		l.workerCount,
 		l.handleMessage,
 	)

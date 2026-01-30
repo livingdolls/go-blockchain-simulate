@@ -35,9 +35,10 @@ type blockService struct {
 	publisherWS      *publisher.PublisherWS
 	pricingPublisher MarketPricingPublisher
 	ledgerPublisher  LedgerPublisher
+	rewardPublisher  RewardPublisher
 }
 
-func NewBlockService(blockRepo repository.BlockRepository, walletRepo repository.UserWalletRepository, balanceRepo repository.UserBalanceRepository, txRepo repository.TransactionRepository, userRepo repository.UserRepository, candle CandleService, market MarketEngineService, publisherWS *publisher.PublisherWS, pricingPublisher MarketPricingPublisher, ledgerPublisher LedgerPublisher) BlockService {
+func NewBlockService(blockRepo repository.BlockRepository, walletRepo repository.UserWalletRepository, balanceRepo repository.UserBalanceRepository, txRepo repository.TransactionRepository, userRepo repository.UserRepository, candle CandleService, market MarketEngineService, publisherWS *publisher.PublisherWS, pricingPublisher MarketPricingPublisher, ledgerPublisher LedgerPublisher, rewardPublisher RewardPublisher) BlockService {
 	return &blockService{
 		blockRepo:        blockRepo,
 		walletRepo:       walletRepo,
@@ -49,6 +50,7 @@ func NewBlockService(blockRepo repository.BlockRepository, walletRepo repository
 		publisherWS:      publisherWS,
 		pricingPublisher: pricingPublisher,
 		ledgerPublisher:  ledgerPublisher,
+		rewardPublisher:  rewardPublisher,
 	}
 }
 
@@ -252,59 +254,29 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 		return models.Block{}, fmt.Errorf("MINER_ACCOUNT not found in locked users")
 	}
 
-	// Prepare bulk operations
+	// Prepare basic info for block creation
 	var ledgerEntries []repository.LedgerEntry
 	var txIDs []int64
 	totalFees := 0.00000000
 
+	// Calculate balances per transaction
+	txBalanceChanges := make(map[string]float64)
 	for _, t := range pendingTxs {
-		txID := t.ID // int64
-		txIDPtr := &txID
-		// Calculate balances
 		totalDeduction := t.Amount + t.Fee
-		currentBalances[t.ToAddress] += t.Amount
-		currentBalances[t.FromAddress] -= totalDeduction
+		txBalanceChanges[t.FromAddress] = currentBalances[t.FromAddress] - totalDeduction
+		txBalanceChanges[t.ToAddress] = currentBalances[t.ToAddress] + t.Amount
+		txBalanceChanges["MINER_ACCOUNT"] = currentBalances["MINER_ACCOUNT"] + t.Fee
 
-		currentBalances["MINER_ACCOUNT"] += t.Fee
 		totalFees += t.Fee
-
-		// Prepare ledger entries (for event publishing & audit trail)
-		ledgerEntries = append(ledgerEntries,
-			repository.LedgerEntry{
-				TxID:         txIDPtr,
-				Address:      t.FromAddress,
-				Amount:       -totalDeduction,
-				BalanceAfter: currentBalances[t.FromAddress],
-			},
-			repository.LedgerEntry{
-				TxID:         txIDPtr,
-				Address:      t.ToAddress,
-				Amount:       t.Amount,
-				BalanceAfter: currentBalances[t.ToAddress],
-			},
-			repository.LedgerEntry{
-				TxID:         txIDPtr,
-				Address:      "MINER_ACCOUNT",
-				Amount:       t.Fee,
-				BalanceAfter: currentBalances["MINER_ACCOUNT"],
-			},
-		)
-
 		txIDs = append(txIDs, t.ID)
 	}
 
-	// Add block reward to miner
-	currentBalances["MINER_ACCOUNT"] += blockReward
+	// Update currentBalances
+	for addr, bal := range txBalanceChanges {
+		currentBalances[addr] = bal
+	}
 
-	// create ledger entry for block reward
-	ledgerEntries = append(ledgerEntries, repository.LedgerEntry{
-		TxID:         nil, // 0 means coinbase/block reward
-		Address:      "MINER_ACCOUNT",
-		Amount:       blockReward,
-		BalanceAfter: currentBalances["MINER_ACCOUNT"],
-	})
-
-	// Create block
+	// Create block FIRST to get blockID
 	newBlock := models.Block{
 		BlockNumber:  nextBlockNumber,
 		PreviousHash: lastBlock.CurrentHash,
@@ -324,6 +296,37 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 	}
 	newBlock.ID = blockID
 
+	// NOW create ledger entries dengan blockID yang sudah ada
+	for _, t := range pendingTxs {
+		txID := t.ID
+		txIDPtr := &txID
+		totalDeduction := t.Amount + t.Fee
+
+		ledgerEntries = append(ledgerEntries,
+			repository.LedgerEntry{
+				BlockID:      blockID,
+				TxID:         txIDPtr,
+				Address:      t.FromAddress,
+				Amount:       -totalDeduction,
+				BalanceAfter: txBalanceChanges[t.FromAddress],
+			},
+			repository.LedgerEntry{
+				BlockID:      blockID,
+				TxID:         txIDPtr,
+				Address:      t.ToAddress,
+				Amount:       t.Amount,
+				BalanceAfter: txBalanceChanges[t.ToAddress],
+			},
+			repository.LedgerEntry{
+				BlockID:      blockID,
+				TxID:         txIDPtr,
+				Address:      "MINER_ACCOUNT",
+				Amount:       t.Fee,
+				BalanceAfter: txBalanceChanges["MINER_ACCOUNT"],
+			},
+		)
+	}
+
 	// Bulk insert block-transaction links (1 query instead of N)
 	err = s.blockRepo.BulkInsertBlockTransactionsWithTx(tx, blockID, txIDs)
 	if err != nil {
@@ -339,7 +342,9 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 	// Bulk update user balances (1 query instead of N)
 	walletUpdates := make(map[string]float64)
 	for addr, bal := range currentBalances {
-		walletUpdates[addr] = bal
+		if addr != "MINER_ACCOUNT" {
+			walletUpdates[addr] = bal
+		}
 	}
 
 	err = s.walletRepo.BulkUpdateBalancesWithTx(tx, walletUpdates)
@@ -483,6 +488,20 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 	// publish ledger batch event
 	if s.ledgerPublisher != nil {
 		ledgerEvents := make([]dto.LedgerEntryEvent, 0, len(ledgerEntries))
+
+		for _, entry := range ledgerEntries {
+			event := dto.LedgerEntryEvent{
+				Address:      entry.Address,
+				Amount:       entry.Amount,
+				BalanceAfter: entry.BalanceAfter,
+			}
+			if entry.TxID != nil {
+				event.TxID = entry.TxID
+			}
+
+			ledgerEvents = append(ledgerEvents, event)
+		}
+
 		if err := s.ledgerPublisher.PublishLedgerBatch(
 			ctx,
 			blockID,
@@ -516,6 +535,24 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 	//broadcast new block mined
 	if s.publisherWS != nil {
 		s.publisherWS.Publish(entity.EventTypeBlockMined, newBlock)
+	}
+
+	// publish reward calculation event
+	if s.rewardPublisher != nil {
+		rewardCalcEvent := dto.RewardCalculationEvent{
+			BlockID:             blockID,
+			BlockNumber:         newBlock.BlockNumber,
+			MinerAddress:        newBlock.MinerAddress,
+			BlockReward:         newBlock.BlockReward,
+			TransactionCount:    len(pendingTxs),
+			TotalTransactionFee: newBlock.TotalFees,
+			MarketPrice:         marketState.Price,
+			Timestamp:           time.Now().Unix(),
+		}
+
+		if err := s.rewardPublisher.PublishRewardCalculation(ctx, rewardCalcEvent); err != nil {
+			log.Printf("[BLOCK_SERVICE] Warning: failed to publish reward calculation event: %v", err)
+		}
 	}
 
 	// load transactions
@@ -559,7 +596,8 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 	fmt.Printf("   Block Reward:     %.8f\n", blockReward)
 	fmt.Printf("   Transaction Fees: %.8f\n", totalFees)
 	fmt.Printf("   Total Earned:     %.8f\n", blockReward+totalFees)
-	fmt.Printf("   Miner Balance:    %.8f\n", currentBalances["MINER_ACCOUNT"])
+	minerWallet, _ := s.walletRepo.GetByAddress("MINER_ACCOUNT")
+	fmt.Printf("   Miner Balance:    %.8f (before reward distribution)\n", minerWallet.YTEBalance)
 
 	fmt.Printf("\n📊 Network Statistics:\n")
 	fmt.Printf("   Current Supply:   %.8f\n", utils.GetCurrentSupply(int64(nextBlockNumber)))

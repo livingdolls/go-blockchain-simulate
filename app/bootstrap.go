@@ -98,6 +98,7 @@ func (a *AppConfig) InitializeRepositories() {
 	a.MarketRepo = repository.NewMarketRepository(a.DB)
 	a.BlockRepo = repository.NewBlockRepository(a.DB)
 	a.CandleRepo = repository.NewCandleRepository(a.DB)
+	a.DiscrepancyRepo = repository.NewDiscrepancyRepository(a.DB)
 	log.Println("[REPOSITORIES] All repositories initialized successfully")
 }
 
@@ -105,7 +106,7 @@ func (a *AppConfig) InitializeRepositories() {
 func (a *AppConfig) InitializePublishers() {
 	a.PricingPublisher = services.NewMarketPricingPublisher(a.RMQClient)
 	a.LedgerPublisher = services.NewLedgerPublisher(a.RMQClient)
-	log.Println("[PUBLISHERS] All publishers initialized successfully")
+	a.RewardPublisher = services.NewRewardPublisher(a.RMQClient)
 }
 
 // InitializeServices initializes all business logic services
@@ -130,7 +131,7 @@ func (a *AppConfig) InitializeServices() {
 	// Block service
 	a.BlockService = services.NewBlockService(
 		a.BlockRepo, a.WalletRepo, a.BalanceRepo, a.TxRepo, a.UserRepo,
-		a.CandleService, a.MarketService, a.PublisherWS, a.PricingPublisher, a.LedgerPublisher,
+		a.CandleService, a.MarketService, a.PublisherWS, a.PricingPublisher, a.LedgerPublisher, a.RewardPublisher,
 	)
 
 	// Reward service
@@ -138,6 +139,8 @@ func (a *AppConfig) InitializeServices() {
 
 	// Profile service
 	a.ProfileService = services.NewProfileService(a.UserRepo)
+
+	a.RewardPublisher = services.NewRewardPublisher(a.RMQClient)
 
 	log.Println("[SERVICES] All services initialized successfully")
 }
@@ -176,6 +179,7 @@ func (a *AppConfig) InitializeConsumers() {
 	a.PricingConsumer = worker.NewMarketPricingConsumer(a.RMQClient, a.MarketRepo, a.PublisherWS, 3)
 	a.VolumeConsumer = worker.NewMarketVolumeConsumer(a.RMQClient, a.MarketRepo, 2)
 	a.AuditConsumer = worker.NewLedgerAuditConsumer(a.RMQClient, 3)
+	a.LedgerPersistenceConsumer = worker.NewLedgerPersistenceConsumer(a.RMQClient, a.LedgerRepo, 5)
 
 	reconcileConfig := worker.RecoilConfig{
 		WorkerCount:       5,
@@ -183,7 +187,28 @@ func (a *AppConfig) InitializeConsumers() {
 		ProcessingTimeout: 30 * time.Second,
 		MaxDiscrepancies:  100000,
 	}
-	a.ReconcileConsumer = worker.NewLedgerReconcileConsumer(a.RMQClient, a.WalletRepo, a.LedgerRepo, reconcileConfig)
+	a.ReconcileConsumer = worker.NewLedgerReconcileConsumer(a.RMQClient, a.WalletRepo, a.LedgerRepo, a.DiscrepancyRepo, reconcileConfig)
+
+	// Reward Calculation Consumer
+	rewardCalcConfig := worker.RewardEngineConfig{
+		ConsumerWorkers:   3,
+		CalcWorkers:       5,
+		ProcessingTimeout: 30 * time.Second,
+		QueueSize:         1000,
+	}
+	a.RewardCalculationConsumer = worker.NewRewardCalculationConsumer(a.RMQClient, a.RewardPublisher, rewardCalcConfig)
+
+	// reward distribution consumer
+	rewardDistConfig := worker.RewardDistConfig{
+		ConsumerWorkers:   3,
+		DistWorkers:       5,
+		ProcessingTimeout: 30 * time.Second,
+		QueueSize:         1000,
+		CleanupInterval:   5 * time.Minute,
+		TTLDuration:       24 * time.Hour,
+	}
+
+	a.RewardDistributionConsumer = worker.NewRewardDistributionConsumer(a.RMQClient, a.WalletRepo, rewardDistConfig)
 
 	log.Println("[CONSUMERS] All message consumers initialized successfully")
 }
@@ -209,6 +234,12 @@ func (a *AppConfig) StartConsumers() {
 	}()
 
 	go func() {
+		if err := a.LedgerPersistenceConsumer.Start(); err != nil {
+			log.Println("[LEDGER_PERSISTENCE_CONSUMER] Error starting:", err)
+		}
+	}()
+
+	go func() {
 		if err := a.AuditConsumer.Start(); err != nil {
 			log.Println("[AUDIT_CONSUMER] Error starting:", err)
 		}
@@ -217,6 +248,18 @@ func (a *AppConfig) StartConsumers() {
 	go func() {
 		if err := a.ReconcileConsumer.Start(); err != nil {
 			log.Println("[RECONCILE_CONSUMER] Error starting:", err)
+		}
+	}()
+
+	go func() {
+		if err := a.RewardCalculationConsumer.Start(); err != nil {
+			log.Println("[REWARD_CALCULATION_CONSUMER] Error starting:", err)
+		}
+	}()
+
+	go func() {
+		if err := a.RewardDistributionConsumer.Start(); err != nil {
+			log.Println("[REWARD_DISTRIBUTION_CONSUMER] Error starting:", err)
 		}
 	}()
 
@@ -235,6 +278,8 @@ func (a *AppConfig) Shutdown() {
 		a.VolumeConsumer,
 		a.AuditConsumer,
 		a.ReconcileConsumer,
+		a.RewardCalculationConsumer,
+		a.RewardDistributionConsumer,
 	)
 
 	if a.Hub != nil {
@@ -284,6 +329,12 @@ func stopWorkers(workers ...interface{}) {
 				case *worker.LedgerReconcileConsumer:
 					v.Stop()
 					log.Println("[WORKER] ledger reconcile consumer stopped")
+				case *worker.RewardCalculationConsumer:
+					v.Stop()
+					log.Println("[WORKER] reward calculation consumer stopped")
+				case *worker.RewardDistributionConsumer:
+					v.Stop()
+					log.Println("[WORKER] reward distribution consumer stopped")
 				}
 			}(w)
 		}

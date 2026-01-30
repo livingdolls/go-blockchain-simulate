@@ -1,18 +1,13 @@
 package main
 
 import (
-	"context"
 	"log"
 	"os"
 	"os/signal"
-	"sync"
 	"syscall"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/livingdolls/go-blockchain-simulate/app"
-	"github.com/livingdolls/go-blockchain-simulate/app/websocket"
-	"github.com/livingdolls/go-blockchain-simulate/app/worker"
 )
 
 func main() {
@@ -78,71 +73,4 @@ func main() {
 
 	log.Println("Server gracefully stopped")
 	os.Exit(0)
-}
-
-// stopWorkers stops all workers gracefully with timeout
-func stopWorkers(ctx context.Context, workers ...interface{}) {
-	var wg sync.WaitGroup
-	stopChan := make(chan struct{})
-
-	wg.Add(len(workers))
-
-	go func() {
-		for _, w := range workers {
-			go func(workerInstance interface{}) {
-				defer wg.Done()
-				switch v := workerInstance.(type) {
-				case *worker.GenerateBlockWorker:
-					v.Stop()
-					log.Println("[WORKER] block worker stopped")
-				case *worker.GenerateCandleWorker:
-					v.Stop()
-					log.Println("[WORKER] candle worker stopped")
-				case *worker.TransactionConsumer:
-					v.Stop()
-					log.Println("[WORKER] transaction consumer stopped")
-				case *worker.MarketPricingConsumer:
-					v.Stop()
-					log.Println("[WORKER] market pricing consumer stopped")
-				case *worker.MarketVolumeConsumer:
-					v.Stop()
-					log.Println("[WORKER] market volume consumer stopped")
-				case *worker.LedgerAuditConsumer:
-					v.Stop()
-					log.Println("[WORKER] ledger audit consumer stopped")
-				case *worker.LedgerReconcileConsumer:
-					v.Stop()
-					log.Println("[WORKER] ledger reconcile consumer stopped")
-				}
-			}(w)
-		}
-		wg.Wait()
-		close(stopChan)
-	}()
-
-	select {
-	case <-stopChan:
-		log.Println("[WORKER] All workers stopped")
-	case <-ctx.Done():
-		log.Println("[WORKER] Timeout while stopping workers")
-	}
-}
-
-// closeHub closes WebSocket hub connections with timeout
-func closeHub(hub *websocket.Hub, timeout time.Duration) {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	done := make(chan struct{})
-	go func() {
-		hub.Close()
-		close(done)
-	}()
-
-	select {
-	case <-done:
-		log.Println("[WEBSOCKET] WebSocket hub closed all connections")
-	case <-ctx.Done():
-		log.Println("[WEBSOCKET] Timeout while closing WebSocket hub connections")
-	}
 }

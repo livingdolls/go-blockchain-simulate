@@ -25,15 +25,18 @@ export type TBuySellData = {
 export const TransactionRepository = {
   generateTxNonce: async (address: string): Promise<string> => {
     const response = await api.get<{ nonce: string }>(
-      `/generate-tx-nonce/${address}`
+      `/generate-tx-nonce/${address}`,
     );
     return response.data.nonce;
   },
   sendBalance: async (
-    data: TTransactionData
+    data: TTransactionData,
   ): Promise<TSendBalanceResponse | TErrorAPI> => {
     try {
-      const response = await api.post<TSendBalanceResponse>("/send", data);
+      const response = await api.post<TSendBalanceResponse>(
+        "/transaction/send",
+        data,
+      );
       return response.data;
     } catch (error: any) {
       throw new Error(error.response.data.error || "Error sending balance");
@@ -46,7 +49,7 @@ export const TransactionRepository = {
     type: TTransactionType,
     status: TTransactionStatus,
     order: "asc" | "desc",
-    sort_by: string
+    sort_by: string,
   ): Promise<TTransactionWalletResponse | TErrorAPI> => {
     try {
       const response = await api.get(`/wallet/${address}`, {
@@ -62,17 +65,17 @@ export const TransactionRepository = {
       return response.data;
     } catch (error: any) {
       throw new Error(
-        error.response.data.error || "Error fetching transactions"
+        error.response.data.error || "Error fetching transactions",
       );
     }
   },
   buy: async (
-    data: TBuySellData
+    data: TBuySellData,
   ): Promise<TSendBalanceResponse | TErrorAPI> => {
     try {
       const response = await api.post<TSendBalanceResponse>(
         "/transaction/buy",
-        data
+        data,
       );
       return response.data;
     } catch (error: any) {
@@ -80,12 +83,12 @@ export const TransactionRepository = {
     }
   },
   sell: async (
-    data: TBuySellData
+    data: TBuySellData,
   ): Promise<TSendBalanceResponse | TErrorAPI> => {
     try {
       const response = await api.post<TSendBalanceResponse>(
         "/transaction/sell",
-        data
+        data,
       );
       return response.data;
     } catch (error: any) {

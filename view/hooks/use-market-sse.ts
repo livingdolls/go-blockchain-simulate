@@ -89,7 +89,7 @@ export const UseMarketSSE = () => {
         retryTimeout = setTimeout(() => {
           console.log("Reconnecting to SSE...");
           connect();
-        }, 5000); // retry after 5 seconds
+        }, 3000); // retry after 5 seconds
       };
     };
 

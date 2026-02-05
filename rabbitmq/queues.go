@@ -2,11 +2,12 @@ package rabbitmq
 
 const (
 	// Exchange Names
-	TransactionExchange = "transactions"
-	BlockExchange       = "blocks"
-	MarketExchange      = "market"
-	LedgerExchange      = "ledger"
-	RewardExchange      = "rewards"
+	TransactionExchange  = "transactions"
+	BlockExchange        = "blocks"
+	MarketExchange       = "market"
+	LedgerExchange       = "ledger"
+	RewardExchange       = "rewards"
+	NotificationExchange = "notifications"
 
 	// Queue Names
 	TransactionPendingQueue   = "transaction.pending"
@@ -21,6 +22,10 @@ const (
 	LedgerPresistenceQueue    = "ledger.persistence"
 	LedgerAuditQueue          = "ledger.audit"
 	LedgerReconcileQueue      = "ledger.reconcile"
+	NotificationRealTimeQueue = "notification.realtime"
+	NotificationEmailQueue    = "notification.email"
+	NotificationSMSQueue      = "notification.sms"
+	NotificationAuditQueue    = "notification.audit"
 
 	// Routing Keys
 	TransactionSubmittedKey = "transaction.submitted"
@@ -33,4 +38,12 @@ const (
 	LedgerEntryKey          = "ledger.entry"
 	RewardCalculationKey    = "reward.calculation"
 	RewardDistributionKey   = "reward.distribution"
+
+	// Notification Routing Keys
+	NotificationUserKey        = "notification.user."
+	NotificationTransactionKey = "notification.transaction."
+	NotificationBlockKey       = "notification.block."
+	NotificationRewardKey      = "notification.reward."
+	NotificationSystemKey      = "notification.system."
+	NotificationAllKey         = "notification.#" // match all notifications
 )

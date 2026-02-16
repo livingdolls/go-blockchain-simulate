@@ -118,10 +118,18 @@ func (c *RabbitMQConn) NewChannel() (*amqp.Channel, error) {
 }
 
 func (c *RabbitMQConn) Close() {
+	// Close the channel pool first
+	if c.pool != nil {
+		c.pool.Close()
+	}
+
+	// Stop reconnect loop
 	close(c.close)
+
+	// Close the connection
 	c.mu.Lock()
+	defer c.mu.Unlock()
 	if c.conn != nil {
 		c.conn.Close()
 	}
-	defer c.mu.Unlock()
 }

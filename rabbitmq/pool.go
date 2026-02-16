@@ -7,10 +7,11 @@ import (
 )
 
 type ChannelPool struct {
-	conn *RabbitMQConn
-	pool chan *amqp.Channel
-	size int
-	mu   sync.Mutex
+	conn   *RabbitMQConn
+	pool   chan *amqp.Channel
+	size   int
+	mu     sync.RWMutex
+	closed bool
 }
 
 func NewChannelPool(conn *RabbitMQConn, size int) (*ChannelPool, error) {
@@ -36,6 +37,13 @@ func NewChannelPool(conn *RabbitMQConn, size int) (*ChannelPool, error) {
 }
 
 func (p *ChannelPool) Get() (*amqp.Channel, error) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
+	if p.closed {
+		return nil, amqp.ErrClosed
+	}
+
 	select {
 	case ch := <-p.pool:
 		if ch.IsClosed() {
@@ -53,6 +61,14 @@ func (p *ChannelPool) Put(ch *amqp.Channel) {
 		return
 	}
 
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
+	if p.closed {
+		ch.Close()
+		return
+	}
+
 	select {
 	case p.pool <- ch:
 	default:
@@ -61,19 +77,51 @@ func (p *ChannelPool) Put(ch *amqp.Channel) {
 	}
 }
 
-func (p *ChannelPool) Rebuild() {
+func (p *ChannelPool) Rebuild() error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	close(p.pool)
+	oldPool := p.pool
 
 	p.pool = make(chan *amqp.Channel, p.size)
 
 	for i := 0; i < p.size; i++ {
 		ch, err := p.conn.NewChannel()
 
-		if err == nil {
-			p.pool <- ch
+		if err != nil {
+			continue
 		}
+
+		p.pool <- ch
+	}
+
+	go func() {
+		for {
+			select {
+			case ch := <-oldPool:
+				ch.Close()
+			default:
+				return
+			}
+		}
+	}()
+
+	return nil
+}
+
+func (p *ChannelPool) Close() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if p.closed {
+		return
+	}
+
+	p.closed = true
+
+	close(p.pool)
+
+	for ch := range p.pool {
+		ch.Close()
 	}
 }

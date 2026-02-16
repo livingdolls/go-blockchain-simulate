@@ -47,6 +47,10 @@ func (c *Client) Consume(queue string, workers int, handler func(amqp091.Deliver
 	return c.conn.Consume(queue, workers, handler)
 }
 
+func (c *Client) ConsumeWithContext(ctx context.Context, queueName string, workerCount int, handler HandlerFunc) error {
+	return c.conn.ConsumeWithContext(ctx, queueName, workerCount, handler)
+}
+
 func (c *Client) Close() {
 	c.conn.Close()
 }

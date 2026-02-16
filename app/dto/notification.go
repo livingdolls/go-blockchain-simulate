@@ -1,6 +1,10 @@
 package dto
 
-import "time"
+import (
+	"crypto/rand"
+	"fmt"
+	"time"
+)
 
 type NotificationPriority string
 
@@ -43,7 +47,7 @@ type NotificationEvent struct {
 	Message string                 `json:"message"`
 	Data    map[string]interface{} `json:"data"`
 
-	Channels  []NotificationChannel `json:"channel"` // ws, email, sms, audit
+	Channels  []NotificationChannel `json:"channels"` // ws, email, sms, audit
 	Timestamp int64                 `json:"timestamp"`
 	CreatedAt int64                 `json:"created_at"`
 	ExpiresAt int64                 `json:"expires_at"`
@@ -87,10 +91,11 @@ type BalanceUpdatedData struct {
 	Timestamp     int64   `json:"timestamp"`
 }
 
+// NewNotificationEvent creates a new notification event
 func NewNotificationEvent(
 	notificationType NotificationType,
 	priority NotificationPriority,
-	receipentAddr string,
+	recipientAddr string,
 	title string,
 	message string,
 	channels []NotificationChannel,
@@ -101,7 +106,7 @@ func NewNotificationEvent(
 		ID:               generateNotificationID(),
 		Type:             notificationType,
 		Priority:         priority,
-		RecipientAddress: receipentAddr,
+		RecipientAddress: recipientAddr,
 		Title:            title,
 		Message:          message,
 		Channels:         channels,
@@ -112,19 +117,68 @@ func NewNotificationEvent(
 	}
 }
 
+// generateNotificationID creates a unique notification ID
 func generateNotificationID() string {
-	return time.Now().Format("2006-01-02T15:04:05.000") + "-" + randomString(8)
+	return time.Now().Format("2006-01-02T15:04:05.000") + "-" + generateRandomString(8)
 }
 
-func randomString(n int) string {
+// generateRandomString creates a cryptographically secure random string
+func generateRandomString(n int) string {
 	const letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	b := make([]byte, n)
+	randomBytes := make([]byte, n)
 
-	for i := range b {
-		b[i] = letters[i%len(letters)]
+	if _, err := rand.Read(randomBytes); err != nil {
+		// Fallback jika ada error
+		for i := range b {
+			b[i] = letters[i%len(letters)]
+		}
+		return string(b)
+	}
+
+	for i := range randomBytes {
+		b[i] = letters[randomBytes[i]%byte(len(letters))]
 	}
 
 	return string(b)
+}
+
+// IsValidPriority checks if the given priority is valid
+func (p NotificationPriority) IsValid() bool {
+	switch p {
+	case PriorityHigh, PriorityMedium, PriorityLow:
+		return true
+	}
+	return false
+}
+
+// IsValidType checks if the given type is valid
+func (t NotificationType) IsValid() bool {
+	switch t {
+	case TypeTransactionConfirmed, TypeTransactionSubmitted, TypeBlockConfirmed,
+		TypeRewardEarned, TypeBalanceUpdated, TypeTransactionBlockMined:
+		return true
+	}
+	return false
+}
+
+// IsValidChannel checks if the given channel is valid
+func (c NotificationChannel) IsValid() bool {
+	switch c {
+	case ChannelWebSocket, ChannelEmail, ChannelSMS, ChannelAudit:
+		return true
+	}
+	return false
+}
+
+// SetData sets the data payload for the notification
+func (ne *NotificationEvent) SetData(data interface{}) error {
+	dataMap, ok := data.(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("invalid data format: expected map[string]interface{}")
+	}
+	ne.Data = dataMap
+	return nil
 }
 
 type NotificationDeliveryStatus struct {

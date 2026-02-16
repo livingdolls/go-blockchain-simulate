@@ -3,7 +3,9 @@ package worker
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/livingdolls/go-blockchain-simulate/app/dto"
@@ -21,17 +23,24 @@ import (
 // - Backup/archive purposes
 // - Multiple independent instances bisa berjalan
 type MarketVolumeConsumer struct {
-	client            *rabbitmq.Client
-	marketRepo        repository.MarketRepository
-	mu                sync.Mutex
-	isRunning         bool
-	stopChan          chan struct{}
-	workerCount       int
-	processingTimeout time.Duration
-	volumeStats       VolumeStats
-	volumeStatsMu     sync.RWMutex
-	processedBlocks   map[int64]bool
-	processedBlocksMu sync.RWMutex
+	client     *rabbitmq.Client
+	marketRepo repository.MarketRepository
+
+	ctx    context.Context
+	cancel context.CancelFunc
+
+	workerCount int
+
+	running atomic.Bool
+	wg      sync.WaitGroup
+
+	processedBlocks sync.Map
+
+	maxRetention    time.Duration
+	cleanupInterval time.Duration
+
+	stats   VolumeStats
+	statsMu sync.RWMutex
 }
 
 type VolumeStats struct {
@@ -50,247 +59,220 @@ func NewMarketVolumeConsumer(
 	marketRepo repository.MarketRepository,
 	workerCount int,
 ) *MarketVolumeConsumer {
+	ctx, cancel := context.WithCancel(context.Background())
+
 	return &MarketVolumeConsumer{
-		client:            client,
-		marketRepo:        marketRepo,
-		stopChan:          make(chan struct{}),
-		workerCount:       workerCount,
-		processingTimeout: 30 * time.Second,
-		volumeStats:       VolumeStats{},
-		processedBlocks:   make(map[int64]bool),
+		client:          client,
+		marketRepo:      marketRepo,
+		ctx:             ctx,
+		cancel:          cancel,
+		workerCount:     workerCount,
+		maxRetention:    1 * time.Hour,
+		cleanupInterval: 15 * time.Minute,
 	}
 }
 
 func (m *MarketVolumeConsumer) Start() error {
-	m.mu.Lock()
-
-	if m.isRunning {
-		m.mu.Unlock()
+	if !m.running.CompareAndSwap(false, true) {
+		logger.LogWarn("Market volume consumer is already running")
 		return nil
 	}
 
-	m.isRunning = true
-	m.mu.Unlock()
-
 	logger.LogInfo("Starting market volume consumer")
 
-	return m.client.Consume(
+	// start cleanup worker
+	m.wg.Add(1)
+	go m.cleanupLoop()
+
+	// start consuming messages
+	return m.client.ConsumeWithContext(
+		m.ctx,
 		rabbitmq.MarketVolumeQueue,
 		m.workerCount,
 		m.handleMessage,
 	)
 }
 
+// stop gracefully
+func (m *MarketVolumeConsumer) Stop() {
+	if !m.running.CompareAndSwap(true, false) {
+		return
+	}
+
+	logger.LogInfo("Stopping market volume consumer")
+
+	m.cancel()
+	m.wg.Wait()
+
+	logger.LogInfo("Market volume consumer stopped")
+}
+
+// handle incoming messages
 func (m *MarketVolumeConsumer) handleMessage(msg amqp091.Delivery) {
 	defer func() {
-		if err := msg.Ack(false); err != nil {
-			logger.LogError("Failed to ack message", err)
+		if r := recover(); r != nil {
+			logger.LogError("Panic in market volume consumer", errors.New("panic occurred"), zap.Any("recovered", r))
+			msg.Nack(false, true)
 		}
 	}()
 
-	var volumeUpdate dto.MarketVolumeUpdate
+	var update dto.MarketVolumeUpdate
 
-	if err := json.Unmarshal(msg.Body, &volumeUpdate); err != nil {
-		logger.LogError("Failed to unmarshal message", err)
+	if err := json.Unmarshal(msg.Body, &update); err != nil {
+		logger.LogError("Failed to unmarshal market volume update", err)
+		msg.Nack(false, false)
 		return
 	}
 
-	// check idempotency
-	m.processedBlocksMu.RLock()
-	if m.processedBlocks[volumeUpdate.BlockID] {
-		m.processedBlocksMu.RUnlock()
-		logger.LogWarn("Duplicate block, skipping",
-			zap.Int64("block_id", volumeUpdate.BlockID),
-		)
+	// idempotency check
+	if m.isProcessed(update.BlockID) {
+		logger.LogInfo("Market volume update already processed for block", zap.Int64("blockID", update.BlockID))
+		msg.Ack(false)
 		return
 	}
 
-	m.processedBlocksMu.RUnlock()
-
-	ctx, cancel := context.WithTimeout(context.Background(), m.processingTimeout)
+	ctx, cancel := context.WithTimeout(m.ctx, 30*time.Second)
 	defer cancel()
 
-	m.updateVolumeStats(volumeUpdate)
+	// process
+	err := m.processVolume(ctx, update)
 
-	go func() {
-		if err := m.storeVolumeData(ctx, volumeUpdate); err != nil {
-			logger.LogError("Failed to store volume data", err)
-		}
-
-		// mark as processed setelah sukses store
-		m.processedBlocksMu.Lock()
-		m.processedBlocks[volumeUpdate.BlockID] = true
-		m.processedBlocksMu.Unlock()
-	}()
-
-	logger.LogInfo("Processed volume update",
-		zap.Int64("block_id", volumeUpdate.BlockID),
-		zap.Float64("buy_volume", volumeUpdate.BuyVolume),
-		zap.Float64("sell_volume", volumeUpdate.SellVolume),
-		zap.Float64("volume_ratio_percent", volumeUpdate.VolumeRatio*100),
-	)
-}
-
-func (m *MarketVolumeConsumer) updateVolumeStats(update dto.MarketVolumeUpdate) {
-	m.volumeStatsMu.Lock()
-	defer m.volumeStatsMu.Unlock()
-
-	m.volumeStats.TotalBlocks++
-	m.volumeStats.TotalBuyVol += update.BuyVolume
-	m.volumeStats.TotalSellVol += update.SellVolume
-	m.volumeStats.AvgBuyVol = m.volumeStats.TotalBuyVol / float64(m.volumeStats.TotalBlocks)
-	m.volumeStats.AvgSellVol = m.volumeStats.TotalSellVol / float64(m.volumeStats.TotalBlocks)
-
-	// update highest/lowest buy volume
-	if update.BuyVolume > m.volumeStats.HighestBuyVol {
-		m.volumeStats.HighestBuyVol = update.BuyVolume
+	if err != nil {
+		logger.LogError("Failed to process market volume update", err, zap.Int64("blockID", update.BlockID))
+		msg.Nack(false, true)
+		return
 	}
 
-	if m.volumeStats.TotalBlocks == 1 || update.BuyVolume < m.volumeStats.LowestBuyVol {
-		m.volumeStats.LowestBuyVol = update.BuyVolume
-	}
+	// mark as processed after successful processing
+	m.markProcessed(update.BlockID)
 
-	m.volumeStats.LastUpdated = time.Now()
+	// update stats
+	m.updateStats(update)
+
+	msg.Ack(false)
+
+	logger.LogInfo("Successfully processed market volume update", zap.Int64("blockID", update.BlockID), zap.Float64("buyVolume", update.BuyVolume), zap.Float64("sellVolume", update.SellVolume))
 }
 
-func (m *MarketVolumeConsumer) storeVolumeData(ctx context.Context, update dto.MarketVolumeUpdate) error {
+// process volume
+func (m *MarketVolumeConsumer) processVolume(ctx context.Context, update dto.MarketVolumeUpdate) error {
 	tick, err := m.marketRepo.GetTickByBlockID(update.BlockID)
+
 	if err != nil {
 		return err
 	}
 
-	// validate consitency data
 	if tick.BuyVolume != update.BuyVolume || tick.SellVolume != update.SellVolume {
-		logger.LogWarn("Data mismatch detected",
-			zap.Int64("block_id", update.BlockID),
-			zap.Float64("db_buy_volume", tick.BuyVolume),
-			zap.Float64("db_sell_volume", tick.SellVolume),
-			zap.Float64("event_buy_volume", update.BuyVolume),
-			zap.Float64("event_sell_volume", update.SellVolume),
-		)
+		logger.LogWarn("Volume mismatch for block", zap.Int64("blockID", update.BlockID), zap.Float64("repoBuyVol", tick.BuyVolume), zap.Float64("repoSellVol", tick.SellVolume), zap.Float64("updateBuyVol", update.BuyVolume), zap.Float64("updateSellVol", update.SellVolume))
 	}
 
-	// Log successful storage
-	logger.LogInfo("Volume data verified",
-		zap.Int64("block_id", tick.BlockID),
-		zap.Float64("buy_volume", tick.BuyVolume),
-		zap.Float64("sell_volume", tick.SellVolume),
-		zap.Int("tx_count", tick.TxCount),
-		zap.Int64("timestamp", tick.CreatedAt),
-	)
-
-	//trigger aggregation
 	if update.BlockID%100 == 0 {
-		m.triggerAggregation(ctx, update.BlockID)
+		return m.aggregate(ctx, update.BlockID)
 	}
+
 	return nil
 }
 
-func (m *MarketVolumeConsumer) triggerAggregation(ctx context.Context, blockID int64) {
-	blockRange := int64(100)
-	startBlock := blockID - blockRange
+// agregate
+func (m *MarketVolumeConsumer) aggregate(ctx context.Context, blockID int64) error {
+	start := blockID - 100
 
-	ticks, err := m.marketRepo.GetVolumeBlockRange(startBlock, blockID)
+	ticks, err := m.marketRepo.GetVolumeBlockRange(start, blockID)
 	if err != nil {
-		logger.LogError("Failed to get volume block range", err)
-		return
+		return err
 	}
 
 	if len(ticks) == 0 {
-		logger.LogWarn("No ticks found for aggregation",
-			zap.Int64("start_block", startBlock),
-			zap.Int64("end_block", blockID),
-		)
-		return
+		logger.LogWarn("No ticks found for aggregation", zap.Int64("startBlockID", start), zap.Int64("endBlockID", blockID))
+		return nil
 	}
 
-	// calculate aggregated values
-	var totalBuyVol, totalSellVol float64
-	var avgPrice float64
-	var minPrice, maxPrice float64 = ticks[0].Price, ticks[0].Price
+	var buy, sell, price float64
 
-	for i, tick := range ticks {
-		totalBuyVol += tick.BuyVolume
-		totalSellVol += tick.SellVolume
-		avgPrice += tick.Price
+	min := ticks[0].Price
+	max := ticks[0].Price
 
-		if tick.Price < minPrice {
-			minPrice = tick.Price
+	for _, t := range ticks {
+		buy += t.BuyVolume
+		sell += t.SellVolume
+		price += t.Price
+
+		if t.Price < min {
+			min = t.Price
 		}
 
-		if tick.Price > maxPrice {
-			maxPrice = tick.Price
+		if t.Price > max {
+			max = t.Price
 		}
+	}
 
-		if i == len(ticks)-1 {
-			logger.LogInfo("Aggregated volume data",
-				zap.Int64("start_block", startBlock),
-				zap.Int64("end_block", blockID),
-				zap.Float64("total_buy_volume", totalBuyVol),
-				zap.Float64("total_sell_volume", totalSellVol),
-				zap.Float64("avg_price", avgPrice/float64(len(ticks))),
-				zap.Float64("min_price", minPrice),
-				zap.Float64("max_price", maxPrice),
-			)
+	logger.LogInfo("Aggregated volume for block range", zap.Int64("startBlockID", start), zap.Int64("endBlockID", blockID), zap.Float64("totalBuyVol", buy), zap.Float64("totalSellVol", sell), zap.Float64("avgPrice", price/float64(len(ticks))), zap.Float64("minPrice", min), zap.Float64("maxPrice", max))
+
+	return nil
+}
+
+// indemoptency check
+func (m *MarketVolumeConsumer) isProcessed(blockID int64) bool {
+	_, exists := m.processedBlocks.Load(blockID)
+	return exists
+}
+
+func (m *MarketVolumeConsumer) markProcessed(blockID int64) {
+	m.processedBlocks.Store(blockID, time.Now())
+}
+
+// stats
+func (m *MarketVolumeConsumer) updateStats(update dto.MarketVolumeUpdate) {
+	m.statsMu.Lock()
+	defer m.statsMu.Unlock()
+
+	m.stats.TotalBlocks++
+
+	m.stats.TotalBuyVol += update.BuyVolume
+	m.stats.TotalSellVol += update.SellVolume
+
+	m.stats.AvgBuyVol = m.stats.AvgBuyVol / float64(m.stats.TotalBlocks)
+	m.stats.AvgSellVol = m.stats.AvgSellVol / float64(m.stats.TotalBlocks)
+
+	if update.BuyVolume > m.stats.HighestBuyVol {
+		m.stats.HighestBuyVol = update.BuyVolume
+	}
+
+	if m.stats.TotalBlocks == 1 || update.BuyVolume < m.stats.LowestBuyVol {
+		m.stats.LowestBuyVol = update.BuyVolume
+	}
+
+	m.stats.LastUpdated = time.Now()
+}
+
+// cleanup Loop
+func (m *MarketVolumeConsumer) cleanupLoop() {
+	defer m.wg.Done()
+	ticker := time.NewTicker(m.cleanupInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-m.ctx.Done():
+			return
+		case <-ticker.C:
+			now := time.Now()
+			m.processedBlocks.Range(func(key, value any) bool {
+				t := value.(time.Time)
+				if now.Sub(t) > m.maxRetention {
+					m.processedBlocks.Delete(key)
+				}
+
+				return true
+			})
 		}
 	}
 }
 
-func (m *MarketVolumeConsumer) GetVolumeStats() VolumeStats {
-	m.volumeStatsMu.RLock()
-	defer m.volumeStatsMu.RUnlock()
+// get stats
+func (m *MarketVolumeConsumer) GetStats() VolumeStats {
+	m.statsMu.RLock()
+	defer m.statsMu.RUnlock()
 
-	return m.volumeStats
-}
-
-func (m *MarketVolumeConsumer) GetHistoricalData(limit, offset int) ([]dto.MarketVolumeUpdate, error) {
-	ticks, err := m.marketRepo.GetVolumeHistory(limit, offset)
-	if err != nil {
-		return nil, err
-	}
-
-	var updates []dto.MarketVolumeUpdate
-
-	for _, tick := range ticks {
-		netVolume := tick.BuyVolume - tick.SellVolume
-		totalVolume := tick.BuyVolume + tick.SellVolume
-		volumeRatio := 0.0
-
-		if totalVolume > 0 {
-			volumeRatio = tick.BuyVolume / totalVolume
-		}
-
-		updates = append(updates, dto.MarketVolumeUpdate{
-			BlockID:     tick.BlockID,
-			BuyVolume:   tick.BuyVolume,
-			SellVolume:  tick.SellVolume,
-			NetVolume:   netVolume,
-			VolumeRatio: volumeRatio,
-			TxCount:     tick.TxCount,
-			Timestamp:   tick.CreatedAt,
-		})
-	}
-
-	return updates, nil
-}
-
-func (m *MarketVolumeConsumer) Stop() {
-	m.mu.Lock()
-
-	if !m.isRunning {
-		m.mu.Unlock()
-		return
-	}
-	m.isRunning = false
-	m.mu.Unlock()
-
-	logger.LogInfo("Stopping market volume consumer")
-	close(m.stopChan)
-	logger.LogInfo("Market volume consumer stopped")
-}
-
-func (m *MarketVolumeConsumer) IsRunning() bool {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return m.isRunning
+	return m.stats
 }

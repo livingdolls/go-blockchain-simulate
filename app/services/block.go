@@ -23,6 +23,9 @@ type BlockService interface {
 	GetBlockByBlockNumber(id int64) (models.Block, error)
 	GetDetailsByBlockNumber(id int64) (models.Block, error)
 	CheckBlockchainIntegrity() error
+	GetTransactionByBlockNumber(ctx context.Context, blockNumber int64) ([]models.Transaction, error)
+	SearchBlocksByHash(ctx context.Context, hash string) ([]models.Block, error)
+	GetBlocksInRange(ctx context.Context, from, to int64) ([]models.Block, error)
 }
 
 type blockService struct {
@@ -639,4 +642,16 @@ func (s *blockService) GetDetailsByBlockNumber(id int64) (models.Block, error) {
 	block.Transactions = tx
 
 	return block, nil
+}
+
+func (s *blockService) GetTransactionByBlockNumber(ctx context.Context, blockNumber int64) ([]models.Transaction, error) {
+	return s.blockRepo.GetTransactionsByBlockNumber(ctx, blockNumber)
+}
+
+func (s *blockService) SearchBlocksByHash(ctx context.Context, hash string) ([]models.Block, error) {
+	return s.blockRepo.SearchByHash(ctx, hash)
+}
+
+func (s *blockService) GetBlocksInRange(ctx context.Context, from, to int64) ([]models.Block, error) {
+	return s.blockRepo.GetBlocksInRange(ctx, from, to)
 }

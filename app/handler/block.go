@@ -1,10 +1,13 @@
 package handler
 
 import (
+	"context"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/livingdolls/go-blockchain-simulate/app/dto"
 	"github.com/livingdolls/go-blockchain-simulate/app/services"
 )
 
@@ -113,4 +116,94 @@ func (h *BlockHandler) GetBlockByBlockNumber(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"block": block})
+}
+
+func (h *BlockHandler) GetTransactionsByBlockNumber(c *gin.Context) {
+	numberParam := c.Param("number")
+
+	var blockNumber int64
+	_, err := fmt.Sscan(numberParam, &blockNumber)
+	if err != nil {
+		c.JSON(http.StatusBadGateway, dto.NewErrorResponse[string]("invalid block number"))
+		return
+	}
+
+	ctx := c.Request.Context()
+
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	txs, err := h.blockService.GetTransactionByBlockNumber(ctx, blockNumber)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, dto.NewErrorResponse[string]("failed to retrieve transactions for block"))
+		return
+	}
+
+	c.JSON(http.StatusOK, dto.NewSuccessResponse(map[string]interface{}{
+		"transactions": txs,
+	}))
+}
+
+func (h *BlockHandler) SearchBlocksByHash(c *gin.Context) {
+	hash := c.Query("hash")
+	if hash == "" {
+		c.JSON(http.StatusBadRequest, dto.NewErrorResponse[string]("hash query parameter is required"))
+		return
+	}
+
+	ctx := c.Request.Context()
+
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	blocks, err := h.blockService.SearchBlocksByHash(ctx, hash)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, dto.NewErrorResponse[string]("failed to search blocks by hash"))
+		return
+	}
+
+	c.JSON(http.StatusOK, dto.NewSuccessResponse(blocks))
+}
+
+func (h *BlockHandler) GetBlocksInRange(c *gin.Context) {
+	fromStr := c.Query("from")
+	toStr := c.Query("to")
+
+	if fromStr == "" || toStr == "" {
+		c.JSON(http.StatusBadRequest, dto.NewErrorResponse[string]("from and to query parameters are required"))
+		return
+	}
+
+	var from, to int64
+	_, err := fmt.Sscan(fromStr, &from)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, dto.NewErrorResponse[string]("invalid from block number"))
+		return
+	}
+
+	_, err = fmt.Sscan(toStr, &to)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, dto.NewErrorResponse[string]("invalid to block number"))
+		return
+	}
+
+	if from > to {
+		c.JSON(http.StatusBadRequest, dto.NewErrorResponse[string]("from block number must be less than or equal to to block number"))
+		return
+	}
+
+	ctx := c.Request.Context()
+
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	blocks, err := h.blockService.GetBlocksInRange(ctx, from, to)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, dto.NewErrorResponse[string]("failed to retrieve blocks in range"))
+		return
+	}
+
+	c.JSON(http.StatusOK, dto.NewSuccessResponse(blocks))
 }

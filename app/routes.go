@@ -46,6 +46,9 @@ func (a *AppConfig) SetupRoutes(r *gin.Engine) {
 		blockGroup.GET("/:id", a.BlockHandler.GetBlockByID)
 		blockGroup.GET("/detail/:number", a.BlockHandler.GetBlockByBlockNumber)
 		blockGroup.GET("/integrity", a.BlockHandler.CheckBlockchainIntegrity)
+		blockGroup.GET("/transaction/:number", a.BlockHandler.GetTransactionsByBlockNumber)
+		blockGroup.GET("/search", a.BlockHandler.SearchBlocksByHash)
+		blockGroup.GET("/range", a.BlockHandler.GetBlocksInRange)
 	}
 
 	// Reward routes

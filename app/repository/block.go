@@ -1,6 +1,8 @@
 package repository
 
 import (
+	"context"
+
 	"github.com/jmoiron/sqlx"
 	"github.com/livingdolls/go-blockchain-simulate/app/models"
 )
@@ -17,6 +19,9 @@ type BlockRepository interface {
 	GetAllBlocks() ([]models.Block, error)
 	GetTotalFeesInBlock(blockID int64) (float64, error)
 	GetBlockByBlockNumber(blockNumber int64) (models.Block, error)
+	GetTransactionsByBlockNumber(ctx context.Context, blockNumber int64) ([]models.Transaction, error)
+	SearchByHash(ctx context.Context, hash string) ([]models.Block, error)
+	GetBlocksInRange(ctx context.Context, from, to int64) ([]models.Block, error)
 }
 
 type blockRepository struct {
@@ -170,4 +175,48 @@ func (b *blockRepository) GetBlockByBlockNumber(blockNumber int64) (models.Block
 	`, blockNumber)
 
 	return block, err
+}
+
+func (b *blockRepository) GetTransactionsByBlockNumber(ctx context.Context, blockNumber int64) ([]models.Transaction, error) {
+	var transcations []models.Transaction
+
+	query := `
+		SELECT t.id, t.from_address, t.to_address, t.amount, t.signature, t.status
+		FROM transactions t
+		INNER JOIN block_transactions bt ON t.id = bt.transaction_id
+		INNER JOIN blocks b ON bt.block_id = b.id
+		WHERE b.block_number = ?
+		ORDER BY t.id ASC`
+
+	err := b.db.SelectContext(ctx, &transcations, query, blockNumber)
+	return transcations, err
+}
+
+func (b *blockRepository) SearchByHash(ctx context.Context, hash string) ([]models.Block, error) {
+	var blocks []models.Block
+
+	query := `
+		SELECT id, block_number, previous_hash, current_hash, nonce, difficulty, timestamp, merkle_root, miner_address, block_reward, total_fees
+		FROM blocks
+		WHERE current_hash = ? OR previous_hash = ?
+		ORDER BY block_number ASC
+		`
+
+	err := b.db.SelectContext(ctx, &blocks, query, hash, hash)
+	return blocks, err
+}
+
+func (b *blockRepository) GetBlocksInRange(ctx context.Context, from, to int64) ([]models.Block, error) {
+	var blocks []models.Block
+
+	query := `
+		SELECT id, block_number, previous_hash, current_hash, nonce, difficulty, timestamp, merkle_root, miner_address, block_reward, total_fees
+		FROM blocks
+		WHERE block_number BETWEEN ? AND ?
+		ORDER BY block_number ASC
+	`
+
+	err := b.db.SelectContext(ctx, &blocks, query, from, to)
+
+	return blocks, err
 }

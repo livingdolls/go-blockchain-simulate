@@ -90,3 +90,12 @@ Content-Type: application/json
   "reference_id": "topup-001",
   "description": "Initial top-up"
 }
+
+### get tx by block number
+GET http://localhost:3010/blocks/transaction/2
+
+### search blocks by hash
+GET http://localhost:3010/blocks/search?hash=0745ddd2f15b2b3598b02a2e477ffbb5f85e3f022d26515f5cd4c8d0f1d596cf
+
+### get blocks in range
+GET http://localhost:3010/blocks/range?from=1&to=10

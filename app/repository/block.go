@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/jmoiron/sqlx"
 	"github.com/livingdolls/go-blockchain-simulate/app/models"
@@ -22,6 +23,7 @@ type BlockRepository interface {
 	GetTransactionsByBlockNumber(ctx context.Context, blockNumber int64) ([]models.Transaction, error)
 	SearchByHash(ctx context.Context, hash string) ([]models.Block, error)
 	GetBlocksInRange(ctx context.Context, from, to int64) ([]models.Block, error)
+	GetBlockStats(ctx context.Context) (models.BlockStats, error)
 }
 
 type blockRepository struct {
@@ -219,4 +221,42 @@ func (b *blockRepository) GetBlocksInRange(ctx context.Context, from, to int64) 
 	err := b.db.SelectContext(ctx, &blocks, query, from, to)
 
 	return blocks, err
+}
+
+func (b *blockRepository) GetBlockStats(ctx context.Context) (models.BlockStats, error) {
+	var stats models.BlockStats
+
+	query := `
+		SELECT
+			COUNT(b.id) AS total_blocks,
+			AVG(b.difficulty) AS average_difficulty,
+			SUM(COALESCE(b.total_fees, 0)) as total_fees,
+			AVG(b.block_reward) AS average_block_reward,
+			MAX(b.block_number) AS latest_block_number
+		FROM blocks b
+	`
+
+	err := b.db.GetContext(ctx, &stats, query)
+
+	if err != nil {
+		return stats, fmt.Errorf("failed to query blocks stats %s", err)
+	}
+
+	// get total transactions
+	var totalTx int64
+	txQuery := `SELECT COUNT(*) FROM transactions`
+	err = b.db.GetContext(ctx, &totalTx, txQuery)
+
+	if err != nil {
+		return stats, fmt.Errorf("failed to query total transactions %s", err)
+	}
+
+	stats.TotalTransactions = totalTx
+
+	// calculate average tx per block
+	if stats.TotalBlocks > 0 {
+		stats.AvgTxPerBlock = float64(totalTx) / float64(stats.TotalBlocks)
+	}
+
+	return stats, nil
 }

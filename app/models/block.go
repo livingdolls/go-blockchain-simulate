@@ -15,3 +15,13 @@ type Block struct {
 	CreatedAt    string        `db:"created_at" json:"created_at"`
 	Transactions []Transaction `db:"-" json:"transactions,omitempty"`
 }
+
+type BlockStats struct {
+	TotalBlocks        int64   `db:"total_blocks"`
+	AverageDifficulty  float64 `db:"average_difficulty"`
+	TotalTransactions  int64   `db:"total_transactions"`
+	TotalFees          float64 `db:"total_fees"`
+	AverageBlockReward float64 `db:"average_block_reward"`
+	AvgTxPerBlock      float64
+	LatestBlockNumber  int64 `db:"latest_block_number"`
+}

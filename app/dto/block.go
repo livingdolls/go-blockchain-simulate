@@ -1,5 +1,7 @@
 package dto
 
+import "github.com/livingdolls/go-blockchain-simulate/app/models"
+
 type BlockStatsResponse struct {
 	TotalBlocks        int             `json:"total_blocks"`
 	AverageBlockTime   float64         `json:"average_block_time"`
@@ -13,11 +15,11 @@ type BlockStatsResponse struct {
 }
 
 type LatestBlockInfo struct {
-	BlockNumber  int64   `json:"block_number"`
-	Hash         string  `json:"hash"`
-	Timestamp    int64   `json:"timestamp"`
-	Transactions int     `json:"transactions"`
-	MinerAddress string  `json:"miner_address"`
-	BlockReward  float64 `json:"block_reward"`
-	TotalFees    float64 `json:"total_fees"`
+	BlockNumber  int64                `json:"block_number"`
+	Hash         string               `json:"hash"`
+	Timestamp    int64                `json:"timestamp"`
+	Transactions []models.Transaction `json:"transactions"`
+	MinerAddress string               `json:"miner_address"`
+	BlockReward  float64              `json:"block_reward"`
+	TotalFees    float64              `json:"total_fees"`
 }

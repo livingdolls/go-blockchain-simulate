@@ -99,3 +99,6 @@ GET http://localhost:3010/blocks/search?hash=0745ddd2f15b2b3598b02a2e477ffbb5f85
 
 ### get blocks in range
 GET http://localhost:3010/blocks/range?from=1&to=10
+
+### get block stats
+GET http://localhost:3010/blocks/stats

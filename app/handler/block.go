@@ -207,3 +207,19 @@ func (h *BlockHandler) GetBlocksInRange(c *gin.Context) {
 
 	c.JSON(http.StatusOK, dto.NewSuccessResponse(blocks))
 }
+
+func (h *BlockHandler) GetBlockStats(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	stats, err := h.blockService.GetBlockStats(ctx)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, dto.NewErrorResponse[string]("failed to retrieve block stats"))
+		return
+	}
+
+	c.JSON(http.StatusOK, dto.NewSuccessResponse(stats))
+}

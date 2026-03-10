@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/jmoiron/sqlx"
 	"github.com/livingdolls/go-blockchain-simulate/app/models"
@@ -24,6 +25,8 @@ type BlockRepository interface {
 	SearchByHash(ctx context.Context, hash string) ([]models.Block, error)
 	GetBlocksInRange(ctx context.Context, from, to int64) ([]models.Block, error)
 	GetBlockStats(ctx context.Context) (models.BlockStats, error)
+	GetLatestBlockInfo(ctx context.Context) (models.Block, error)
+	GetBlockCountLastHour(ctx context.Context) (int64, error)
 }
 
 type blockRepository struct {
@@ -259,4 +262,49 @@ func (b *blockRepository) GetBlockStats(ctx context.Context) (models.BlockStats,
 	}
 
 	return stats, nil
+}
+
+func (b *blockRepository) GetLatestBlockInfo(ctx context.Context) (models.Block, error) {
+	var block models.Block
+
+	query := `
+		SELECT id, block_number, previous_hash, current_hash, nonce, difficulty, timestamp, merkle_root, miner_address, block_reward, total_fees
+		FROM blocks
+		ORDER BY block_number DESC
+		LIMIT 1
+	`
+
+	err := b.db.GetContext(ctx, &block, query)
+
+	queryTransaction := `
+		SELECT t.id, t.from_address, t.to_address, t.amount, t.signature, t.status
+		FROM transactions t
+		INNER JOIN block_transactions bt ON t.id = bt.transaction_id
+		WHERE bt.block_id = ?
+		ORDER BY t.id ASC
+	`
+
+	var txs []models.Transaction
+	err = b.db.SelectContext(ctx, &txs, queryTransaction, block.ID)
+	if err != nil {
+		return block, fmt.Errorf("failed to query transactions for latest block %s", err)
+	}
+	block.Transactions = txs
+
+	return block, err
+}
+
+func (b *blockRepository) GetBlockCountLastHour(ctx context.Context) (int64, error) {
+	oneHourAgo := time.Now().Add(-1 * time.Hour).Unix()
+
+	var count int64
+
+	query := `SELECT COUNT(*) FROM blocks WHERE timestamp >= ?`
+
+	err := b.db.GetContext(ctx, &count, query, oneHourAgo)
+	if err != nil {
+		return 0, fmt.Errorf("failed to query block count for last hour %s", err)
+	}
+
+	return count, nil
 }

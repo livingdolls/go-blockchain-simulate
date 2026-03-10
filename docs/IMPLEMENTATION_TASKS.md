@@ -56,20 +56,20 @@
   - [ ] `GetLatestBlock()` - GET /blocks/latest
   - [*] `GetBlockTransactions(number)` - GET /blocks/:number/transactions
   - [ ] `GetBlockDetailedInfo(number)` - GET /blocks/:number/details
-  - [ ] `GetBlockStats()` - GET /blocks/stats
+  - [*] `GetBlockStats()` - GET /blocks/stats
   - [*] `SearchBlocks(query)` - GET /blocks/search
   - [*] `GetBlocksInRange(from, to)` - GET /blocks/range/:from/:to
 
 - [ ] **Service**: Create `BlockExplorerService`
   - [ ] Method: `GetLatestBlock(ctx)`
   - [*] Method: `GetBlockWithTransactions(ctx, blockNumber)`
-  - [ ] Method: `GetBlockStats(ctx)`
+  - [*] Method: `GetBlockStats(ctx)`
   - [*] Method: `SearchBlocks(ctx, query)`
   - [ ] Method: `GetDifficultyHistory(ctx)`
   - [ ] Method: `CalculateHashRate(ctx, lastN int)`
 
 - [ ] **Repository**: Add methods to `BlockRepository`
-  - [ ] `GetLatest(ctx)`
+  - [*] `GetLatest(ctx)`
   - [*] `GetTransactionsByBlockNumber(ctx, number, limit, offset)`
   - [*] `SearchByHash(ctx, hash)`
   - [ ] `SearchByMiner(ctx, address, limit, offset)`

@@ -14,6 +14,7 @@ import (
 	"github.com/livingdolls/go-blockchain-simulate/logger"
 	"github.com/livingdolls/go-blockchain-simulate/utils"
 	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 )
 
 type BlockService interface {
@@ -26,7 +27,7 @@ type BlockService interface {
 	GetTransactionByBlockNumber(ctx context.Context, blockNumber int64) ([]models.Transaction, error)
 	SearchBlocksByHash(ctx context.Context, hash string) ([]models.Block, error)
 	GetBlocksInRange(ctx context.Context, from, to int64) ([]models.Block, error)
-	GetBlockStats(ctx context.Context) (models.BlockStats, error)
+	GetBlockStats(ctx context.Context) (dto.BlockStatsResponse, error)
 }
 
 type blockService struct {
@@ -657,6 +658,57 @@ func (s *blockService) GetBlocksInRange(ctx context.Context, from, to int64) ([]
 	return s.blockRepo.GetBlocksInRange(ctx, from, to)
 }
 
-func (s *blockService) GetBlockStats(ctx context.Context) (models.BlockStats, error) {
-	return s.blockRepo.GetBlockStats(ctx)
+func (s *blockService) GetBlockStats(ctx context.Context) (dto.BlockStatsResponse, error) {
+	var (
+		blockStats  models.BlockStats
+		latestBlock models.Block
+		countHour   int64
+	)
+
+	// error group
+	g, ctx := errgroup.WithContext(ctx)
+
+	g.Go(func() error {
+		var err error
+		blockStats, err = s.blockRepo.GetBlockStats(ctx)
+		return err
+	})
+
+	g.Go(func() error {
+		var err error
+		latestBlock, err = s.blockRepo.GetLatestBlockInfo(ctx)
+		return err
+	})
+
+	g.Go(func() error {
+		var err error
+		countHour, err = s.blockRepo.GetBlockCountLastHour(ctx)
+		return err
+	})
+
+	// wait all goroutine finish
+	if err := g.Wait(); err != nil {
+		return dto.BlockStatsResponse{}, err
+	}
+
+	response := dto.BlockStatsResponse{
+		TotalBlocks:       int(blockStats.TotalBlocks),
+		AverageDifficulty: blockStats.AverageDifficulty,
+		TotalTransactions: int(blockStats.TotalTransactions),
+		TotalFees:         blockStats.TotalFees,
+		AvgTxPerBlock:     blockStats.AvgTxPerBlock,
+		TotalBlockRewards: float64(blockStats.AverageBlockReward * float64(blockStats.TotalBlocks)),
+		LatestBlock: dto.LatestBlockInfo{
+			BlockNumber:  int64(latestBlock.BlockNumber),
+			Hash:         latestBlock.CurrentHash,
+			Timestamp:    latestBlock.Timestamp,
+			Transactions: latestBlock.Transactions,
+			MinerAddress: latestBlock.MinerAddress,
+			BlockReward:  latestBlock.BlockReward,
+			TotalFees:    latestBlock.TotalFees,
+		},
+		LastHourBlockCount: countHour,
+	}
+
+	return response, nil
 }

@@ -223,3 +223,48 @@ func (h *BlockHandler) GetBlockStats(c *gin.Context) {
 
 	c.JSON(http.StatusOK, dto.NewSuccessResponse(stats))
 }
+
+func (h *BlockHandler) SearchBlocksByMinerAddress(c *gin.Context) {
+	address := c.Query("address")
+	if address == "" {
+		c.JSON(http.StatusBadRequest, dto.NewErrorResponse[string]("address query parameter is required"))
+		return
+	}
+
+	limitStr := c.Query("limit")
+	offsetStr := c.Query("offset")
+
+	if limitStr == "" {
+		limitStr = "10"
+	}
+
+	if offsetStr == "" {
+		offsetStr = "0"
+	}
+
+	var limit, offset int
+	_, err := fmt.Sscan(limitStr, &limit)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, dto.NewErrorResponse[string]("invalid limit"))
+		return
+	}
+
+	_, err = fmt.Sscan(offsetStr, &offset)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, dto.NewErrorResponse[string]("invalid offset"))
+		return
+	}
+
+	ctx := c.Request.Context()
+
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	blocks, err := h.blockService.SearchBlocksByMinerAddress(ctx, address, limit, offset)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, dto.NewErrorResponse[string]("failed to search blocks by miner address"))
+		return
+	}
+
+	c.JSON(http.StatusOK, dto.NewSuccessResponse(blocks))
+}

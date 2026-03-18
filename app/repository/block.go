@@ -27,6 +27,7 @@ type BlockRepository interface {
 	GetBlockStats(ctx context.Context) (models.BlockStats, error)
 	GetLatestBlockInfo(ctx context.Context) (models.Block, error)
 	GetBlockCountLastHour(ctx context.Context) (int64, error)
+	SearchByMinerAddress(ctx context.Context, address string, limit, offset int) ([]models.Block, error)
 }
 
 type blockRepository struct {
@@ -307,4 +308,19 @@ func (b *blockRepository) GetBlockCountLastHour(ctx context.Context) (int64, err
 	}
 
 	return count, nil
+}
+
+func (b *blockRepository) SearchByMinerAddress(ctx context.Context, address string, limit, offset int) ([]models.Block, error) {
+	var blocks []models.Block
+
+	query := `
+		SELECT id, block_number, previous_hash, current_hash, nonce, difficulty, timestamp, merkle_root, miner_address, block_reward, total_fees
+		FROM blocks
+		WHERE miner_address = ?
+		ORDER BY block_number DESC
+		LIMIT ? OFFSET ?
+	`
+
+	err := b.db.SelectContext(ctx, &blocks, query, address, limit, offset)
+	return blocks, err
 }

@@ -102,3 +102,6 @@ GET http://localhost:3010/blocks/range?from=1&to=10
 
 ### get block stats
 GET http://localhost:3010/blocks/stats
+
+### search blocks by miner address
+GET http://localhost:3010/blocks/search/miner?address=MINER_ACCOUNT&limit=10&offset=0

@@ -28,6 +28,7 @@ type BlockService interface {
 	SearchBlocksByHash(ctx context.Context, hash string) ([]models.Block, error)
 	GetBlocksInRange(ctx context.Context, from, to int64) ([]models.Block, error)
 	GetBlockStats(ctx context.Context) (dto.BlockStatsResponse, error)
+	SearchBlocksByMinerAddress(ctx context.Context, address string, limit, offset int) ([]models.Block, error)
 }
 
 type blockService struct {
@@ -711,4 +712,19 @@ func (s *blockService) GetBlockStats(ctx context.Context) (dto.BlockStatsRespons
 	}
 
 	return response, nil
+}
+
+func (s *blockService) SearchBlocksByMinerAddress(ctx context.Context, address string, limit, offset int) ([]models.Block, error) {
+	// validate limit and offset
+	if limit <= 0 {
+		limit = 10
+	} else if limit > 100 {
+		limit = 100
+	}
+
+	if offset < 0 {
+		offset = 0
+	}
+
+	return s.blockRepo.SearchByMinerAddress(ctx, address, limit, offset)
 }

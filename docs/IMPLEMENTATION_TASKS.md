@@ -72,7 +72,7 @@
   - [*] `GetLatest(ctx)`
   - [*] `GetTransactionsByBlockNumber(ctx, number, limit, offset)`
   - [*] `SearchByHash(ctx, hash)`
-  - [ ] `SearchByMiner(ctx, address, limit, offset)`
+  - [*] `SearchByMiner(ctx, address, limit, offset)`
   - [*] `GetRangeStats(ctx, from, to)`
 
 - [ ] **Routes**: Add to routes.go

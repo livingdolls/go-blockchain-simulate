@@ -50,6 +50,7 @@ func (a *AppConfig) SetupRoutes(r *gin.Engine) {
 		blockGroup.GET("/search", a.BlockHandler.SearchBlocksByHash)
 		blockGroup.GET("/range", a.BlockHandler.GetBlocksInRange)
 		blockGroup.GET("/stats", a.BlockHandler.GetBlockStats)
+		blockGroup.GET("/search/miner/", a.BlockHandler.SearchBlocksByMinerAddress)
 	}
 
 	// Reward routes

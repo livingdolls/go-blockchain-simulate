@@ -1,0 +1,1007 @@
+openapi: 3.0.0
+info:
+  title: Go Blockchain Simulate API
+  description: |
+    API dokumentasi untuk Go Blockchain Simulate - aplikasi simulasi blockchain dengan dukungan trading crypto, reward system, dan real-time market data.
+  version: 1.0.0
+  contact:
+    name: API Support
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:8080
+    description: Development Server
+  - url: https://api.blockchain-simulate.local
+    description: Production Server
+
+tags:
+  - name: Auth
+    description: Authentication & Verification
+  - name: Transaction
+    description: Transaction Management
+  - name: Balance
+    description: Balance & Wallet Operations
+  - name: Blocks
+    description: Blockchain Operations
+  - name: Reward
+    description: Reward System
+  - name: Market
+    description: Market Data
+  - name: Candles
+    description: Candle/OHLCV Data
+  - name: Streaming
+    description: Real-time Data Streaming
+  - name: Profile
+    description: User Profile (Protected)
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token required for protected endpoints
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        message:
+          type: string
+        code:
+          type: string
+      required:
+        - message
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        username:
+          type: string
+        email:
+          type: string
+        address:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    Balance:
+      type: object
+      properties:
+        address:
+          type: string
+        usd_balance:
+          type: number
+          format: double
+        total_balance:
+          type: number
+          format: double
+
+    Wallet:
+      type: object
+      properties:
+        address:
+          type: string
+        assets:
+          type: object
+          additionalProperties:
+            type: number
+
+    Block:
+      type: object
+      properties:
+        id:
+          type: string
+        number:
+          type: integer
+        hash:
+          type: string
+        previous_hash:
+          type: string
+        miner:
+          type: string
+        timestamp:
+          type: integer
+        difficulty:
+          type: integer
+        nonce:
+          type: integer
+        transactions_count:
+          type: integer
+        reward:
+          type: number
+
+    Transaction:
+      type: object
+      properties:
+        id:
+          type: string
+        from:
+          type: string
+        to:
+          type: string
+        amount:
+          type: number
+        nonce:
+          type: integer
+        block_number:
+          type: integer
+        status:
+          type: string
+          enum: [pending, confirmed, failed]
+        timestamp:
+          type: integer
+
+    Candle:
+      type: object
+      properties:
+        timestamp:
+          type: integer
+        open:
+          type: number
+        high:
+          type: number
+        low:
+          type: number
+        close:
+          type: number
+        volume:
+          type: number
+        interval:
+          type: string
+
+    RewardInfo:
+      type: object
+      properties:
+        block_number:
+          type: integer
+        reward_amount:
+          type: number
+        halving_schedule:
+          type: array
+          items:
+            type: object
+
+    MarketState:
+      type: object
+      properties:
+        current_price:
+          type: number
+        price_24h_change:
+          type: number
+        volume_24h:
+          type: number
+        timestamp:
+          type: integer
+
+paths:
+  /register:
+    post:
+      tags:
+        - Auth
+      summary: Register new user
+      operationId: registerUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+                email:
+                  type: string
+                password:
+                  type: string
+              required:
+                - username
+                - email
+                - password
+      responses:
+        "201":
+          description: User registered successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          description: Invalid request payload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /challenge/{address}:
+    post:
+      tags:
+        - Auth
+      summary: Request challenge for wallet verification
+      operationId: getChallenge
+      parameters:
+        - name: address
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Wallet address
+      responses:
+        "200":
+          description: Challenge generated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  challenge:
+                    type: string
+                  expires_at:
+                    type: integer
+        "404":
+          description: Address not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /challenge/verify:
+    post:
+      tags:
+        - Auth
+      summary: Verify challenge with signature
+      operationId: verifyChallengeSignature
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                address:
+                  type: string
+                signature:
+                  type: string
+                message:
+                  type: string
+              required:
+                - address
+                - signature
+                - message
+      responses:
+        "200":
+          description: Verification successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                  user:
+                    $ref: "#/components/schemas/User"
+        "401":
+          description: Invalid signature
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /transaction/send:
+    post:
+      tags:
+        - Transaction
+      summary: Send transaction
+      operationId: sendTransaction
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                from:
+                  type: string
+                to:
+                  type: string
+                amount:
+                  type: number
+                nonce:
+                  type: integer
+              required:
+                - from
+                - to
+                - amount
+                - nonce
+      responses:
+        "200":
+          description: Transaction accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Transaction"
+        "400":
+          description: Invalid transaction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /transaction/{id}:
+    get:
+      tags:
+        - Transaction
+      summary: Get transaction by ID
+      operationId: getTransaction
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Transaction ID
+      responses:
+        "200":
+          description: Transaction details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Transaction"
+        "404":
+          description: Transaction not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /transaction/buy:
+    post:
+      tags:
+        - Transaction
+      summary: Buy cryptocurrency
+      operationId: buyTransaction
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                address:
+                  type: string
+                symbol:
+                  type: string
+                usd_amount:
+                  type: number
+              required:
+                - address
+                - symbol
+                - usd_amount
+      responses:
+        "200":
+          description: Buy order processed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Transaction"
+        "400":
+          description: Invalid request or insufficient balance
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /transaction/sell:
+    post:
+      tags:
+        - Transaction
+      summary: Sell cryptocurrency
+      operationId: sellTransaction
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                address:
+                  type: string
+                symbol:
+                  type: string
+                amount:
+                  type: number
+              required:
+                - address
+                - symbol
+                - amount
+      responses:
+        "200":
+          description: Sell order processed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Transaction"
+        "400":
+          description: Invalid request or insufficient asset balance
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /generate-tx-nonce/{address}:
+    get:
+      tags:
+        - Transaction
+      summary: Generate/get transaction nonce
+      operationId: generateNonce
+      parameters:
+        - name: address
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Wallet address
+      responses:
+        "200":
+          description: Nonce generated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  nonce:
+                    type: integer
+        "404":
+          description: Address not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /balance/{address}:
+    get:
+      tags:
+        - Balance
+      summary: Get user balance with USD value
+      operationId: getUserBalance
+      parameters:
+        - name: address
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Wallet address
+      responses:
+        "200":
+          description: User balance
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Balance"
+        "404":
+          description: Wallet not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /balance/topup:
+    post:
+      tags:
+        - Balance
+      summary: Top up USD balance
+      operationId: topupBalance
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                address:
+                  type: string
+                amount:
+                  type: number
+              required:
+                - address
+                - amount
+      responses:
+        "200":
+          description: Top up successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Balance"
+        "400":
+          description: Invalid amount
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /wallet/{address}:
+    get:
+      tags:
+        - Balance
+      summary: Get wallet balance (crypto assets)
+      operationId: getWalletBalance
+      parameters:
+        - name: address
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Wallet address
+      responses:
+        "200":
+          description: Wallet balance
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Wallet"
+        "404":
+          description: Wallet not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /blocks/generate:
+    post:
+      tags:
+        - Blocks
+      summary: Generate new block
+      operationId: generateBlock
+      responses:
+        "200":
+          description: Block generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Block"
+        "500":
+          description: Block generation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /blocks:
+    get:
+      tags:
+        - Blocks
+      summary: Get list of blocks
+      operationId: getBlocks
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+          description: Number of blocks to return
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+          description: Pagination offset
+      responses:
+        "200":
+          description: List of blocks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Block"
+
+  /blocks/{id}:
+    get:
+      tags:
+        - Blocks
+      summary: Get block by ID
+      operationId: getBlockById
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Block ID
+      responses:
+        "200":
+          description: Block details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Block"
+        "404":
+          description: Block not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /blocks/detail/{number}:
+    get:
+      tags:
+        - Blocks
+      summary: Get block by block number
+      operationId: getBlockByNumber
+      parameters:
+        - name: number
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Block number
+      responses:
+        "200":
+          description: Block details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Block"
+        "404":
+          description: Block number not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /blocks/integrity:
+    get:
+      tags:
+        - Blocks
+      summary: Check blockchain integrity
+      operationId: checkIntegrity
+      responses:
+        "200":
+          description: Integrity check result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  is_valid:
+                    type: boolean
+                  message:
+                    type: string
+
+  /blocks/transaction/{number}:
+    get:
+      tags:
+        - Blocks
+      summary: Get transactions in block
+      operationId: getTransactionsByBlock
+      parameters:
+        - name: number
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Block number
+      responses:
+        "200":
+          description: Block transactions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Transaction"
+        "404":
+          description: Block not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /blocks/search:
+    get:
+      tags:
+        - Blocks
+      summary: Search blocks by hash
+      operationId: searchBlocksByHash
+      parameters:
+        - name: hash
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Block hash
+      responses:
+        "200":
+          description: Search results
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Block"
+
+  /blocks/range:
+    get:
+      tags:
+        - Blocks
+      summary: Get blocks in range
+      operationId: getBlocksInRange
+      parameters:
+        - name: from
+          in: query
+          required: true
+          schema:
+            type: integer
+          description: Start block number
+        - name: to
+          in: query
+          required: true
+          schema:
+            type: integer
+          description: End block number
+      responses:
+        "200":
+          description: Blocks in range
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Block"
+
+  /blocks/stats:
+    get:
+      tags:
+        - Blocks
+      summary: Get blockchain statistics
+      operationId: getBlockStats
+      responses:
+        "200":
+          description: Blockchain statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total_blocks:
+                    type: integer
+                  total_transactions:
+                    type: integer
+                  avg_block_time:
+                    type: number
+                  difficulty:
+                    type: number
+
+  /blocks/search/miner/:
+    get:
+      tags:
+        - Blocks
+      summary: Search blocks by miner address
+      operationId: searchBlocksByMiner
+      parameters:
+        - name: address
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Miner wallet address
+      responses:
+        "200":
+          description: Blocks mined by address
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Block"
+
+  /reward/schedule/{number}:
+    get:
+      tags:
+        - Reward
+      summary: Get reward schedule
+      operationId: getRewardSchedule
+      parameters:
+        - name: number
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Block number
+      responses:
+        "200":
+          description: Reward schedule
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RewardInfo"
+
+  /reward/block/{number}:
+    get:
+      tags:
+        - Reward
+      summary: Get block reward
+      operationId: getBlockReward
+      parameters:
+        - name: number
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Block number
+      responses:
+        "200":
+          description: Block reward amount
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  block_number:
+                    type: integer
+                  reward:
+                    type: number
+
+  /reward/info:
+    get:
+      tags:
+        - Reward
+      summary: Get reward system info
+      operationId: getRewardInfo
+      responses:
+        "200":
+          description: Reward system information
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RewardInfo"
+
+  /market:
+    get:
+      tags:
+        - Market
+      summary: Get market engine state
+      operationId: getMarketState
+      responses:
+        "200":
+          description: Current market state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MarketState"
+
+  /candles:
+    get:
+      tags:
+        - Candles
+      summary: Get candle data
+      operationId: getCandle
+      parameters:
+        - name: symbol
+          in: query
+          schema:
+            type: string
+          description: Trading pair symbol
+        - name: interval
+          in: query
+          schema:
+            type: string
+            enum: [1m, 5m, 15m, 1h, 4h, 1d]
+          description: Candle interval
+      responses:
+        "200":
+          description: Candle data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Candle"
+
+  /candles/range:
+    get:
+      tags:
+        - Candles
+      summary: Get candle data range
+      operationId: getCandleRange
+      parameters:
+        - name: from
+          in: query
+          required: true
+          schema:
+            type: integer
+          description: Start timestamp
+        - name: to
+          in: query
+          required: true
+          schema:
+            type: integer
+          description: End timestamp
+        - name: interval
+          in: query
+          schema:
+            type: string
+            enum: [1m, 5m, 15m, 1h, 4h, 1d]
+          description: Candle interval
+      responses:
+        "200":
+          description: Candle data range
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Candle"
+
+  /sse/candles:
+    get:
+      tags:
+        - Streaming
+      summary: Stream candle updates (SSE)
+      operationId: streamCandles
+      description: Server-Sent Events endpoint for real-time candle updates
+      responses:
+        "200":
+          description: Event stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+
+  /sse/ping:
+    get:
+      tags:
+        - Streaming
+      summary: SSE health check ping
+      operationId: sseHealthCheck
+      description: Health check endpoint to verify SSE connection
+      responses:
+        "200":
+          description: Pong response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+
+  /ws/market:
+    get:
+      tags:
+        - Streaming
+      summary: WebSocket market stream
+      operationId: wsMarketStream
+      description: WebSocket endpoint for real-time market data
+      responses:
+        "101":
+          description: WebSocket connection established
+
+  /profile:
+    get:
+      tags:
+        - Profile
+      summary: Get current user profile (protected)
+      operationId: getUserProfile
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: User profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          description: Unauthorized - invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Forbidden - insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"

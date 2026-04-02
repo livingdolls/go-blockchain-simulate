@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -8,18 +9,32 @@ import (
 	"github.com/livingdolls/go-blockchain-simulate/app/models"
 )
 
-// AdminRepository handles admin-related database operations
-type AdminRepository struct {
+type AdminRepository interface {
+	GetAdminByUserID(ctx context.Context, userID int) (*models.AdminWithUser, error)
+	GetAllAdmins(ctx context.Context, limit, offset int) ([]*models.AdminWithUser, error)
+	CreateAdmin(ctx context.Context, userID int, role string, permissions []string) error
+	UpdateAdminRole(ctx context.Context, adminID int, role string, permissions []string) error
+	UpdateAdminStatus(ctx context.Context, adminID int, status string) error
+	UpdateLastLogin(ctx context.Context, adminID int) error
+	LogActivity(ctx context.Context, log *models.AdminActivityLog) error
+	GetActivityLogs(ctx context.Context, adminID int, action string, limit, offset int) ([]*models.AdminActivityLog, error)
+	GetRecentActivityLogs(ctx context.Context, days int, limit int) ([]*models.AdminActivityLog, error)
+	GetDashboardStats(ctx context.Context) (*models.AdminDashboardStats, error)
+	CountAdmins(ctx context.Context) (int, error)
+	DeleteAdmin(ctx context.Context, adminID int) error
+}
+
+type adminRepository struct {
 	db *sql.DB
 }
 
 // NewAdminRepository creates new admin repository
-func NewAdminRepository(db *sql.DB) *AdminRepository {
-	return &AdminRepository{db: db}
+func NewAdminRepository(db *sql.DB) AdminRepository {
+	return &adminRepository{db: db}
 }
 
 // GetAdminByUserID fetches admin by user ID
-func (r *AdminRepository) GetAdminByUserID(userID int) (*models.AdminWithUser, error) {
+func (r *adminRepository) GetAdminByUserID(ctx context.Context, userID int) (*models.AdminWithUser, error) {
 	query := `
 		SELECT 
 			a.id, a.user_id, u.name, u.address, a.role, a.permissions, 
@@ -47,7 +62,7 @@ func (r *AdminRepository) GetAdminByUserID(userID int) (*models.AdminWithUser, e
 }
 
 // GetAllAdmins fetches all admin users with pagination
-func (r *AdminRepository) GetAllAdmins(limit, offset int) ([]*models.AdminWithUser, error) {
+func (r *adminRepository) GetAllAdmins(ctx context.Context, limit, offset int) ([]*models.AdminWithUser, error) {
 	query := `
 		SELECT 
 			a.id, a.user_id, u.name, u.address, a.role, a.permissions, 
@@ -82,7 +97,7 @@ func (r *AdminRepository) GetAllAdmins(limit, offset int) ([]*models.AdminWithUs
 }
 
 // CreateAdmin creates new admin user
-func (r *AdminRepository) CreateAdmin(userID int, role string, permissions []string) error {
+func (r *adminRepository) CreateAdmin(ctx context.Context, userID int, role string, permissions []string) error {
 	permJSON, _ := json.Marshal(permissions)
 
 	query := `
@@ -95,7 +110,7 @@ func (r *AdminRepository) CreateAdmin(userID int, role string, permissions []str
 }
 
 // UpdateAdminRole updates admin role and permissions
-func (r *AdminRepository) UpdateAdminRole(adminID int, role string, permissions []string) error {
+func (r *adminRepository) UpdateAdminRole(ctx context.Context, adminID int, role string, permissions []string) error {
 	permJSON, _ := json.Marshal(permissions)
 
 	query := `
@@ -109,7 +124,7 @@ func (r *AdminRepository) UpdateAdminRole(adminID int, role string, permissions 
 }
 
 // UpdateAdminStatus updates admin status
-func (r *AdminRepository) UpdateAdminStatus(adminID int, status string) error {
+func (r *adminRepository) UpdateAdminStatus(ctx context.Context, adminID int, status string) error {
 	query := `
 		UPDATE admins
 		SET status = ?, updated_at = NOW()
@@ -121,14 +136,14 @@ func (r *AdminRepository) UpdateAdminStatus(adminID int, status string) error {
 }
 
 // UpdateLastLogin updates last login timestamp
-func (r *AdminRepository) UpdateLastLogin(adminID int) error {
+func (r *adminRepository) UpdateLastLogin(ctx context.Context, adminID int) error {
 	query := `UPDATE admins SET last_login_at = NOW() WHERE id = ?`
 	_, err := r.db.Exec(query, adminID)
 	return err
 }
 
 // LogActivity logs admin action to activity log
-func (r *AdminRepository) LogActivity(log *models.AdminActivityLog) error {
+func (r *adminRepository) LogActivity(ctx context.Context, log *models.AdminActivityLog) error {
 	query := `
 		INSERT INTO admin_activity_logs (
 			admin_id, action, target_entity, target_id, target_name,
@@ -147,7 +162,7 @@ func (r *AdminRepository) LogActivity(log *models.AdminActivityLog) error {
 }
 
 // GetActivityLogs fetches admin activity logs with filters
-func (r *AdminRepository) GetActivityLogs(adminID int, action string, limit, offset int) ([]*models.AdminActivityLog, error) {
+func (r *adminRepository) GetActivityLogs(ctx context.Context, adminID int, action string, limit, offset int) ([]*models.AdminActivityLog, error) {
 	query := `
 		SELECT 
 			id, admin_id, action, target_entity, target_id, target_name,
@@ -186,7 +201,7 @@ func (r *AdminRepository) GetActivityLogs(adminID int, action string, limit, off
 }
 
 // GetRecentActivityLogs fetches recent activity logs for dashboard
-func (r *AdminRepository) GetRecentActivityLogs(days int, limit int) ([]*models.AdminActivityLog, error) {
+func (r *adminRepository) GetRecentActivityLogs(ctx context.Context, days int, limit int) ([]*models.AdminActivityLog, error) {
 	query := `
 		SELECT 
 			id, admin_id, action, target_entity, target_id, target_name,
@@ -221,7 +236,7 @@ func (r *AdminRepository) GetRecentActivityLogs(days int, limit int) ([]*models.
 }
 
 // GetDashboardStats fetches dashboard statistics
-func (r *AdminRepository) GetDashboardStats() (*models.AdminDashboardStats, error) {
+func (r *adminRepository) GetDashboardStats(ctx context.Context) (*models.AdminDashboardStats, error) {
 	stats := &models.AdminDashboardStats{}
 
 	// Total users
@@ -260,14 +275,14 @@ func (r *AdminRepository) GetDashboardStats() (*models.AdminDashboardStats, erro
 }
 
 // CountAdmins returns total admin count
-func (r *AdminRepository) CountAdmins() (int, error) {
+func (r *adminRepository) CountAdmins(ctx context.Context) (int, error) {
 	var count int
 	err := r.db.QueryRow("SELECT COUNT(*) FROM admins WHERE status != 'inactive'").Scan(&count)
 	return count, err
 }
 
 // DeleteAdmin soft deletes admin by marking as inactive
-func (r *AdminRepository) DeleteAdmin(adminID int) error {
+func (r *adminRepository) DeleteAdmin(ctx context.Context, adminID int) error {
 	query := `UPDATE admins SET status = 'inactive', updated_at = NOW() WHERE id = ?`
 	_, err := r.db.Exec(query, adminID)
 	return err

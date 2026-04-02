@@ -12,7 +12,7 @@ import (
 	"github.com/livingdolls/go-blockchain-simulate/security"
 )
 
-func AdminMiddleware(jwtService security.AdminJWTService, adminRepo *repository.AdminRepository) gin.HandlerFunc {
+func AdminMiddleware(jwtService security.AdminJWTService, adminRepo repository.AdminRepository) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// extract token from cookie
 		token, err := c.Cookie("admin_token")
@@ -29,8 +29,10 @@ func AdminMiddleware(jwtService security.AdminJWTService, adminRepo *repository.
 			return
 		}
 
+		ctx := c.Request.Context()
+
 		// check if user is admin
-		admin, err := adminRepo.GetAdminByUserID(claims.UserID)
+		admin, err := adminRepo.GetAdminByUserID(ctx, claims.UserID)
 		if err != nil {
 			if err.Error() == "admin not found" {
 				c.AbortWithStatusJSON(http.StatusForbidden, dto.NewErrorResponse[string]("Forbidden: not an admin"))
@@ -52,14 +54,14 @@ func AdminMiddleware(jwtService security.AdminJWTService, adminRepo *repository.
 		c.Set("user", claims)
 
 		// update last login time
-		_ = adminRepo.UpdateLastLogin(admin.ID)
+		_ = adminRepo.UpdateLastLogin(ctx, admin.ID)
 
 		c.Next()
 	}
 }
 
 // AdminWithPermissionMiddleware checks if admin has required permission
-func AdminWithPermissionMiddleware(jwtService security.AdminJWTService, adminRepo *repository.AdminRepository, requiredPermisiion string) gin.HandlerFunc {
+func AdminWithPermissionMiddleware(jwtService security.AdminJWTService, adminRepo repository.AdminRepository, requiredPermisiion string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// extract token from cookie
 
@@ -78,7 +80,8 @@ func AdminWithPermissionMiddleware(jwtService security.AdminJWTService, adminRep
 		}
 
 		// check if user is admin
-		admin, err := adminRepo.GetAdminByUserID(claims.UserID)
+		ctx := c.Request.Context()
+		admin, err := adminRepo.GetAdminByUserID(ctx, claims.UserID)
 		if err != nil {
 			if err.Error() == "admin not found" {
 				c.AbortWithStatusJSON(http.StatusForbidden, dto.NewErrorResponse[string]("Forbidden: not an admin"))
@@ -105,7 +108,7 @@ func AdminWithPermissionMiddleware(jwtService security.AdminJWTService, adminRep
 		c.Set("user", claims)
 
 		// update last login time
-		_ = adminRepo.UpdateLastLogin(admin.ID)
+		_ = adminRepo.UpdateLastLogin(ctx, admin.ID)
 
 		c.Next()
 	}

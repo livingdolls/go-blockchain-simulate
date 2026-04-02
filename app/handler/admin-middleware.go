@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -61,10 +62,9 @@ func AdminMiddleware(jwtService security.AdminJWTService, adminRepo repository.A
 }
 
 // AdminWithPermissionMiddleware checks if admin has required permission
-func AdminWithPermissionMiddleware(jwtService security.AdminJWTService, adminRepo repository.AdminRepository, requiredPermisiion string) gin.HandlerFunc {
+func AdminWithPermissionMiddleware(jwtService security.AdminJWTService, adminRepo repository.AdminRepository, requiredPermission string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// extract token from cookie
-
 		token := getTokenFromCookie(c)
 
 		if token == "" {
@@ -98,7 +98,7 @@ func AdminWithPermissionMiddleware(jwtService security.AdminJWTService, adminRep
 		}
 
 		// check permission
-		if !hasPermission(admin, requiredPermisiion) {
+		if !hasPermission(admin, requiredPermission) {
 			c.AbortWithStatusJSON(http.StatusForbidden, dto.NewErrorResponse[string]("Forbidden: insufficient permissions"))
 			return
 		}
@@ -142,13 +142,26 @@ func hasPermission(admin *models.AdminWithUser, requiredPermission string) bool 
 	return false
 }
 
-func getTokenFromCookie(c *gin.Context) string {
-	// get token from cookie
-	token, err := c.Cookie("admin_token")
+// GetAdminFromContext extracts admin info from gin context
+func GetAdminFromContext(c *gin.Context) (*models.AdminWithUser, error) {
+	adminVal, exists := c.Get("admin")
+	if !exists {
+		return nil, fmt.Errorf("admin not found in context")
+	}
 
+	admin, ok := adminVal.(*models.AdminWithUser)
+	if !ok {
+		return nil, fmt.Errorf("invalid admin context")
+	}
+
+	return admin, nil
+}
+
+// getTokenFromCookie extracts admin token from cookie
+func getTokenFromCookie(c *gin.Context) string {
+	token, err := c.Cookie("admin_token")
 	if err == nil && strings.TrimSpace(token) != "" {
 		return token
 	}
-
 	return ""
 }

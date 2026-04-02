@@ -25,7 +25,8 @@ type AppConfig struct {
 	RMQClient *rabbitmq.Client
 
 	// Auth
-	JWT security.JWTService
+	JWT      security.JWTService
+	JWTAdmin security.AdminJWTService
 
 	// WebSocket
 	Hub         *websocket.Hub
@@ -41,6 +42,7 @@ type AppConfig struct {
 	BlockRepo       repository.BlockRepository
 	CandleRepo      repository.CandlesRepository
 	DiscrepancyRepo repository.DiscrepancyRepository
+	AdminRepo       repository.AdminRepository
 
 	// Publishers
 	PricingPublisher services.MarketPricingPublisher
@@ -56,6 +58,7 @@ type AppConfig struct {
 	BlockService       services.BlockService
 	RewardService      services.RewardService
 	ProfileService     services.ProfileService
+	AdminService       services.AdminService
 
 	// Handlers
 	UserHandler         *handler.RegisterHandler
@@ -67,6 +70,7 @@ type AppConfig struct {
 	MarketHandler       *handler.MarketHandler
 	CandleHandler       *handler.CandleHandler
 	CandleStreamHandler *handler.CandleStreamHandler
+	AdminHandler        *handler.AdminHandler
 
 	// Workers
 	BlockWorker  *worker.GenerateBlockWorker

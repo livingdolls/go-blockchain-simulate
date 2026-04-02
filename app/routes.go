@@ -25,6 +25,18 @@ func (a *AppConfig) SetupRoutes(r *gin.Engine) {
 		txGroup.POST("/sell", a.TransactionHandler.Sell)
 	}
 
+	adminGroup := r.Group("/admin")
+	adminGroup.Use(handler.AdminMiddleware(a.JWTAdmin, a.AdminRepo))
+	{
+		adminGroup.GET("/dashboard", a.AdminHandler.Dashboard)
+		adminGroup.GET("/admins", a.AdminHandler.ListAdmins)
+		adminGroup.POST("/admins/:id/role", a.AdminHandler.UpdateAdminRole)
+		adminGroup.POST("/admins/:id/status", a.AdminHandler.UpdateAdminStatus)
+		adminGroup.DELETE("/admins/:id", a.AdminHandler.DeleteAdmin)
+		adminGroup.GET("/activity-logs", a.AdminHandler.GetActivityLogs)
+		adminGroup.GET("/activity-logs/recent", a.AdminHandler.RecentActivityLogs)
+	}
+
 	// Nonce generation
 	r.GET("/generate-tx-nonce/:address", a.TransactionHandler.GenerateNonce)
 

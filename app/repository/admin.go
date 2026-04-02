@@ -313,26 +313,71 @@ func (r *adminRepository) DeleteAdmin(ctx context.Context, adminID int) error {
 }
 
 func (r *adminRepository) GetAdminByUsername(ctx context.Context, username string) (*models.AdminWithUser, error) {
-	query := `
+	queryByName := `
 		SELECT 
 			a.id, a.user_id, u.name, u.address, a.role, a.permissions, 
 			a.status, a.last_login_at, a.created_at
 		FROM admins a
 		JOIN users u ON a.user_id = u.id
 		WHERE u.name = ? AND a.status = 'active'
+		ORDER BY a.id DESC
+		LIMIT 2
+	`
+
+	rows, err := r.db.Query(queryByName, username)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var admins []*models.AdminWithUser
+	for rows.Next() {
+		item := &models.AdminWithUser{}
+		err := rows.Scan(
+			&item.ID, &item.UserID, &item.Username, &item.Address,
+			&item.Role, &item.Permissions, &item.Status, &item.LastLoginAt,
+			&item.CreatedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+		admins = append(admins, item)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	if len(admins) == 1 {
+		return admins[0], nil
+	}
+
+	if len(admins) > 1 {
+		return nil, fmt.Errorf("duplicate admin username")
+	}
+
+	queryByAddress := `
+		SELECT 
+			a.id, a.user_id, u.name, u.address, a.role, a.permissions, 
+			a.status, a.last_login_at, a.created_at
+		FROM admins a
+		JOIN users u ON a.user_id = u.id
+		WHERE u.address = ? AND a.status = 'active'
+		LIMIT 1
 	`
 
 	admin := &models.AdminWithUser{}
-	err := r.db.QueryRow(query, username).Scan(
+	err = r.db.QueryRow(queryByAddress, username).Scan(
 		&admin.ID, &admin.UserID, &admin.Username, &admin.Address,
 		&admin.Role, &admin.Permissions, &admin.Status, &admin.LastLoginAt,
 		&admin.CreatedAt,
 	)
 
+	if err == sql.ErrNoRows {
+		return nil, fmt.Errorf("admin not found")
+	}
+
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, fmt.Errorf("admin not found")
-		}
 		return nil, err
 	}
 
@@ -340,26 +385,71 @@ func (r *adminRepository) GetAdminByUsername(ctx context.Context, username strin
 }
 
 func (r *adminRepository) GetAdminByUsernameWithPassword(ctx context.Context, username string) (*models.AdminWithPassword, error) {
-	query := `
+	queryByName := `
 		SELECT 
 			a.id, a.user_id, u.name, u.address, a.role, a.permissions, 
 			a.status, a.last_login_at, a.password_hash, a.created_at
 		FROM admins a
 		JOIN users u ON a.user_id = u.id
 		WHERE u.name = ? AND a.status = 'active'
+		ORDER BY a.id DESC
+		LIMIT 2
+	`
+
+	rows, err := r.db.Query(queryByName, username)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var admins []*models.AdminWithPassword
+	for rows.Next() {
+		item := &models.AdminWithPassword{}
+		err := rows.Scan(
+			&item.ID, &item.UserID, &item.Username, &item.Address,
+			&item.Role, &item.Permissions, &item.Status, &item.LastLoginAt,
+			&item.PasswordHash, &item.CreatedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+		admins = append(admins, item)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	if len(admins) == 1 {
+		return admins[0], nil
+	}
+
+	if len(admins) > 1 {
+		return nil, fmt.Errorf("duplicate admin username")
+	}
+
+	queryByAddress := `
+		SELECT 
+			a.id, a.user_id, u.name, u.address, a.role, a.permissions, 
+			a.status, a.last_login_at, a.password_hash, a.created_at
+		FROM admins a
+		JOIN users u ON a.user_id = u.id
+		WHERE u.address = ? AND a.status = 'active'
+		LIMIT 1
 	`
 
 	admin := &models.AdminWithPassword{}
-	err := r.db.QueryRow(query, username).Scan(
+	err = r.db.QueryRow(queryByAddress, username).Scan(
 		&admin.ID, &admin.UserID, &admin.Username, &admin.Address,
 		&admin.Role, &admin.Permissions, &admin.Status, &admin.LastLoginAt,
 		&admin.PasswordHash, &admin.CreatedAt,
 	)
 
+	if err == sql.ErrNoRows {
+		return nil, fmt.Errorf("admin not found")
+	}
+
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, fmt.Errorf("admin not found")
-		}
 		return nil, err
 	}
 

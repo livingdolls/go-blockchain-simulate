@@ -48,6 +48,7 @@ func (a *AppConfig) InitializeInfrastructure() error {
 
 	// JWT
 	a.JWT = security.NewJWTAdapter("yurinahirate-verysecret", 24*time.Hour)
+	a.JWTAdmin = security.NewAdminJWTAdapter("yurinahirate-adminsecret", 24*time.Hour)
 
 	logger.LogInfo("Infrastructure initialized successfully")
 	return nil
@@ -100,6 +101,7 @@ func (a *AppConfig) InitializeRepositories() {
 	a.BlockRepo = repository.NewBlockRepository(a.DB)
 	a.CandleRepo = repository.NewCandleRepository(a.DB)
 	a.DiscrepancyRepo = repository.NewDiscrepancyRepository(a.DB)
+	a.AdminRepo = repository.NewAdminRepository(a.DB)
 	logger.LogInfo("All repositories initialized successfully")
 }
 
@@ -143,6 +145,10 @@ func (a *AppConfig) InitializeServices() {
 
 	a.RewardPublisher = services.NewRewardPublisher(a.RMQClient)
 
+	// Admin services
+	a.AdminService = services.NewAdminService(a.AdminRepo)
+	a.AdminAuthService = services.NewAdminAuthService(a.UserRepo, a.AdminRepo)
+
 	logger.LogInfo("All services initialized successfully")
 }
 
@@ -157,6 +163,8 @@ func (a *AppConfig) InitializeHandlers() {
 	a.MarketHandler = handler.NewMarketHandler(a.MarketService)
 	a.CandleHandler = handler.NewCandleHandler(a.CandleService)
 	a.CandleStreamHandler = handler.NewCandleStreamHandler(services.NewCandleStreamService(a.RedisServices), a.CandleService)
+	a.AdminLoginHandler = handler.NewAdminLoginHandler(a.AdminAuthService, a.JWTAdmin)
+	a.AdminHandler = handler.NewAdminHandler(a.AdminService)
 	logger.LogInfo("All handlers initialized successfully")
 }
 

@@ -25,13 +25,22 @@ func (a *AppConfig) SetupRoutes(r *gin.Engine) {
 		txGroup.POST("/sell", a.TransactionHandler.Sell)
 	}
 
+	// Admin Auth routes (public - no middleware required)
+	adminAuthGroup := r.Group("/admin/auth")
+	{
+		adminAuthGroup.POST("/login", a.AdminLoginHandler.Login)
+		adminAuthGroup.POST("/logout", a.AdminLoginHandler.Logout)
+	}
+
+	// Admin dashboard & management routes (protected with middleware)
 	adminGroup := r.Group("/admin")
 	adminGroup.Use(handler.AdminMiddleware(a.JWTAdmin, a.AdminRepo))
 	{
 		adminGroup.GET("/dashboard", a.AdminHandler.Dashboard)
 		adminGroup.GET("/admins", a.AdminHandler.ListAdmins)
-		adminGroup.POST("/admins/:id/role", a.AdminHandler.UpdateAdminRole)
-		adminGroup.POST("/admins/:id/status", a.AdminHandler.UpdateAdminStatus)
+		adminGroup.POST("/admins", a.AdminHandler.CreateAdmin)
+		adminGroup.PUT("/admins/:id/role", a.AdminHandler.UpdateAdminRole)
+		adminGroup.PUT("/admins/:id/status", a.AdminHandler.UpdateAdminStatus)
 		adminGroup.DELETE("/admins/:id", a.AdminHandler.DeleteAdmin)
 		adminGroup.GET("/activity-logs", a.AdminHandler.GetActivityLogs)
 		adminGroup.GET("/activity-logs/recent", a.AdminHandler.RecentActivityLogs)

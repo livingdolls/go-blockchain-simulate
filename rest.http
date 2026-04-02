@@ -105,3 +105,71 @@ GET http://localhost:3010/blocks/stats
 
 ### search blocks by miner address
 GET http://localhost:3010/blocks/search/miner?address=MINER_ACCOUNT&limit=10&offset=0
+
+### ============================================
+### ADMIN ROUTES TESTS
+### ============================================
+
+### Admin Login
+POST http://localhost:3010/admin/auth/login
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "admin123"
+}
+
+### Admin Logout
+POST http://localhost:3010/admin/auth/logout
+Cookie: admin_token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjozLCJ1c2VybmFtZSI6ImFkbWluIiwicm9sZSI6ImFkbWluIiwiZXhwIjoxNzc1MTkxMjU3LCJpYXQiOjE3NzUxMDQ4NTd9.wve9V2BUauPdQk9tRUgSR59bO5FLzDHZyejgifRmUvo"
+
+### Get Admin Dashboard
+GET http://localhost:3010/admin/dashboard
+Cookie: admin_token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjozLCJ1c2VybmFtZSI6ImFkbWluIiwicm9sZSI6ImFkbWluIiwiZXhwIjoxNzc1MTkxMjU3LCJpYXQiOjE3NzUxMDQ4NTd9.wve9V2BUauPdQk9tRUgSR59bO5FLzDHZyejgifRmUvo"
+
+### List All Admins
+GET http://localhost:3010/admin/admins?limit=10&offset=0
+Cookie: admin_token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjozLCJ1c2VybmFtZSI6ImFkbWluIiwicm9sZSI6ImFkbWluIiwiZXhwIjoxNzc1MTkxMjU3LCJpYXQiOjE3NzUxMDQ4NTd9.wve9V2BUauPdQk9tRUgSR59bO5FLzDHZyejgifRmUvo"
+
+### Create New Admin
+POST http://localhost:3010/admin/admins
+Content-Type: application/json
+Cookie: admin_token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjozLCJ1c2VybmFtZSI6ImFkbWluIiwicm9sZSI6ImFkbWluIiwiZXhwIjoxNzc1MTkxMjU3LCJpYXQiOjE3NzUxMDQ4NTd9.wve9V2BUauPdQk9tRUgSR59bO5FLzDHZyejgifRmUvo"
+
+{
+  "user_id": 4,
+  "role": "moderator",
+  "permissions": ["read_dashboard", "view_activity_logs", "read_users"]
+}
+
+### Update Admin Role
+PUT http://localhost:3010/admin/admins/2/role
+Content-Type: application/json
+Cookie: admin_token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjozLCJ1c2VybmFtZSI6ImFkbWluIiwicm9sZSI6ImFkbWluIiwiZXhwIjoxNzc1MTkxMjU3LCJpYXQiOjE3NzUxMDQ4NTd9.wve9V2BUauPdQk9tRUgSR59bO5FLzDHZyejgifRmUvo"
+
+{
+  "role": "support",
+  "permissions": ["read_users", "view_activity_logs"]
+}
+
+### Update Admin Status
+PUT http://localhost:3010/admin/admins/2/status
+Content-Type: application/json
+Cookie: admin_token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjozLCJ1c2VybmFtZSI6ImFkbWluIiwicm9sZSI6ImFkbWluIiwiZXhwIjoxNzc1MTkxMjU3LCJpYXQiOjE3NzUxMDQ4NTd9.wve9V2BUauPdQk9tRUgSR59bO5FLzDHZyejgifRmUvo"
+
+{
+  "status": "inactive"
+}
+
+### Delete Admin
+DELETE http://localhost:3010/admin/admins/2
+Cookie: admin_token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjozLCJ1c2VybmFtZSI6ImFkbWluIiwicm9sZSI6ImFkbWluIiwiZXhwIjoxNzc1MTkxMjU3LCJpYXQiOjE3NzUxMDQ4NTd9.wve9V2BUauPdQk9tRUgSR59bO5FLzDHZyejgifRmUvo"
+
+### Get Activity Logs
+GET http://localhost:3010/admin/activity-logs?admin_id=1&action=create&limit=20&offset=0
+Cookie: admin_token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjozLCJ1c2VybmFtZSI6ImFkbWluIiwicm9sZSI6ImFkbWluIiwiZXhwIjoxNzc1MTkxMjU3LCJpYXQiOjE3NzUxMDQ4NTd9.wve9V2BUauPdQk9tRUgSR59bO5FLzDHZyejgifRmUvo"
+
+### Get Recent Activity Logs
+GET http://localhost:3010/admin/activity-logs/recent?days=7&limit=50
+Cookie: admin_token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjozLCJ1c2VybmFtZSI6ImFkbWluIiwicm9sZSI6ImFkbWluIiwiZXhwIjoxNzc1MTkxMjU3LCJpYXQiOjE3NzUxMDQ4NTd9.wve9V2BUauPdQk9tRUgSR59bO5FLzDHZyejgifRmUvo"
+

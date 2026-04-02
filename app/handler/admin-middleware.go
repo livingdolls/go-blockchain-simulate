@@ -18,7 +18,7 @@ func AdminMiddleware(jwtService security.AdminJWTService, adminRepo repository.A
 		// extract token from cookie
 		token, err := c.Cookie("admin_token")
 
-		if err != nil || token == strings.TrimSpace(token) {
+		if err != nil || strings.TrimSpace(token) == "" {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, dto.NewErrorResponse[string]("Unauthorized: missing token"))
 			return
 		}
@@ -32,8 +32,10 @@ func AdminMiddleware(jwtService security.AdminJWTService, adminRepo repository.A
 
 		ctx := c.Request.Context()
 
+		fmt.Printf("AdminMiddleware: Validated token for user_id=%d, username=%s, role=%s\n", claims.UserID, claims.Username, claims.Role)
+
 		// check if user is admin
-		admin, err := adminRepo.GetAdminByUserID(ctx, claims.UserID)
+		admin, err := adminRepo.GetAdminByID(ctx, claims.UserID)
 		if err != nil {
 			if err.Error() == "admin not found" {
 				c.AbortWithStatusJSON(http.StatusForbidden, dto.NewErrorResponse[string]("Forbidden: not an admin"))
@@ -81,7 +83,7 @@ func AdminWithPermissionMiddleware(jwtService security.AdminJWTService, adminRep
 
 		// check if user is admin
 		ctx := c.Request.Context()
-		admin, err := adminRepo.GetAdminByUserID(ctx, claims.UserID)
+		admin, err := adminRepo.GetAdminByID(ctx, claims.UserID)
 		if err != nil {
 			if err.Error() == "admin not found" {
 				c.AbortWithStatusJSON(http.StatusForbidden, dto.NewErrorResponse[string]("Forbidden: not an admin"))
@@ -114,7 +116,7 @@ func AdminWithPermissionMiddleware(jwtService security.AdminJWTService, adminRep
 	}
 }
 
-func hasPermission(admin *models.AdminWithUser, requiredPermission string) bool {
+func hasPermission(admin *models.Admin, requiredPermission string) bool {
 	// admin with * role has all permissions
 
 	if admin.Role == "admin" {
@@ -143,13 +145,13 @@ func hasPermission(admin *models.AdminWithUser, requiredPermission string) bool 
 }
 
 // GetAdminFromContext extracts admin info from gin context
-func GetAdminFromContext(c *gin.Context) (*models.AdminWithUser, error) {
+func GetAdminFromContext(c *gin.Context) (*models.Admin, error) {
 	adminVal, exists := c.Get("admin")
 	if !exists {
 		return nil, fmt.Errorf("admin not found in context")
 	}
 
-	admin, ok := adminVal.(*models.AdminWithUser)
+	admin, ok := adminVal.(*models.Admin)
 	if !ok {
 		return nil, fmt.Errorf("invalid admin context")
 	}

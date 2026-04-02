@@ -6,11 +6,13 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/jmoiron/sqlx"
 	"github.com/livingdolls/go-blockchain-simulate/app/models"
 )
 
 type AdminRepository interface {
 	GetAdminByUserID(ctx context.Context, userID int) (*models.AdminWithUser, error)
+	GetAdminByID(ctx context.Context, adminID int) (*models.Admin, error)
 	GetAllAdmins(ctx context.Context, limit, offset int) ([]*models.AdminWithUser, error)
 	CreateAdmin(ctx context.Context, userID int, role string, permissions []string) error
 	UpdateAdminRole(ctx context.Context, adminID int, role string, permissions []string) error
@@ -22,15 +24,37 @@ type AdminRepository interface {
 	GetDashboardStats(ctx context.Context) (*models.AdminDashboardStats, error)
 	CountAdmins(ctx context.Context) (int, error)
 	DeleteAdmin(ctx context.Context, adminID int) error
+	GetAdminByUsername(ctx context.Context, username string) (*models.AdminWithUser, error)
+	GetAdminByUsernameWithPassword(ctx context.Context, username string) (*models.AdminWithPassword, error)
 }
 
 type adminRepository struct {
-	db *sql.DB
+	db *sqlx.DB
 }
 
 // NewAdminRepository creates new admin repository
-func NewAdminRepository(db *sql.DB) AdminRepository {
+func NewAdminRepository(db *sqlx.DB) AdminRepository {
 	return &adminRepository{db: db}
+}
+
+// GetAdminByID fetches admin by ID
+func (r *adminRepository) GetAdminByID(ctx context.Context, adminID int) (*models.Admin, error) {
+	query := `SELECT id, user_id, role, permissions, status, last_login_at, created_at FROM admins WHERE id = ? AND status = 'active'`
+
+	admin := &models.Admin{}
+	err := r.db.QueryRow(query, adminID).Scan(
+		&admin.ID, &admin.UserID, &admin.Role, &admin.Permissions,
+		&admin.Status, &admin.LastLoginAt, &admin.CreatedAt,
+	)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("admin not found")
+		}
+		return nil, err
+	}
+
+	return admin, nil
 }
 
 // GetAdminByUserID fetches admin by user ID
@@ -286,4 +310,58 @@ func (r *adminRepository) DeleteAdmin(ctx context.Context, adminID int) error {
 	query := `UPDATE admins SET status = 'inactive', updated_at = NOW() WHERE id = ?`
 	_, err := r.db.Exec(query, adminID)
 	return err
+}
+
+func (r *adminRepository) GetAdminByUsername(ctx context.Context, username string) (*models.AdminWithUser, error) {
+	query := `
+		SELECT 
+			a.id, a.user_id, u.name, u.address, a.role, a.permissions, 
+			a.status, a.last_login_at, a.created_at
+		FROM admins a
+		JOIN users u ON a.user_id = u.id
+		WHERE u.name = ? AND a.status = 'active'
+	`
+
+	admin := &models.AdminWithUser{}
+	err := r.db.QueryRow(query, username).Scan(
+		&admin.ID, &admin.UserID, &admin.Username, &admin.Address,
+		&admin.Role, &admin.Permissions, &admin.Status, &admin.LastLoginAt,
+		&admin.CreatedAt,
+	)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("admin not found")
+		}
+		return nil, err
+	}
+
+	return admin, nil
+}
+
+func (r *adminRepository) GetAdminByUsernameWithPassword(ctx context.Context, username string) (*models.AdminWithPassword, error) {
+	query := `
+		SELECT 
+			a.id, a.user_id, u.name, u.address, a.role, a.permissions, 
+			a.status, a.last_login_at, a.password_hash, a.created_at
+		FROM admins a
+		JOIN users u ON a.user_id = u.id
+		WHERE u.name = ? AND a.status = 'active'
+	`
+
+	admin := &models.AdminWithPassword{}
+	err := r.db.QueryRow(query, username).Scan(
+		&admin.ID, &admin.UserID, &admin.Username, &admin.Address,
+		&admin.Role, &admin.Permissions, &admin.Status, &admin.LastLoginAt,
+		&admin.PasswordHash, &admin.CreatedAt,
+	)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("admin not found")
+		}
+		return nil, err
+	}
+
+	return admin, nil
 }

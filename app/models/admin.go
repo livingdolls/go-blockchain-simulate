@@ -45,6 +45,11 @@ type AdminWithUser struct {
 	CreatedAt   string         `db:"created_at" json:"created_at"`
 }
 
+type AdminWithPassword struct {
+	AdminWithUser
+	PasswordHash string `db:"password_hash" json:"-"`
+}
+
 // AdminDashboardStats untuk dashboard admin
 type AdminDashboardStats struct {
 	TotalUsers          int64   `json:"total_users"`

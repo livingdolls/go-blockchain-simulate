@@ -12,19 +12,19 @@ import (
 // AdminService defines admin operations
 type AdminService interface {
 	// Dashboard
-	GetDashboardStats(ctx context.Context, admin *models.AdminWithUser) (*models.AdminDashboardStats, error)
-	GetRecentActivityLogs(ctx context.Context, admin *models.AdminWithUser, days, limit int) ([]*models.AdminActivityLog, error)
+	GetDashboardStats(ctx context.Context, admin *models.Admin) (*models.AdminDashboardStats, error)
+	GetRecentActivityLogs(ctx context.Context, admin *models.Admin, days, limit int) ([]*models.AdminActivityLog, error)
 
 	// Admin management
-	GetAllAdmins(ctx context.Context, admin *models.AdminWithUser, limit, offset int) ([]*models.AdminWithUser, error)
-	CreateAdmin(ctx context.Context, admin *models.AdminWithUser, userID int, role string, permissions []string) error
-	UpdateAdminRole(ctx context.Context, admin *models.AdminWithUser, targetAdminID int, role string, permissions []string) error
-	UpdateAdminStatus(ctx context.Context, admin *models.AdminWithUser, targetAdminID int, status string) error
-	DeleteAdmin(ctx context.Context, admin *models.AdminWithUser, targetAdminID int) error
+	GetAllAdmins(ctx context.Context, admin *models.Admin, limit, offset int) ([]*models.AdminWithUser, error)
+	CreateAdmin(ctx context.Context, admin *models.Admin, userID int, role string, permissions []string) error
+	UpdateAdminRole(ctx context.Context, admin *models.Admin, targetAdminID int, role string, permissions []string) error
+	UpdateAdminStatus(ctx context.Context, admin *models.Admin, targetAdminID int, status string) error
+	DeleteAdmin(ctx context.Context, admin *models.Admin, targetAdminID int) error
 
 	// Activity logs
 	LogActivity(ctx context.Context, log *models.AdminActivityLog) error
-	GetActivityLogs(ctx context.Context, admin *models.AdminWithUser, targetAdminID int, action string, limit, offset int) ([]*models.AdminActivityLog, error)
+	GetActivityLogs(ctx context.Context, admin *models.Admin, targetAdminID int, action string, limit, offset int) ([]*models.AdminActivityLog, error)
 }
 
 type adminService struct {
@@ -36,7 +36,7 @@ func NewAdminService(repo repository.AdminRepository) AdminService {
 }
 
 // GetDashboardStats retrieves dashboard statistics with permission check
-func (s *adminService) GetDashboardStats(ctx context.Context, admin *models.AdminWithUser) (*models.AdminDashboardStats, error) {
+func (s *adminService) GetDashboardStats(ctx context.Context, admin *models.Admin) (*models.AdminDashboardStats, error) {
 	if !s.hasPermission(admin, "read_dashboard") {
 		return nil, fmt.Errorf("insufficient permissions")
 	}
@@ -44,7 +44,7 @@ func (s *adminService) GetDashboardStats(ctx context.Context, admin *models.Admi
 }
 
 // GetRecentActivityLogs retrieves recent admin activity logs
-func (s *adminService) GetRecentActivityLogs(ctx context.Context, admin *models.AdminWithUser, days, limit int) ([]*models.AdminActivityLog, error) {
+func (s *adminService) GetRecentActivityLogs(ctx context.Context, admin *models.Admin, days, limit int) ([]*models.AdminActivityLog, error) {
 	if !s.hasPermission(admin, "view_activity_logs") {
 		return nil, fmt.Errorf("insufficient permissions")
 	}
@@ -56,7 +56,7 @@ func (s *adminService) GetRecentActivityLogs(ctx context.Context, admin *models.
 }
 
 // GetAllAdmins retrieves all admin users
-func (s *adminService) GetAllAdmins(ctx context.Context, admin *models.AdminWithUser, limit, offset int) ([]*models.AdminWithUser, error) {
+func (s *adminService) GetAllAdmins(ctx context.Context, admin *models.Admin, limit, offset int) ([]*models.AdminWithUser, error) {
 	if !s.hasPermission(admin, "manage_admins") {
 		return nil, fmt.Errorf("insufficient permissions")
 	}
@@ -68,7 +68,7 @@ func (s *adminService) GetAllAdmins(ctx context.Context, admin *models.AdminWith
 }
 
 // CreateAdmin creates new admin user
-func (s *adminService) CreateAdmin(ctx context.Context, admin *models.AdminWithUser, userID int, role string, permissions []string) error {
+func (s *adminService) CreateAdmin(ctx context.Context, admin *models.Admin, userID int, role string, permissions []string) error {
 	if !s.hasPermission(admin, "manage_admins") {
 		return fmt.Errorf("insufficient permissions")
 	}
@@ -99,7 +99,7 @@ func (s *adminService) CreateAdmin(ctx context.Context, admin *models.AdminWithU
 }
 
 // UpdateAdminRole updates admin role and permissions
-func (s *adminService) UpdateAdminRole(ctx context.Context, admin *models.AdminWithUser, targetAdminID int, role string, permissions []string) error {
+func (s *adminService) UpdateAdminRole(ctx context.Context, admin *models.Admin, targetAdminID int, role string, permissions []string) error {
 	if !s.hasPermission(admin, "manage_admins") {
 		return fmt.Errorf("insufficient permissions")
 	}
@@ -136,7 +136,7 @@ func (s *adminService) UpdateAdminRole(ctx context.Context, admin *models.AdminW
 }
 
 // UpdateAdminStatus updates admin status
-func (s *adminService) UpdateAdminStatus(ctx context.Context, admin *models.AdminWithUser, targetAdminID int, status string) error {
+func (s *adminService) UpdateAdminStatus(ctx context.Context, admin *models.Admin, targetAdminID int, status string) error {
 	if !s.hasPermission(admin, "manage_admins") {
 		return fmt.Errorf("insufficient permissions")
 	}
@@ -169,7 +169,7 @@ func (s *adminService) UpdateAdminStatus(ctx context.Context, admin *models.Admi
 }
 
 // DeleteAdmin deletes admin user (soft delete)
-func (s *adminService) DeleteAdmin(ctx context.Context, admin *models.AdminWithUser, targetAdminID int) error {
+func (s *adminService) DeleteAdmin(ctx context.Context, admin *models.Admin, targetAdminID int) error {
 	if !s.hasPermission(admin, "manage_admins") {
 		return fmt.Errorf("insufficient permissions")
 	}
@@ -205,7 +205,7 @@ func (s *adminService) LogActivity(ctx context.Context, log *models.AdminActivit
 }
 
 // GetActivityLogs retrieves activity logs for admin
-func (s *adminService) GetActivityLogs(ctx context.Context, admin *models.AdminWithUser, targetAdminID int, action string, limit, offset int) ([]*models.AdminActivityLog, error) {
+func (s *adminService) GetActivityLogs(ctx context.Context, admin *models.Admin, targetAdminID int, action string, limit, offset int) ([]*models.AdminActivityLog, error) {
 	if !s.hasPermission(admin, "view_activity_logs") {
 		return nil, fmt.Errorf("insufficient permissions")
 	}
@@ -225,7 +225,7 @@ func (s *adminService) GetActivityLogs(ctx context.Context, admin *models.AdminW
 // Helper functions
 
 // hasPermission checks if admin has required permission
-func (s *adminService) hasPermission(admin *models.AdminWithUser, permission string) bool {
+func (s *adminService) hasPermission(admin *models.Admin, permission string) bool {
 	if admin.Role == "admin" {
 		return true
 	}

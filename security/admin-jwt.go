@@ -8,12 +8,14 @@ import (
 )
 
 type AdminClaims struct {
-	UserID int `json:"user_id"`
+	UserID   int    `json:"user_id"`
+	Username string `json:"username"`
+	Role     string `json:"role"`
 	jwt.RegisteredClaims
 }
 
 type AdminJWTService interface {
-	GenerateAdminToken(userID int) (string, error)
+	GenerateAdminToken(userID int, username string, role string) (string, error)
 	ValidateAdminToken(token string) (*AdminClaims, error)
 }
 
@@ -30,9 +32,11 @@ func NewAdminJWTAdapter(secret string, ttl time.Duration) AdminJWTService {
 }
 
 // GenerateAdminToken implements [AdminJWTService].
-func (a *AdminJWTAdapter) GenerateAdminToken(userID int) (string, error) {
+func (a *AdminJWTAdapter) GenerateAdminToken(userID int, username string, role string) (string, error) {
 	claims := &AdminClaims{
-		UserID: userID,
+		UserID:   userID,
+		Username: username,
+		Role:     role,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(a.ttl)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),

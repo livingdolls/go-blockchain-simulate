@@ -59,6 +59,7 @@ type AppConfig struct {
 	RewardService      services.RewardService
 	ProfileService     services.ProfileService
 	AdminService       services.AdminService
+	AdminAuthService   services.AdminAuthService
 
 	// Handlers
 	UserHandler         *handler.RegisterHandler
@@ -71,7 +72,7 @@ type AppConfig struct {
 	CandleHandler       *handler.CandleHandler
 	CandleStreamHandler *handler.CandleStreamHandler
 	AdminHandler        *handler.AdminHandler
-
+	AdminLoginHandler   *handler.AdminLoginHandler
 	// Workers
 	BlockWorker  *worker.GenerateBlockWorker
 	CandleWorker *worker.GenerateCandleWorker

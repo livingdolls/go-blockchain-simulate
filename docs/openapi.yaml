@@ -18,6 +18,8 @@ servers:
 tags:
   - name: Auth
     description: Authentication & Verification
+  - name: Admin
+    description: Admin Dashboard & Management (Protected)
   - name: Transaction
     description: Transaction Management
   - name: Balance
@@ -42,6 +44,11 @@ components:
       scheme: bearer
       bearerFormat: JWT
       description: JWT token required for protected endpoints
+    AdminCookie:
+      type: apiKey
+      in: cookie
+      name: admin_token
+      description: Admin JWT token in cookie for admin endpoints
 
   schemas:
     Error:
@@ -178,7 +185,536 @@ components:
         timestamp:
           type: integer
 
+    AdminLoginRequest:
+      type: object
+      properties:
+        username:
+          type: string
+          description: Admin username
+        password:
+          type: string
+          description: Admin password
+      required:
+        - username
+        - password
+
+    AdminLoginResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+        user_id:
+          type: integer
+        username:
+          type: string
+        role:
+          type: string
+          enum: [admin, moderator, support]
+        token:
+          type: string
+
+    Admin:
+      type: object
+      properties:
+        id:
+          type: integer
+        user_id:
+          type: integer
+        username:
+          type: string
+        address:
+          type: string
+        role:
+          type: string
+          enum: [admin, moderator, support]
+        permissions:
+          type: array
+          items:
+            type: string
+        status:
+          type: string
+          enum: [active, inactive, suspended]
+        last_login_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+
+    AdminActivityLog:
+      type: object
+      properties:
+        id:
+          type: integer
+        admin_id:
+          type: integer
+        action:
+          type: string
+          enum: [create, update, delete, read]
+        target_entity:
+          type: string
+        target_id:
+          type: integer
+        target_name:
+          type: string
+        old_values:
+          type: object
+        new_values:
+          type: object
+        changes_summary:
+          type: string
+        ip_address:
+          type: string
+        user_agent:
+          type: string
+        status:
+          type: string
+          enum: [success, failed]
+        error_message:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    AdminDashboardStats:
+      type: object
+      properties:
+        total_users:
+          type: integer
+        total_transactions:
+          type: integer
+        total_blocks:
+          type: integer
+        total_admins:
+          type: integer
+        active_users:
+          type: integer
+        suspended_admins:
+          type: integer
+        recent_activity_count:
+          type: integer
+        total_volume:
+          type: number
+
 paths:
+  /admin/auth/login:
+    post:
+      tags:
+        - Admin
+      summary: Admin login
+      operationId: adminLogin
+      description: Authenticate admin user with username and password. Returns JWT token.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminLoginRequest"
+      responses:
+        "200":
+          description: Admin authenticated successfully
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+                example: admin_token=eyJhbGc...; HttpOnly; Secure; SameSite=Strict
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/AdminLoginResponse"
+                  success:
+                    type: boolean
+        "401":
+          description: Authentication failed - invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /admin/auth/logout:
+    post:
+      tags:
+        - Admin
+      summary: Admin logout
+      operationId: adminLogout
+      description: Logout admin user and clear session cookie
+      security:
+        - AdminCookie: []
+      responses:
+        "200":
+          description: Logout successful
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+                example: admin_token=; Max-Age=0
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Logged out successfully
+        "401":
+          description: Unauthorized - missing or invalid token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /admin/dashboard:
+    get:
+      tags:
+        - Admin
+      summary: Get admin dashboard statistics
+      operationId: getAdminDashboard
+      description: Fetch dashboard statistics including user count, transactions, blocks, etc.
+      security:
+        - AdminCookie: []
+      responses:
+        "200":
+          description: Dashboard statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/AdminDashboardStats"
+                  success:
+                    type: boolean
+        "401":
+          description: Unauthorized - missing or invalid token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Forbidden - insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /admin/admins:
+    get:
+      tags:
+        - Admin
+      summary: List all admins
+      operationId: listAdmins
+      description: Fetch paginated list of admin users
+      security:
+        - AdminCookie: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+          description: Number of admins to return
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+          description: Pagination offset
+      responses:
+        "200":
+          description: List of admins
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Admin"
+                  success:
+                    type: boolean
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    post:
+      tags:
+        - Admin
+      summary: Create new admin
+      operationId: createAdmin
+      description: Create a new admin user from existing user account
+      security:
+        - AdminCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                user_id:
+                  type: integer
+                  description: Existing user ID to promote to admin
+                role:
+                  type: string
+                  enum: [admin, moderator, support]
+                  description: Admin role
+                permissions:
+                  type: array
+                  items:
+                    type: string
+                  description: List of permissions
+              required:
+                - user_id
+                - role
+      responses:
+        "201":
+          description: Admin created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Admin"
+                  success:
+                    type: boolean
+        "400":
+          description: Invalid request or user not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /admin/admins/{id}/role:
+    put:
+      tags:
+        - Admin
+      summary: Update admin role and permissions
+      operationId: updateAdminRole
+      description: Change admin role and permissions
+      security:
+        - AdminCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Admin ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                role:
+                  type: string
+                  enum: [admin, moderator, support]
+                permissions:
+                  type: array
+                  items:
+                    type: string
+              required:
+                - role
+      responses:
+        "200":
+          description: Admin role updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Admin"
+                  success:
+                    type: boolean
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /admin/admins/{id}/status:
+    put:
+      tags:
+        - Admin
+      summary: Update admin status
+      operationId: updateAdminStatus
+      description: Change admin account status (active, inactive, suspended)
+      security:
+        - AdminCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Admin ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: [active, inactive, suspended]
+              required:
+                - status
+      responses:
+        "200":
+          description: Admin status updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/Admin"
+                  success:
+                    type: boolean
+        "400":
+          description: Invalid status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /admin/admins/{id}:
+    delete:
+      tags:
+        - Admin
+      summary: Delete admin (soft delete)
+      operationId: deleteAdmin
+      description: Soft delete admin by marking as inactive
+      security:
+        - AdminCookie: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Admin ID
+      responses:
+        "200":
+          description: Admin deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  success:
+                    type: boolean
+        "400":
+          description: Cannot delete own admin account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /admin/activity-logs:
+    get:
+      tags:
+        - Admin
+      summary: Get activity logs
+      operationId: getActivityLogs
+      description: Fetch admin activity logs with optional filters
+      security:
+        - AdminCookie: []
+      parameters:
+        - name: admin_id
+          in: query
+          schema:
+            type: integer
+          description: Filter by admin ID
+        - name: action
+          in: query
+          schema:
+            type: string
+            enum: [create, update, delete, read]
+          description: Filter by action type
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+          description: Number of logs to return
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+          description: Pagination offset
+      responses:
+        "200":
+          description: Activity logs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AdminActivityLog"
+                  success:
+                    type: boolean
+
+  /admin/activity-logs/recent:
+    get:
+      tags:
+        - Admin
+      summary: Get recent activity logs
+      operationId: getRecentActivityLogs
+      description: Fetch recent admin activity logs for dashboard
+      security:
+        - AdminCookie: []
+      parameters:
+        - name: days
+          in: query
+          schema:
+            type: integer
+            default: 7
+          description: Number of days to look back
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+          description: Maximum logs to return
+      responses:
+        "200":
+          description: Recent activity logs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AdminActivityLog"
+                  success:
+                    type: boolean
+
   /register:
     post:
       tags:

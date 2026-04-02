@@ -1,6 +1,26 @@
 package models
 
-import "database/sql"
+import (
+	"database/sql"
+	"encoding/json"
+	"time"
+)
+
+func nullStringValue(value sql.NullString) *string {
+	if !value.Valid {
+		return nil
+	}
+	v := value.String
+	return &v
+}
+
+func nullTimeValue(value sql.NullTime) *string {
+	if !value.Valid {
+		return nil
+	}
+	v := value.Time.Format(time.RFC3339)
+	return &v
+}
 
 // Admin represents an admin user
 type Admin struct {
@@ -12,6 +32,30 @@ type Admin struct {
 	LastLoginAt sql.NullTime   `db:"last_login_at" json:"last_login_at"`
 	CreatedAt   string         `db:"created_at" json:"created_at"`
 	UpdatedAt   string         `db:"updated_at" json:"updated_at"`
+}
+
+func (a Admin) MarshalJSON() ([]byte, error) {
+	type adminJSON struct {
+		ID          int     `json:"id"`
+		UserID      int     `json:"user_id"`
+		Role        string  `json:"role"`
+		Permissions *string `json:"permissions"`
+		Status      string  `json:"status"`
+		LastLoginAt *string `json:"last_login_at"`
+		CreatedAt   string  `json:"created_at"`
+		UpdatedAt   string  `json:"updated_at"`
+	}
+
+	return json.Marshal(adminJSON{
+		ID:          a.ID,
+		UserID:      a.UserID,
+		Role:        a.Role,
+		Permissions: nullStringValue(a.Permissions),
+		Status:      a.Status,
+		LastLoginAt: nullTimeValue(a.LastLoginAt),
+		CreatedAt:   a.CreatedAt,
+		UpdatedAt:   a.UpdatedAt,
+	})
 }
 
 // AdminActivityLog represents an action performed by admin
@@ -32,6 +76,42 @@ type AdminActivityLog struct {
 	CreatedAt      string         `db:"created_at" json:"created_at"`
 }
 
+func (l AdminActivityLog) MarshalJSON() ([]byte, error) {
+	type adminActivityLogJSON struct {
+		ID             int64   `json:"id"`
+		AdminID        int     `json:"admin_id"`
+		Action         string  `json:"action"`
+		TargetEntity   *string `json:"target_entity"`
+		TargetID       *string `json:"target_id"`
+		TargetName     *string `json:"target_name"`
+		OldValues      *string `json:"old_values"`
+		NewValues      *string `json:"new_values"`
+		ChangesSummary *string `json:"changes_summary"`
+		IPAddress      *string `json:"ip_address"`
+		UserAgent      *string `json:"user_agent"`
+		Status         string  `json:"status"`
+		ErrorMessage   *string `json:"error_message"`
+		CreatedAt      string  `json:"created_at"`
+	}
+
+	return json.Marshal(adminActivityLogJSON{
+		ID:             l.ID,
+		AdminID:        l.AdminID,
+		Action:         l.Action,
+		TargetEntity:   nullStringValue(l.TargetEntity),
+		TargetID:       nullStringValue(l.TargetID),
+		TargetName:     nullStringValue(l.TargetName),
+		OldValues:      nullStringValue(l.OldValues),
+		NewValues:      nullStringValue(l.NewValues),
+		ChangesSummary: nullStringValue(l.ChangesSummary),
+		IPAddress:      nullStringValue(l.IPAddress),
+		UserAgent:      nullStringValue(l.UserAgent),
+		Status:         l.Status,
+		ErrorMessage:   nullStringValue(l.ErrorMessage),
+		CreatedAt:      l.CreatedAt,
+	})
+}
+
 // AdminWithUser combines Admin and User info
 type AdminWithUser struct {
 	ID          int            `db:"id" json:"id"`
@@ -43,6 +123,32 @@ type AdminWithUser struct {
 	Status      string         `db:"status" json:"status"`
 	LastLoginAt sql.NullTime   `db:"last_login_at" json:"last_login_at"`
 	CreatedAt   string         `db:"created_at" json:"created_at"`
+}
+
+func (a AdminWithUser) MarshalJSON() ([]byte, error) {
+	type adminWithUserJSON struct {
+		ID          int     `json:"id"`
+		UserID      int     `json:"user_id"`
+		Username    string  `json:"username"`
+		Address     string  `json:"address"`
+		Role        string  `json:"role"`
+		Permissions *string `json:"permissions"`
+		Status      string  `json:"status"`
+		LastLoginAt *string `json:"last_login_at"`
+		CreatedAt   string  `json:"created_at"`
+	}
+
+	return json.Marshal(adminWithUserJSON{
+		ID:          a.ID,
+		UserID:      a.UserID,
+		Username:    a.Username,
+		Address:     a.Address,
+		Role:        a.Role,
+		Permissions: nullStringValue(a.Permissions),
+		Status:      a.Status,
+		LastLoginAt: nullTimeValue(a.LastLoginAt),
+		CreatedAt:   a.CreatedAt,
+	})
 }
 
 type AdminWithPassword struct {

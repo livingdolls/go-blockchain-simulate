@@ -34,7 +34,16 @@ type MiningResult struct {
 	Difficulty int
 }
 
-func MineBlock(blockNumber int, prevHash string, transactions []models.Transaction, difficulty int) MiningResult {
+// computeBlockHash menghitung SHA-256 dari field block. Format ini adalah
+// satu-satunya sumber kebenaran untuk block hash. MineBlock, RecalculateBlockHash,
+// dan CheckBlockchainIntegrity semua pakai format ini.
+func computeBlockHash(blockNumber int, prevHash string, transactions []models.Transaction, nonce int64, timestamp int64) string {
+	data := fmt.Sprintf("%d%s%v%d%d", blockNumber, prevHash, transactions, nonce, timestamp)
+	hashBytes := sha256.Sum256([]byte(data))
+	return hex.EncodeToString(hashBytes[:])
+}
+
+func MineBlock(blockNumber int, prevHash string, transactions []models.Transaction, difficulty int, timestamp int64) MiningResult {
 	startTime := time.Now()
 
 	// calculate targtet (number with difficulty leading zeros)
@@ -47,12 +56,9 @@ func MineBlock(blockNumber int, prevHash string, transactions []models.Transacti
 	fmt.Printf("Mining block #%d with difficulty %d (target: %s...)\n", blockNumber, difficulty, target)
 
 	for {
-		// Create block data string
-		data := fmt.Sprintf("%d%s%v%d%d", blockNumber, prevHash, transactions, nonce, time.Now().UnixNano())
-
-		// calculate SHA-256 hash
-		hashBytes := sha256.Sum256([]byte(data))
-		hash = hex.EncodeToString(hashBytes[:])
+		// Pakai timestamp dari parameter (bukan time.Now()) agar hash bisa
+		// di-recover persis sama dengan RecalculateBlockHash saat validasi.
+		hash = computeBlockHash(blockNumber, prevHash, transactions, nonce, timestamp)
 
 		attempts++
 
@@ -149,18 +155,11 @@ func CalculateNextDifficulty(blocks []models.Block) int {
 	return currentDifficulty
 }
 
-// Recalculate block hash with nonce for validation
+// Recalculate block hash with nonce for validation.
+// Delegate ke computeBlockHash untuk menjamin format identik dengan
+// MineBlock (sumber kebenaran tunggal).
 func RecalculateBlockHash(block models.Block) string {
-	data := fmt.Sprintf("%d%s%v%d%d",
-		block.BlockNumber,
-		block.PreviousHash,
-		block.Transactions,
-		block.Nonce,
-		block.Timestamp,
-	)
-
-	hashBytes := sha256.Sum256([]byte(data))
-	return hex.EncodeToString(hashBytes[:])
+	return computeBlockHash(block.BlockNumber, block.PreviousHash, block.Transactions, block.Nonce, block.Timestamp)
 }
 
 // Get difficulty target converts difficulty to target number

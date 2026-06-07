@@ -22,16 +22,10 @@ func txFor(id int64, from, to string, amount, fee float64) models.Transaction {
 	}
 }
 
-// leafHash mereplikasi format persis di utils/merkle_root.go:20
+// leafHash mereplikasi format persis di utils/merkle_root.go
 // (id, from, to, amount, fee, signature). Format ini SAMA dengan yang
-// dipakai CalculateMerkleRoot untuk leaf hash, sehingga proof bisa
-// dicocokkan dengan root.
-//
-// CATATAN: format ini BERBEDA dari leaf hash yang dipakai
-// GetMerkleProof di line 57 (yang menghilangkan .Fee). Artinya proof
-// yang dihasilkan GetMerkleProof TIDAK BISA diverifikasi terhadap root
-// CalculateMerkleRoot. Bug ini didokumentasikan di test
-// TestMerkleProof_LeafFormatMismatch.
+// dipakai CalculateMerkleRoot dan GetMerkleProof, sehingga proof yang
+// dihasilkan bisa diverifikasi terhadap root.
 func leafHash(tx models.Transaction) string {
 	data := fmt.Sprintf("%d%s%s%.8f%.8f%s", tx.ID, tx.FromAddress, tx.ToAddress, tx.Amount, tx.Fee, tx.Signature)
 	sum := sha256.Sum256([]byte(data))
@@ -119,64 +113,115 @@ func TestGetMerkleProof_ValidIndex(t *testing.T) {
 }
 
 func TestVerifyMerkleProof_EvenIndex(t *testing.T) {
-	// Isolasi bug #2 (sibling position) dengan membangun proof manual
-	// yang konsisten dengan format leaf CalculateMerkleRoot. Untuk index 0,
-	// sibling ada di kanan, jadi 'currentHash + sibling' = order original.
+	// Index 0 (genap): sibling di kanan -> combined = current + sibling.
+	// Setelah fix, VerifyMerkleProof harus sukses dengan leaf format
+	// CalculateMerkleRoot dan txIndex = 0.
 	txs := []models.Transaction{
 		txFor(1, "0xA", "0xB", 10, 0.01),
 		txFor(2, "0xB", "0xC", 5, 0.01),
 	}
 	root := CalculateMerkleRoot(txs)
 	leaf := leafHash(txs[0])
-	// Bangun proof manual dengan sibling di kanan (sibling untuk index 0)
-	sibling := leafHash(txs[1])
-	proof := []string{sibling}
-	assert.True(t, VerifyMerkleProof(leaf, proof, root),
-		"verify untuk even index (sibling kanan) harus sukses jika leaf format konsisten")
+	proof := GetMerkleProof(txs, 0)
+	assert.True(t, VerifyMerkleProof(leaf, proof, root, 0),
+		"verify untuk even index harus sukses dengan txIndex parameter")
 }
 
-func TestVerifyMerkleProof_OddIndex_KnownBug(t *testing.T) {
-	// KNOWN BUG: VerifyMerkleProof selalu concat 'currentHash + siblingHash'
-	// tanpa tahu sisi sibling. Untuk odd index (sibling di kiri), proof berisi
-	// hash sebelah kiri, dan verify akan menghasilkan 'B+A' bukan 'A+B'.
-	// Test ini menggunakan leaf format yang konsisten untuk mengisolasi bug
-	// konkatenasi saja.
+func TestVerifyMerkleProof_OddIndex(t *testing.T) {
+	// Index 1 (ganjil): sibling di kiri -> combined = sibling + current.
+	// Ini yang dulu gagal karena VerifyMerkleProof selalu 'current + sibling'.
 	txs := []models.Transaction{
 		txFor(1, "0xA", "0xB", 10, 0.01),
 		txFor(2, "0xB", "0xC", 5, 0.01),
 	}
 	root := CalculateMerkleRoot(txs)
 	leaf := leafHash(txs[1])
-	// Sibling untuk index 1 ada di KIRI (yaitu leaf[0])
-	sibling := leafHash(txs[0])
-	proof := []string{sibling}
-	// TODO(phase-6): fix VerifyMerkleProof untuk handle sibling position
-	assert.False(t, VerifyMerkleProof(leaf, proof, root),
-		"verify untuk odd index GAGAL: tidak tahu sibling di kiri, harus 'sibling+current' bukan 'current+sibling'")
+	proof := GetMerkleProof(txs, 1)
+	assert.True(t, VerifyMerkleProof(leaf, proof, root, 1),
+		"verify untuk odd index harus sukses (sibling di kiri)")
 }
 
-func TestMerkleProof_LeafFormatMismatch(t *testing.T) {
-	// KNOWN BUG: leaf hash di GetMerkleProof (line 57, tanpa .Fee) berbeda
-	// dari leaf hash di CalculateMerkleRoot (line 20, dengan .Fee).
-	// Konsekuensinya, proof yang dihasilkan GetMerkleProof TIDAK bisa
-	// diverifikasi terhadap root CalculateMerkleRoot meskipun kita pakai
-	// leaf hash yang benar.
-	// TODO(phase-6): samakan format leaf di kedua function.
+func TestVerifyMerkleProof_FourTxRoundTrip(t *testing.T) {
+	// 4 tx: round-trip proof untuk semua index harus sukses.
+	txs := []models.Transaction{
+		txFor(1, "0xA", "0xB", 10, 0.01),
+		txFor(2, "0xB", "0xC", 5, 0.01),
+		txFor(3, "0xC", "0xD", 3, 0.01),
+		txFor(4, "0xD", "0xE", 7, 0.01),
+	}
+	root := CalculateMerkleRoot(txs)
+	for i := 0; i < len(txs); i++ {
+		leaf := leafHash(txs[i])
+		proof := GetMerkleProof(txs, i)
+		assert.True(t, VerifyMerkleProof(leaf, proof, root, i),
+			"round-trip proof untuk index %d harus sukses", i)
+	}
+}
+
+func TestVerifyMerkleProof_WrongLeaf(t *testing.T) {
+	// Leaf yang dimodifikasi harus ditolak.
 	txs := []models.Transaction{
 		txFor(1, "0xA", "0xB", 10, 0.01),
 		txFor(2, "0xB", "0xC", 5, 0.01),
 	}
 	root := CalculateMerkleRoot(txs)
-	// Pakai leaf hash internal GetMerkleProof (tanpa .Fee)
-	leafNoFee := func(tx models.Transaction) string {
-		data := fmt.Sprintf("%d%s%s%.8f%s", tx.ID, tx.FromAddress, tx.ToAddress, tx.Amount, tx.Signature)
-		sum := sha256.Sum256([]byte(data))
-		return hex.EncodeToString(sum[:])
-	}
+	wrongLeaf := leafHash(models.Transaction{
+		ID: 1, FromAddress: "0xX", ToAddress: "0xY", Amount: 999, Fee: 0, Signature: "wrong",
+	})
 	proof := GetMerkleProof(txs, 0)
-	// verify HARUS gagal karena leaf di proof formatnya beda dengan leaf di root
-	assert.False(t, VerifyMerkleProof(leafNoFee(txs[0]), proof, root),
-		"verify GAGAL karena format leaf GetMerkleProof ≠ CalculateMerkleRoot")
+	assert.False(t, VerifyMerkleProof(wrongLeaf, proof, root, 0),
+		"leaf yang dimodifikasi harus ditolak")
+}
+
+func TestVerifyMerkleProof_WrongIndex(t *testing.T) {
+	// txIndex yang salah harus membuat verifikasi gagal.
+	txs := []models.Transaction{
+		txFor(1, "0xA", "0xB", 10, 0.01),
+		txFor(2, "0xB", "0xC", 5, 0.01),
+	}
+	root := CalculateMerkleRoot(txs)
+	leaf := leafHash(txs[0])
+	proof := GetMerkleProof(txs, 0)
+	// Klaim index 1, padahal proof milik index 0
+	assert.False(t, VerifyMerkleProof(leaf, proof, root, 1),
+		"txIndex yang salah harus menghasilkan hash akhir berbeda")
+}
+
+func TestMerkleProof_GetMerkleProof_RoundTrip(t *testing.T) {
+	// Verifikasi bahwa GetMerkleProof output bisa diverifikasi end-to-end.
+	// Ini test integrasi utama setelah fix bug leaf format.
+	txs := []models.Transaction{
+		txFor(1, "0xA", "0xB", 10, 0.01),
+		txFor(2, "0xB", "0xC", 5, 0.01),
+		txFor(3, "0xC", "0xD", 3, 0.01),
+	}
+	root := CalculateMerkleRoot(txs)
+	for i := 0; i < len(txs); i++ {
+		proof := GetMerkleProof(txs, i)
+		leaf := leafHash(txs[i])
+		assert.True(t, VerifyMerkleProof(leaf, proof, root, i),
+			"end-to-end round-trip untuk index %d harus sukses", i)
+	}
+}
+
+func TestMerkleProof_OddCount_RoundTrip(t *testing.T) {
+	// Odd count: index terakhir akan di-duplikasi sebagai sibling-nya sendiri.
+	// Test ini verifikasi GetMerkleProof + VerifyMerkleProof menangani
+	// kasus duplicate-last-hash dengan benar.
+	txs := []models.Transaction{
+		txFor(1, "0xA", "0xB", 10, 0.01),
+		txFor(2, "0xB", "0xC", 5, 0.01),
+		txFor(3, "0xC", "0xD", 3, 0.01),
+		txFor(4, "0xD", "0xE", 7, 0.01),
+		txFor(5, "0xE", "0xF", 2, 0.01),
+	}
+	root := CalculateMerkleRoot(txs)
+	for i := 0; i < len(txs); i++ {
+		proof := GetMerkleProof(txs, i)
+		leaf := leafHash(txs[i])
+		assert.True(t, VerifyMerkleProof(leaf, proof, root, i),
+			"odd count: round-trip index %d harus sukses", i)
+	}
 }
 
 // leafHash mereplikasi format persis di utils/merkle_root.go:57

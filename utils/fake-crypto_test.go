@@ -29,15 +29,27 @@ func makeBlock(prevHash string, blockNum int, difficulty int, timestamp int64, t
 }
 
 func TestCheckBlockchainIntegrity_HappyPath(t *testing.T) {
-	// Bangun 2-block chain (genesis + block2). Block ketiga (i=2) akan
-	// melewati step 5 (CalculateBlockHash check) yang akan gagal di test
-	// ini karena format CalculateBlockHash ≠ RecalculateBlockHash. Bug
-	// ini didokumentasikan terpisah; happy path hanya sampai 2 block.
+	// Bangun 2-block chain. Setelah fix (MineBlock pakai timestamp yang
+	// sama dengan block.Timestamp, dan step 5 dihapus), chain apapun
+	// yang konsisten dengan makeBlock harus lulus.
 	baseTime := time.Now().Unix()
 	genesis := makeBlock("", 1, 0, baseTime, nil)
 	block2 := makeBlock(genesis.CurrentHash, 2, 0, baseTime+10, nil)
 
 	err := CheckBlockchainIntegrity([]models.Block{genesis, block2})
+	assert.NoError(t, err)
+}
+
+func TestCheckBlockchainIntegrity_ThreeBlocks(t *testing.T) {
+	// 3-block chain juga harus lulus (dulu gagal di step 5 CalculateBlockHash
+	// yang formatnya beda). Setelah fix, RecalculateBlockHash adalah satu-
+	// satunya sumber kebenaran untuk validasi hash.
+	baseTime := time.Now().Unix()
+	genesis := makeBlock("", 1, 0, baseTime, nil)
+	block2 := makeBlock(genesis.CurrentHash, 2, 0, baseTime+10, nil)
+	block3 := makeBlock(block2.CurrentHash, 3, 0, baseTime+20, nil)
+
+	err := CheckBlockchainIntegrity([]models.Block{genesis, block2, block3})
 	assert.NoError(t, err)
 }
 
@@ -94,25 +106,6 @@ func TestCheckBlockchainIntegrity_TimestampNotMonotonic(t *testing.T) {
 	err := CheckBlockchainIntegrity([]models.Block{genesis, block2})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "timestamp not greater")
-}
-
-func TestCheckBlockchainIntegrity_KnownBug_ThreeBlocks(t *testing.T) {
-	// KNOWN BUG: CheckBlockchainIntegrity di step 5 membandingkan
-	// CurrentHash dengan CalculateBlockHash(block), tapi CurrentHash
-	// di produksi berasal dari MineBlock/RecalculateBlockHash (format
-	// berbeda). Untuk chain dengan >= 3 block (i > 1), step 5 SELALU
-	// gagal. Test ini mendokumentasikan bug tersebut.
-	// TODO(phase-6): audit CheckBlockchainIntegrity dan putuskan
-	// format hash tunggal yang jadi sumber kebenaran.
-	baseTime := time.Now().Unix()
-	genesis := makeBlock("", 1, 0, baseTime, nil)
-	block2 := makeBlock(genesis.CurrentHash, 2, 0, baseTime+10, nil)
-	block3 := makeBlock(block2.CurrentHash, 3, 0, baseTime+20, nil)
-
-	err := CheckBlockchainIntegrity([]models.Block{genesis, block2, block3})
-	require.Error(t, err, "3-block chain HARUS gagal karena step 5 incompat format")
-	assert.Contains(t, err.Error(), "calculated hash mismatch",
-		"bug: CalculateBlockHash menggunakan format berbeda dari MineBlock")
 }
 
 func TestGenerateFakeKey_Unique(t *testing.T) {

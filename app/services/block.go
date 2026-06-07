@@ -199,6 +199,10 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 	nextBlockNumber := lastBlock.BlockNumber + 1
 	blockReward := utils.CalculateBlockReward(int64(nextBlockNumber))
 
+	// Tentukan timestamp SEBELUM mining agar hash bisa di-recover
+	// persis sama dengan RecalculateBlockHash saat integritas dicek.
+	blockTimestamp := time.Now().Unix()
+
 	// Perform mining (this can take 5-60 seconds depending on difficulty)
 	logger.LogInfo("Starting mining process",
 		zap.Int64("block_number", int64(nextBlockNumber)),
@@ -207,7 +211,7 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 		zap.Float64("block_reward", blockReward),
 	)
 
-	miningResult := utils.MineBlock(lastBlock.BlockNumber+1, lastBlock.CurrentHash, pendingTxs, difficulty)
+	miningResult := utils.MineBlock(lastBlock.BlockNumber+1, lastBlock.CurrentHash, pendingTxs, difficulty, blockTimestamp)
 
 	// check if mining was successful
 	if miningResult.Hash == "" {
@@ -291,7 +295,7 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 		CurrentHash:  miningResult.Hash,
 		Nonce:        miningResult.Nonce,
 		Difficulty:   miningResult.Difficulty,
-		Timestamp:    time.Now().Unix(),
+		Timestamp:    blockTimestamp,
 		MerkleRoot:   merkleRoot,
 		MinerAddress: entity.MinerAccountAddress,
 		BlockReward:  blockReward,

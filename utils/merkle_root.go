@@ -52,9 +52,9 @@ func GetMerkleProof(transactions []models.Transaction, txIndex int) []string {
 	var proof []string
 	var hashes []string
 
-	// build initial leaf hashes
+	// build initial leaf hashes (sama format dengan CalculateMerkleRoot:20)
 	for _, tx := range transactions {
-		txData := fmt.Sprintf("%d%s%s%.8f%s", tx.ID, tx.FromAddress, tx.ToAddress, tx.Amount, tx.Signature)
+		txData := fmt.Sprintf("%d%s%s%.8f%.8f%s", tx.ID, tx.FromAddress, tx.ToAddress, tx.Amount, tx.Fee, tx.Signature)
 
 		hash := sha256.Sum256([]byte(txData))
 		hashes = append(hashes, hex.EncodeToString(hash[:]))
@@ -69,9 +69,15 @@ func GetMerkleProof(transactions []models.Transaction, txIndex int) []string {
 			var combined string
 
 			if i == index || i+1 == index {
-				if i == index && i+1 < len(hashes) {
-					proof = append(proof, hashes[i+1])
+				if i == index {
+					// tx ada di kiri. Sibling di i+1, atau diri sendiri jika i+1 OOB (odd count).
+					if i+1 < len(hashes) {
+						proof = append(proof, hashes[i+1])
+					} else {
+						proof = append(proof, hashes[i])
+					}
 				} else if i+1 == index {
+					// tx ada di kanan, sibling di i.
 					proof = append(proof, hashes[i])
 				}
 			}
@@ -92,13 +98,27 @@ func GetMerkleProof(transactions []models.Transaction, txIndex int) []string {
 	return proof
 }
 
-func VerifyMerkleProof(txHash string, proof []string, merkleRoot string) bool {
+func VerifyMerkleProof(txHash string, proof []string, merkleRoot string, txIndex int) bool {
+	// Tentukan posisi sibling di setiap level dari txIndex:
+	// - bit terakhir index: 0 = left, 1 = right
+	// - sibling index = index ^ 1 (XOR flip last bit)
+	// - sibling di kiri (siblingIdx < index): combined = sibling + current
+	// - sibling di kanan (siblingIdx > index): combined = current + sibling
 	currentHash := txHash
+	index := txIndex
 
 	for _, siblingHash := range proof {
-		combined := currentHash + siblingHash
+		var combined string
+		if (index & 1) == 0 {
+			// tx ada di kiri, sibling di kanan
+			combined = currentHash + siblingHash
+		} else {
+			// tx ada di kanan, sibling di kiri
+			combined = siblingHash + currentHash
+		}
 		hash := sha256.Sum256([]byte(combined))
 		currentHash = hex.EncodeToString(hash[:])
+		index = index / 2
 	}
 
 	return currentHash == merkleRoot

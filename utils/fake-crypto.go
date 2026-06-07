@@ -47,12 +47,6 @@ func HashBlock(prevHash string, txList []models.Transaction) string {
 	return hex.EncodeToString(sum[:])
 }
 
-func CalculateBlockHash(block models.Block) string {
-	// Recalculate hash from previous hash and transactions
-	// This should match the original HashBlock calculation
-	return HashBlock(block.PreviousHash, block.Transactions)
-}
-
 func CheckBlockchainIntegrity(blocks []models.Block) error {
 	for i := 1; i < len(blocks); i++ {
 		block := blocks[i]
@@ -68,7 +62,7 @@ func CheckBlockchainIntegrity(blocks []models.Block) error {
 			return fmt.Errorf("block %d: invalid proof of work", block.BlockNumber)
 		}
 
-		// 3. Hash recalculation
+		// 3. Hash recalculation (sumber kebenaran tunggal: computeBlockHash)
 		calculatedHash := RecalculateBlockHash(block)
 		if block.CurrentHash != calculatedHash {
 			return fmt.Errorf("block %d: hash mismatch", block.BlockNumber)
@@ -77,16 +71,6 @@ func CheckBlockchainIntegrity(blocks []models.Block) error {
 		// 4. Check timestamp squence
 		if block.Timestamp <= prevBlock.Timestamp {
 			return fmt.Errorf("block %d: timestamp not greater than previous block", block.BlockNumber)
-		}
-
-		// Skip genesis block hash validation
-		if i > 1 {
-			// 5. Block hash calculation
-			calculatedHash := CalculateBlockHash(block)
-
-			if block.CurrentHash != calculatedHash {
-				return fmt.Errorf("block %d: calculated hash mismatch", block.BlockNumber)
-			}
 		}
 	}
 

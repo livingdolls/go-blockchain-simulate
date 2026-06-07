@@ -174,13 +174,28 @@ func TestCalculateNextDifficulty_OnTarget(t *testing.T) {
 
 func TestMineBlock_DifficultyOne(t *testing.T) {
 	// Difficulty 1: probabilitas 1/16, harus cepat selesai.
+	ts := int64(1700000000)
 	result := MineBlock(1, "prevhash", []models.Transaction{
 		{ID: 1, FromAddress: "0xA", ToAddress: "0xB", Amount: 10, Fee: 0.01, Signature: "sig"},
-	}, 1)
+	}, 1, ts)
 	assert.NotEmpty(t, result.Hash, "harus menemukan hash")
 	assert.True(t, strings.HasPrefix(result.Hash, "0"),
 		"hash harus dimulai dengan minimal 1 leading zero (difficulty 1), got=%s", result.Hash)
 	assert.Equal(t, 1, result.Difficulty)
 	assert.GreaterOrEqual(t, result.Nonce, int64(0))
 	assert.Greater(t, result.HashRate, 0.0)
+
+	// Hash harus sama dengan RecalculateBlockHash untuk block dengan nonce yang ditemukan
+	rebuilt := models.Block{
+		BlockNumber:  1,
+		PreviousHash: "prevhash",
+		Nonce:        result.Nonce,
+		Difficulty:   1,
+		Timestamp:    ts,
+		Transactions: []models.Transaction{
+			{ID: 1, FromAddress: "0xA", ToAddress: "0xB", Amount: 10, Fee: 0.01, Signature: "sig"},
+		},
+	}
+	assert.Equal(t, result.Hash, RecalculateBlockHash(rebuilt),
+		"hash yang ditambang harus bisa di-recover via RecalculateBlockHash dengan timestamp yang sama")
 }

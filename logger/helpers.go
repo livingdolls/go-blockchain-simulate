@@ -10,6 +10,9 @@ import (
 // LogError logs error dengan stack trace
 // Skips 1 level to show actual caller, not this helper
 func LogError(msg string, err error, fields ...zap.Field) {
+	if L == nil {
+		return
+	}
 	L.WithOptions(zap.AddCallerSkip(1)).Error(msg,
 		append(fields, zap.Error(err))...,
 	)
@@ -17,16 +20,25 @@ func LogError(msg string, err error, fields ...zap.Field) {
 
 // LogWarn logs warning
 func LogWarn(msg string, fields ...zap.Field) {
+	if L == nil {
+		return
+	}
 	L.WithOptions(zap.AddCallerSkip(1)).Warn(msg, fields...)
 }
 
 // LogInfo logs info message
 func LogInfo(msg string, fields ...zap.Field) {
+	if L == nil {
+		return
+	}
 	L.WithOptions(zap.AddCallerSkip(1)).Info(msg, fields...)
 }
 
 // LogDebug logs debug message
 func LogDebug(msg string, fields ...zap.Field) {
+	if L == nil {
+		return
+	}
 	L.WithOptions(zap.AddCallerSkip(1)).Debug(msg, fields...)
 }
 

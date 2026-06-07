@@ -36,6 +36,31 @@ tags:
     description: Real-time Data Streaming
   - name: Profile
     description: User Profile (Protected)
+  - name: Health
+    description: |
+      Health check endpoint (liveness/readiness probe). Endpoint ini
+      selalu publik (tidak butuh autentikasi) dan digunakan oleh
+      load balancer atau Kubernetes untuk mengetahui status service
+      dan dependency-nya.
+  - name: Common
+    description: |
+      Header dan behavior yang berlaku untuk SEMUA endpoint:
+
+      - **X-Request-ID**: Header request-id untuk tracing. Jika client
+        mengirim header ini, nilainya dipakai apa adanya. Jika tidak,
+        server generate UUID baru. Selalu dikembalikan di response header
+        sehingga client dapat mengkorelasikan log client dengan log server.
+
+      - **Idempotency-Key**: Header untuk mencegah double-submit pada
+        `POST /transaction/send`, `/transaction/buy`, `/transaction/sell`.
+        Server menyimpan respons 2xx selama 24 jam; request berikutnya
+        dengan key yang sama akan di-replay dari cache. Respons cache
+        hit menyertakan header `Idempotent-Replayed: true`.
+
+      - **Rate limiting**: Endpoint `/admin/auth/*` dan `/transaction/*`
+        dilindungi rate limiter (Redis-backed, fixed window). Respons
+        membawa header `X-RateLimit-Limit`, `X-RateLimit-Remaining`,
+        dan `Retry-After` saat di-throttle.
 
 components:
   securitySchemes:
@@ -60,6 +85,42 @@ components:
           type: string
       required:
         - message
+
+    HealthResponse:
+      type: object
+      description: Respons health check (liveness/readiness).
+      properties:
+        status:
+          type: string
+          enum: [ok, degraded]
+          description: Status keseluruhan service.
+        service:
+          type: string
+          description: Nama service.
+        version:
+          type: string
+          description: Versi aplikasi.
+        timestamp:
+          type: string
+          format: date-time
+          description: Waktu respons (UTC).
+        components:
+          type: object
+          description: Status per dependency. Hanya muncul di /readyz.
+          additionalProperties:
+            type: object
+            properties:
+              status:
+                type: string
+                enum: [up, down]
+              error:
+                type: string
+                description: Pesan error jika status=down.
+      required:
+        - status
+        - service
+        - version
+        - timestamp
 
     User:
       type: object
@@ -297,6 +358,79 @@ components:
           type: number
 
 paths:
+  /healthz:
+    get:
+      tags:
+        - Health
+      summary: Liveness probe
+      operationId: liveness
+      description: |
+        Endpoint liveness probe sederhana. Mengembalikan 200 OK selama
+        proses aplikasi masih hidup. Tidak mengecek dependency.
+        Cocok untuk Kubernetes `livenessProbe` agar pod tidak di-restart
+        saat dependency external (DB, Redis) sedang down.
+      security: []
+      responses:
+        "200":
+          description: Service alive
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+              example:
+                status: "ok"
+                service: "blockchain"
+                version: "1.0.0"
+                timestamp: "2026-06-07T10:00:00Z"
+
+  /readyz:
+    get:
+      tags:
+        - Health
+      summary: Readiness probe
+      operationId: readiness
+      description: |
+        Endpoint readiness probe. Memeriksa dependency utama (database
+        dan Redis) dengan timeout 3 detik. Mengembalikan 503 jika ada
+        dependency yang tidak reachable.
+        Cocok untuk Kubernetes `readinessProbe` atau load balancer
+        health check agar pod tidak menerima traffic sebelum siap.
+      security: []
+      responses:
+        "200":
+          description: All dependencies healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+              example:
+                status: "ok"
+                service: "blockchain"
+                version: "1.0.0"
+                timestamp: "2026-06-07T10:00:00Z"
+                components:
+                  database:
+                    status: "up"
+                  redis:
+                    status: "up"
+        "503":
+          description: One or more dependencies unhealthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+              example:
+                status: "degraded"
+                service: "blockchain"
+                version: "1.0.0"
+                timestamp: "2026-06-07T10:00:00Z"
+                components:
+                  database:
+                    status: "down"
+                    error: "dial tcp 127.0.0.1:3306: connect: connection refused"
+                  redis:
+                    status: "up"
+
   /admin/auth/login:
     post:
       tags:

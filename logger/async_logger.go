@@ -99,19 +99,49 @@ func initLogger(cfg Config) error {
 		go asyncWorker(i, queue)
 	}
 
-	// Wrap with async queue
+	// Wrap dengan custom Core yang hanya push ke queue (TIDAK menulis langsung).
+	// Sebelumnya menggunakan RegisterHooks, yang menyebabkan double-write
+	// (hook + core.Write). Implementasi ini: Write hanya enqueue, queue worker
+	// yang menulis. AddCaller tetap dikirim lewat entry agar caller source
+	// code ditampilkan dengan benar di log.
 	L = baseLogger.WithOptions(zap.WrapCore(func(core zapcore.Core) zapcore.Core {
-		return zapcore.RegisterHooks(core, func(e zapcore.Entry) error {
-			queue.push(logEvent{
-				fn: func() {
-					_ = core.Write(e, nil)
-				},
-			}, cfg.DropOnFull)
-			return nil
-		})
+		return &queueCore{
+			Core:  core,
+			queue: queue,
+			cfg:   cfg,
+		}
 	}))
 
 	return nil
+}
+
+// queueCore adalah zapcore.Core yang menunda penulisan ke core asli
+// via async queue. Hanya method Write yang berubah; method lain (Sync, With,
+// Enabled, Check) didelegasikan ke core asli.
+type queueCore struct {
+	zapcore.Core
+	queue *asyncQueue
+	cfg   Config
+}
+
+// Write menunda penulisan dengan memasukkan event ke queue worker pool.
+// TIDAK memanggil core.Write secara langsung untuk menghindari duplikasi
+// (RegisterHooks menyebabkan hook + original core sama-sama Write).
+func (q *queueCore) Write(entry zapcore.Entry, fields []zapcore.Field) error {
+	q.queue.push(logEvent{
+		fn: func() {
+			_ = q.Core.Write(entry, fields)
+		},
+	}, q.cfg.DropOnFull)
+	return nil
+}
+
+// Sync menunggu queue kosong lalu flush core asli.
+// Implementasi sederhana: trigger Sync pada underlying core.
+// Note: in-flight events mungkin masih diproses; panggil Shutdown untuk
+// drain penuh.
+func (q *queueCore) Sync() error {
+	return q.Core.Sync()
 }
 
 func asyncWorker(id int, queue *asyncQueue) {

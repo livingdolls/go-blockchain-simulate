@@ -33,6 +33,9 @@ func LogDebug(msg string, fields ...zap.Field) {
 // LogErrorCtx logs error dengan field dari context (request_id, user_id, dll).
 // Gunakan ini dari service/repository yang sudah menerima context.Context.
 func LogErrorCtx(ctx context.Context, msg string, err error, fields ...zap.Field) {
+	if L == nil {
+		return
+	}
 	all := make([]zap.Field, 0, len(fields)+1)
 	all = append(all, fields...)
 	all = append(all, zap.Error(err))
@@ -41,16 +44,25 @@ func LogErrorCtx(ctx context.Context, msg string, err error, fields ...zap.Field
 
 // LogWarnCtx logs warning dengan field dari context.
 func LogWarnCtx(ctx context.Context, msg string, fields ...zap.Field) {
+	if L == nil {
+		return
+	}
 	FromContext(ctx).WithOptions(zap.AddCallerSkip(1)).Warn(msg, fields...)
 }
 
 // LogInfoCtx logs info dengan field dari context (request_id otomatis muncul).
 func LogInfoCtx(ctx context.Context, msg string, fields ...zap.Field) {
+	if L == nil {
+		return
+	}
 	FromContext(ctx).WithOptions(zap.AddCallerSkip(1)).Info(msg, fields...)
 }
 
 // LogDebugCtx logs debug dengan field dari context.
 func LogDebugCtx(ctx context.Context, msg string, fields ...zap.Field) {
+	if L == nil {
+		return
+	}
 	FromContext(ctx).WithOptions(zap.AddCallerSkip(1)).Debug(msg, fields...)
 }
 

@@ -13,7 +13,6 @@ import (
 	"github.com/livingdolls/go-blockchain-simulate/app"
 	"github.com/livingdolls/go-blockchain-simulate/config"
 	"github.com/livingdolls/go-blockchain-simulate/logger"
-	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
 
@@ -24,7 +23,9 @@ func main() {
 		panic("Gagal memuat konfigurasi: " + err.Error())
 	}
 
-	// Inisialisasi logger berdasarkan environment.
+	// Inisialisasi logger berdasarkan environment. Field service/env/version
+	// sudah ditambahkan global oleh logger (lihat async_logger.go), sehingga
+	// pemanggil tidak perlu menambahkannya lagi per-call.
 	env := cfg.App.Environment
 	var logCfg logger.Config
 	if env == "production" {
@@ -32,6 +33,9 @@ func main() {
 	} else {
 		logCfg = logger.DevelopmentConfig(cfg.App.Name, cfg.App.Version)
 	}
+	// Pakai env dari config (bukan hard-coded "production"/"development")
+	// agar staging/testing tidak salah label.
+	logCfg.Env = env
 
 	// Override log level jika LOG_LEVEL env di-set.
 	if logLevelStr := os.Getenv("LOG_LEVEL"); logLevelStr != "" {
@@ -52,11 +56,7 @@ func main() {
 	}
 	defer logger.Shutdown(5 * time.Second)
 
-	logger.L.Info("Aplikasi mulai",
-		zap.String("service", cfg.App.Name),
-		zap.String("env", env),
-		zap.String("version", cfg.App.Version),
-	)
+	logger.L.Info("Aplikasi mulai")
 
 	// Bangun seluruh dependensi infrastruktur dari konfigurasi.
 	deps, err := app.NewAppDependencies(cfg)

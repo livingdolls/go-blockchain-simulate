@@ -43,6 +43,8 @@ type TransactionConsumer struct {
 	stopChan          chan struct{}
 	workerCount       int
 	processingTimeout time.Duration
+	parentCtx         context.Context
+	parentCancel      context.CancelFunc
 }
 
 func NewTransactionConsumer(
@@ -94,12 +96,18 @@ func (tc *TransactionConsumer) Start(ctx context.Context) error {
 	}
 
 	tc.isRunning = true
+	// Derive cancellable context dari input agar handler bisa di-abort
+	// saat Stop() dipanggil.
+	tc.parentCtx, tc.parentCancel = context.WithCancel(ctx)
 	tc.mu.Unlock()
 
 	logger.LogInfo(fmt.Sprintf("Starting with %d workers", tc.workerCount))
 
 	handler := func(delivery amqp091.Delivery) {
-		ctx, cancel := context.WithTimeout(context.Background(), tc.processingTimeout)
+		// Pakai parent ctx agar handler dapat dibatalkan saat shutdown.
+		// Batas maksimum processing time = processingTimeout, tapi juga
+		// berhenti lebih awal bila ctx parent di-cancel.
+		ctx, cancel := context.WithTimeout(tc.parentCtx, tc.processingTimeout)
 
 		defer cancel()
 
@@ -173,17 +181,36 @@ func (tc *TransactionConsumer) Start(ctx context.Context) error {
 	return nil
 }
 
+// Stop menunggu in-flight handler selesai lalu menutup stopChan.
+// Cancellation dilakukan via parent ctx (handler pakai
+// context.WithTimeout(parentCtx, ...)), sehingga handler yang
+// select terhadap ctx.Done() akan keluar early.
 func (tc *TransactionConsumer) Stop() {
 	tc.mu.Lock()
-	defer tc.mu.Unlock()
 
 	if !tc.isRunning {
+		tc.mu.Unlock()
 		logger.LogInfo("Transaction consumer is not running")
 		return
 	}
 
 	tc.isRunning = false
-	close(tc.stopChan)
+	stopChan := tc.stopChan
+	parentCancel := tc.parentCancel
+	tc.mu.Unlock()
+
+	// Cancel parent ctx agar handler yang sedang berjalan keluar early.
+	if parentCancel != nil {
+		parentCancel()
+	}
+
+	// Tutup stopChan agar goroutine consumer keluar dari loop.
+	select {
+	case <-stopChan:
+		// sudah ditutup
+	default:
+		close(stopChan)
+	}
 
 	logger.LogInfo("Transaction consumer stopped")
 }

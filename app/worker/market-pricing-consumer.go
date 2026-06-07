@@ -30,6 +30,9 @@ type MarketPricingConsumer struct {
 	processingTimeout time.Duration
 	priceCache        map[int64]float64 // Cache harga terakhir per block ID
 	priceCacheMu      sync.RWMutex
+
+	parentCtx    context.Context
+	parentCancel context.CancelFunc
 }
 
 func NewMarketPricingConsumer(
@@ -55,13 +58,12 @@ func NewMarketPricingConsumer(
 // - Idempotent: safe untuk retry (menggunakan block_id sebagai key)
 func (m *MarketPricingConsumer) Start() error {
 	m.mu.Lock()
-
 	if m.isRunning {
 		m.mu.Unlock()
 		return nil
 	}
-
 	m.isRunning = true
+	m.parentCtx, m.parentCancel = context.WithCancel(context.Background())
 	m.mu.Unlock()
 
 	logger.LogInfo("Starting market pricing consumer")
@@ -98,7 +100,7 @@ func (m *MarketPricingConsumer) handleMessage(msg amqp091.Delivery) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), m.processingTimeout)
+	ctx, cancel := context.WithTimeout(m.parentCtx, m.processingTimeout)
 	defer cancel()
 
 	// update price cache dan hitung perubahan harga
@@ -297,10 +299,21 @@ func (m *MarketPricingConsumer) Stop() {
 	}
 
 	m.isRunning = false
+	stopChan := m.stopChan
+	parentCancel := m.parentCancel
 	m.mu.Unlock()
 
+	// Cancel parent ctx agar handler keluar early saat shutdown.
+	if parentCancel != nil {
+		parentCancel()
+	}
+
 	logger.LogInfo("Stopping market pricing consumer")
-	close(m.stopChan)
+	select {
+	case <-stopChan:
+	default:
+		close(stopChan)
+	}
 	logger.LogInfo("Market pricing consumer stopped")
 }
 

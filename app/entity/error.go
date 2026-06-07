@@ -36,3 +36,6 @@ var ErrInternalServer = errors.New("internal server error")
 var ErrInvalidInput = errors.New("invalid input")
 var ErrOperationFailed = errors.New("operation failed")
 var ErrConflict = errors.New("resource conflict")
+
+// INIT ERRORS
+var ErrDependenciesNotInitialized = errors.New("dependensi aplikasi belum diinisialisasi")

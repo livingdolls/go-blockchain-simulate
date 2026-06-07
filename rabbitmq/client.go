@@ -11,6 +11,8 @@ type Client struct {
 	conn *RabbitMQConn
 }
 
+// NewClient membuat koneksi RabbitMQ baru dengan URL dan ukuran channel pool.
+// URL contoh: amqp://guest:guest@localhost:5672/
 func NewClient(url string, poolSize int) (*Client, error) {
 	conn, err := NewRabbitMQConn(url)
 

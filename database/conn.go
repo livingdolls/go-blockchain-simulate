@@ -2,58 +2,70 @@ package database
 
 import (
 	"fmt"
-	"log"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
+	"github.com/livingdolls/go-blockchain-simulate/logger"
 )
 
+// DBConn membungkus sqlx.DB untuk koneksi database utama.
 type DBConn struct {
 	db *sqlx.DB
 }
 
+// Database adalah interface abstraksi koneksi database.
+// Dipakai agar unit test bisa mock dengan mudah.
 type Database interface {
 	GetDB() *sqlx.DB
 	Close() error
 }
 
-func NewDBConn() (Database, error) {
-	db, err := openDatabase("mysql", "yurina:hirate@tcp(172.17.0.1:3306)/blockchain?parseTime=true&loc=Local")
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to main DB: %w", err)
-	}
-
-	return &DBConn{
-		db: db,
-	}, nil
+// Config berisi parameter koneksi database.
+// Dipakai agar package database tidak bergantung langsung ke package config.
+type Config struct {
+	Driver          string
+	DSN             string
+	MaxOpenConns    int
+	MaxIdleConns    int
+	ConnMaxLifetime time.Duration
 }
 
-// Close implements Database.
+// NewDBConn membuat koneksi database baru dari konfigurasi.
+func NewDBConn(cfg Config) (Database, error) {
+	db, err := openDatabase(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("gagal konek ke database utama: %w", err)
+	}
+
+	return &DBConn{db: db}, nil
+}
+
+// Close menutup koneksi database.
 func (d *DBConn) Close() error {
 	return d.db.Close()
 }
 
-// GetDB implements Database.
+// GetDB mengembalikan instance sqlx.DB untuk diakses oleh repository.
 func (d *DBConn) GetDB() *sqlx.DB {
 	return d.db
 }
 
-func openDatabase(driver, dsn string) (*sqlx.DB, error) {
-	db, err := sqlx.Open(driver, dsn)
+func openDatabase(cfg Config) (*sqlx.DB, error) {
+	db, err := sqlx.Open(cfg.Driver, cfg.DSN)
 	if err != nil {
 		return nil, err
 	}
 
-	db.SetMaxOpenConns(100)
-	db.SetMaxIdleConns(20)
-	db.SetConnMaxLifetime(5 * time.Minute)
+	db.SetMaxOpenConns(cfg.MaxOpenConns)
+	db.SetMaxIdleConns(cfg.MaxIdleConns)
+	db.SetConnMaxLifetime(cfg.ConnMaxLifetime)
 
 	if err := db.Ping(); err != nil {
 		return nil, fmt.Errorf("ping error: %w", err)
 	}
 
-	log.Printf("Connected to %s database successfully!", dsn)
+	logger.LogInfo("koneksi database berhasil dibuka")
 
 	return db, nil
 }

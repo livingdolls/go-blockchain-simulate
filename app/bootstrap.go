@@ -5,6 +5,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/livingdolls/go-blockchain-simulate/app/entity"
+	"github.com/livingdolls/go-blockchain-simulate/config"
 	"github.com/livingdolls/go-blockchain-simulate/logger"
 
 	"github.com/livingdolls/go-blockchain-simulate/app/handler"
@@ -19,39 +21,104 @@ import (
 	"github.com/livingdolls/go-blockchain-simulate/security"
 )
 
-// InitializeInfrastructure initializes database, cache, message queue, and auth
-func (a *AppConfig) InitializeInfrastructure() error {
+// AppDependencies berisi seluruh dependensi yang dibutuhkan aplikasi.
+// Dibuat dari konfigurasi terpusat, lalu diteruskan ke AppConfig.
+// Definisi struct ada di app/config.go.
+
+// NewAppDependencies membangun seluruh dependensi infrastruktur dari konfigurasi.
+// Dipanggil dari main sebelum inisialisasi handler/service/worker.
+func NewAppDependencies(cfg *config.Config) (*AppDependencies, error) {
+	deps := &AppDependencies{Config: cfg}
+
+	if err := deps.initializeInfrastructure(); err != nil {
+		return nil, err
+	}
+
+	return deps, nil
+}
+
+// initializeInfrastructure membuka koneksi database, redis, dan rabbitmq
+// serta membuat adapter JWT berdasarkan konfigurasi.
+func (d *AppDependencies) initializeInfrastructure() error {
 	// Database
-	db, err := database.NewDBConn()
+	db, err := database.NewDBConn(database.Config{
+		Driver:          d.Config.Database.Driver,
+		DSN:             d.Config.Database.DSN,
+		MaxOpenConns:    d.Config.Database.MaxOpenConns,
+		MaxIdleConns:    d.Config.Database.MaxIdleConns,
+		ConnMaxLifetime: d.Config.Database.ConnMaxLifetime,
+	})
 	if err != nil {
 		return err
 	}
-	a.DB = db.GetDB()
+	d.DBConn = db
 
 	// Redis
-	redisClient, err := redis.NewRedisMemory()
+	redisClient, err := redis.NewRedisClient(redis.Config{
+		Addr:         d.Config.Redis.Addr,
+		Password:     d.Config.Redis.Password,
+		DB:           d.Config.Redis.DB,
+		PoolSize:     d.Config.Redis.PoolSize,
+		MinIdleConns: d.Config.Redis.MinIdleConns,
+	})
 	if err != nil {
+		_ = db.Close()
 		return err
 	}
+	d.RedisClient = redisClient
+
 	redisServices, err := redis.NewMemoryAdapter(redisClient, 1024)
 	if err != nil {
+		_ = redisClient.Close()
+		_ = db.Close()
 		return err
 	}
-	a.RedisServices = redisServices
+	d.RedisServices = redisServices
 
 	// RabbitMQ
-	rmqClient, err := rabbitmq.NewClient("amqp://guest:guest@localhost:5672/", 10)
+	rmqClient, err := rabbitmq.NewClient(d.Config.RabbitMQ.URL, d.Config.RabbitMQ.PoolSize)
 	if err != nil {
+		_ = redisClient.Close()
+		_ = db.Close()
 		return err
 	}
-	a.RMQClient = rmqClient
+	d.RMQClient = rmqClient
 
 	// JWT
-	a.JWT = security.NewJWTAdapter("yurinahirate-verysecret", 24*time.Hour)
-	a.JWTAdmin = security.NewAdminJWTAdapter("yurinahirate-adminsecret", 24*time.Hour)
+	d.JWT = security.NewJWTAdapter(d.Config.JWT.UserSecret, d.Config.JWT.UserTTL)
+	d.JWTAdmin = security.NewAdminJWTAdapter(d.Config.JWT.AdminSecret, d.Config.JWT.AdminTTL)
 
-	logger.LogInfo("Infrastructure initialized successfully")
+	logger.LogInfo("infrastruktur berhasil diinisialisasi")
 	return nil
+}
+
+// InitializeInfrastructure tetap dipertahankan untuk backward compatibility.
+// Memindahkan nilai dari AppDependencies ke AppConfig.
+// Disarankan migrasi ke NewAppDependencies di caller.
+func (a *AppConfig) InitializeInfrastructure() error {
+	if a.deps == nil {
+		return entity.ErrDependenciesNotInitialized
+	}
+	a.DBConn = a.deps.DBConn
+	a.DB = a.deps.DBConn.GetDB()
+	a.RedisServices = a.deps.RedisServices
+	a.RMQClient = a.deps.RMQClient
+	a.JWT = a.deps.JWT
+	a.JWTAdmin = a.deps.JWTAdmin
+	return nil
+}
+
+// SetDeps menempelkan AppDependencies ke AppConfig.
+// Cara yang disarankan di main, menggantikan pemanggilan NewAppDependencies
+// terpisah + InitializeInfrastructure terpisah.
+func (a *AppConfig) SetDeps(deps *AppDependencies) {
+	a.deps = deps
+	a.DBConn = deps.DBConn
+	a.DB = deps.DBConn.GetDB()
+	a.RedisServices = deps.RedisServices
+	a.RMQClient = deps.RMQClient
+	a.JWT = deps.JWT
+	a.JWTAdmin = deps.JWTAdmin
 }
 
 // SetupRabbitMQTopology sets up queues, exchanges, and bindings

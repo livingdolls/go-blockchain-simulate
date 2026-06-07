@@ -39,6 +39,10 @@ type RewardCalculationConsumer struct {
 	pendingBlocksMu sync.RWMutex
 	pendingBlocks   map[int64]dto.RewardCalculationEvent
 
+	// pendingHandles menunggu semua handleMessage yang sedang berjalan
+	// sebelum channel calcQueue ditutup. Mencegah panic "send on closed channel".
+	pendingHandles sync.WaitGroup
+
 	// metrics
 	metricsMu           sync.RWMutex
 	processedCount      int64
@@ -96,9 +100,14 @@ func (r *RewardCalculationConsumer) Start() error {
 }
 
 func (r *RewardCalculationConsumer) handleMessage(msg amqp091.Delivery) {
+	// Daftarkan handleMessage ke WaitGroup agar Stop() bisa menunggu
+	// sebelum menutup calcQueue (mencegah panic "send on closed channel").
+	r.pendingHandles.Add(1)
+	defer r.pendingHandles.Done()
+
 	defer func() {
 		if err := msg.Ack(false); err != nil {
-			logger.LogError("Failed to ack message", err)
+			logger.LogError("gagal ack pesan reward calculation", err)
 		}
 	}()
 
@@ -397,21 +406,24 @@ func (r *RewardCalculationConsumer) GetMetrics() map[string]interface{} {
 
 func (r *RewardCalculationConsumer) Stop() {
 	r.mu.Lock()
-	defer r.mu.Unlock()
-
 	if !r.isRunning {
+		r.mu.Unlock()
 		return
 	}
+	r.isRunning = false
+	r.mu.Unlock()
 
-	logger.LogInfo("Stopping reward calculation consumer")
+	logger.LogInfo("menghentikan reward calculation consumer")
 
-	// Cancel context terlebih dahulu (triggers all workers to stop)
+	// 1. Cancel context agar worker berhenti membaca dari calcQueue.
 	r.stopCancel()
 
-	// Close channel setelah context cancelled
+	// 2. Tunggu semua handleMessage selesai mengirim ke calcQueue.
+	// Ini mencegah panic "send on closed channel".
+	r.pendingHandles.Wait()
+
+	// 3. Sekarang aman menutup channel.
 	close(r.calcQueue)
 
-	r.isRunning = false
-
-	logger.LogInfo("Reward calculation consumer stopped")
+	logger.LogInfo("reward calculation consumer berhenti")
 }

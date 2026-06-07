@@ -111,31 +111,29 @@ func (n *NotificationWSConsumer) Start() error {
 func (n *NotificationWSConsumer) handleMessage(msg amqp091.Delivery) {
 	startTime := time.Now()
 
-	// defer ACK handling
+	// ACK handling di-defer untuk memastikan pesan selalu di-acknowledge walau proses panic.
 	defer func() {
 		if err := msg.Ack(false); err != nil {
-			logger.LogError("[NOTIFICATION_WS_CONSUMER] Failed to acknowledge notification WebSocket message: %v\n", err)
+			logger.LogError("gagal ack pesan notifikasi websocket", err)
 		}
 	}()
 
-	logger.LogDebug("[NOTIFICATION_WS_CONSUMER] Received notification WebSocket message", zap.ByteString("body", msg.Body))
+	logger.LogDebug("menerima pesan notifikasi websocket", zap.ByteString("body", msg.Body))
 
-	// validate
 	if len(msg.Body) == 0 {
-		logger.LogWarn("[NOTIFICATION_WS_CONSUMER] Empty notification WebSocket message body")
+		logger.LogWarn("body pesan notifikasi kosong")
 		return
 	}
 
 	var notification dto.NotificationEvent
 
 	if err := json.Unmarshal(msg.Body, &notification); err != nil {
-		logger.LogError("[NOTIFICATION_WS_CONSUMER] Failed to unmarshal notification WebSocket message: %v\n", err)
+		logger.LogError("gagal unmarshal pesan notifikasi", err)
 		return
 	}
 
-	// validate notification
 	if err := n.validateNotification(&notification); err != nil {
-		logger.LogError("[NOTIFICATION_WS_CONSUMER] Invalid notification WebSocket message: %v\n", err)
+		logger.LogError("validasi notifikasi gagal", err)
 		return
 	}
 

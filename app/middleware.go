@@ -2,20 +2,32 @@ package app
 
 import (
 	"github.com/gin-gonic/gin"
+	"github.com/livingdolls/go-blockchain-simulate/config"
 )
 
-var allowedOrigins = map[string]bool{
-	"http://192.168.88.178:3001": true,
-	"http://localhost:3001":      true,
-	"http://192.168.88.178:3000": true,
-	"http://192.168.88.178:3002": true,
+// DefaultAllowedOrigins adalah fallback origin yang dipakai saat CORSOrigins
+// pada konfigurasi kosong. Tetap disediakan untuk development lokal.
+var DefaultAllowedOrigins = map[string]bool{
+	"http://localhost:3000": true,
+	"http://localhost:3001": true,
+	"http://localhost:3002": true,
 }
 
-// CORSMiddleware handles CORS headers for all requests
-func CORSMiddleware() gin.HandlerFunc {
+// CORSMiddleware mengatur header CORS untuk semua request.
+// Daftar origin yang diizinkan dibaca dari konfigurasi server.
+// Jika konfigurasi kosong, fallback ke DefaultAllowedOrigins.
+func CORSMiddleware(cfg *config.ServerConfig) gin.HandlerFunc {
+	allowed := make(map[string]bool, len(cfg.AllowedOrigins))
+	for _, o := range cfg.AllowedOrigins {
+		allowed[o] = true
+	}
+	if len(allowed) == 0 {
+		allowed = DefaultAllowedOrigins
+	}
+
 	return func(c *gin.Context) {
 		origin := c.GetHeader("Origin")
-		if origin != "" && allowedOrigins[origin] {
+		if origin != "" && allowed[origin] {
 			c.Header("Access-Control-Allow-Origin", origin)
 			c.Header("Vary", "Origin")
 		}

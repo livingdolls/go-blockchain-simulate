@@ -3,35 +3,39 @@ package redis
 import (
 	"context"
 	"fmt"
-	"net/url"
+	"time"
 
 	"github.com/redis/go-redis/v9"
 )
 
-func NewRedisMemory() (*redis.Client, error) {
-	buildUrl := fmt.Sprintf("redis://:%s@%s:%s/%d", "", "localhost", "6379", 0)
+// Config berisi parameter koneksi redis.
+type Config struct {
+	Addr         string
+	Password     string
+	DB           int
+	PoolSize     int
+	MinIdleConns int
+}
 
-	u, err := url.Parse(buildUrl)
-
-	if err != nil {
-		return nil, err
-	}
-
-	addr := u.Host
-	password, _ := u.User.Password()
-
+// NewRedisClient membuat koneksi redis baru dari konfigurasi.
+func NewRedisClient(cfg Config) (*redis.Client, error) {
 	rdb := redis.NewClient(&redis.Options{
-		Addr:         addr,
-		Password:     password,
-		DB:           0,
-		PoolSize:     10,
-		MinIdleConns: 5,
+		Addr:         cfg.Addr,
+		Password:     cfg.Password,
+		DB:           cfg.DB,
+		PoolSize:     cfg.PoolSize,
+		MinIdleConns: cfg.MinIdleConns,
+		DialTimeout:  5 * time.Second,
+		ReadTimeout:  3 * time.Second,
+		WriteTimeout: 3 * time.Second,
 	})
 
-	if err := rdb.Ping(context.Background()).Err(); err != nil {
-		return nil, err
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := rdb.Ping(ctx).Err(); err != nil {
+		return nil, fmt.Errorf("gagal konek ke redis: %w", err)
 	}
 
 	return rdb, nil
-
 }

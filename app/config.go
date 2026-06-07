@@ -8,15 +8,22 @@ import (
 	"github.com/livingdolls/go-blockchain-simulate/app/services"
 	"github.com/livingdolls/go-blockchain-simulate/app/websocket"
 	"github.com/livingdolls/go-blockchain-simulate/app/worker"
+	"github.com/livingdolls/go-blockchain-simulate/config"
+	"github.com/livingdolls/go-blockchain-simulate/database"
 	"github.com/livingdolls/go-blockchain-simulate/rabbitmq"
 	"github.com/livingdolls/go-blockchain-simulate/redis"
 	"github.com/livingdolls/go-blockchain-simulate/security"
+	goredis "github.com/redis/go-redis/v9"
 )
 
 // AppConfig holds all application dependencies
 type AppConfig struct {
+	// Internal
+	deps *AppDependencies
+
 	// Database
-	DB *sqlx.DB
+	DB     *sqlx.DB
+	DBConn database.Database
 
 	// Cache
 	RedisServices redis.MemoryAdapter
@@ -86,4 +93,16 @@ type AppConfig struct {
 	ReconcileConsumer          *worker.LedgerReconcileConsumer
 	RewardCalculationConsumer  *worker.RewardCalculationConsumer
 	RewardDistributionConsumer *worker.RewardDistributionConsumer
+}
+
+// AppDependencies adalah container untuk seluruh dependency yang dibuat dari konfigurasi.
+// Dipakai di main sebagai jembatan antara config terpusat dan AppConfig.
+type AppDependencies struct {
+	Config        *config.Config
+	DBConn        database.Database
+	RedisClient   *goredis.Client
+	RedisServices redis.MemoryAdapter
+	RMQClient     *rabbitmq.Client
+	JWT           security.JWTService
+	JWTAdmin      security.AdminJWTService
 }

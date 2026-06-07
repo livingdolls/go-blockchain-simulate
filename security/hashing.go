@@ -1,11 +1,11 @@
 package security
 
 import (
-	"fmt"
-
 	"golang.org/x/crypto/bcrypt"
 )
 
+// HashPassword menghasilkan bcrypt hash dari password plaintext.
+// cost default = 10. Gunakan untuk hashing password user saat registrasi/ganti password.
 func HashPassword(password string) (string, error) {
 	hashedBytes, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
@@ -14,8 +14,10 @@ func HashPassword(password string) (string, error) {
 	return string(hashedBytes), nil
 }
 
+// CheckPasswordHash memverifikasi password plaintext terhadap bcrypt hash.
+// Mengembalikan true jika cocok, false jika tidak.
+// PENTING: fungsi ini TIDAK boleh logging password plaintext ke console/log.
 func CheckPasswordHash(password, hash string) bool {
 	err := bcrypt.CompareHashAndPassword([]byte(password), []byte(hash))
-	fmt.Printf("Comparing password '%s' with hash '%s': %v\n", password, hash, err)
 	return err == nil
 }

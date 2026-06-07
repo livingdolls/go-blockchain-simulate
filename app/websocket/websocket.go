@@ -78,27 +78,25 @@ func (h *Hub) Run() {
 }
 
 func (h *Hub) broadcastMessageToSubscribers(message *Message) {
-	log.Printf("Broadcasting message to subscribers: %v", message.Type)
 	payload, err := json.Marshal(message)
 	if err != nil {
-		log.Printf("==========================================")
-		log.Printf("WebSocket broadcast marshal error: %v", err)
+		log.Printf("[WS] gagal marshal broadcast: %v", err)
 		return
 	}
 
-	h.mu.RLock()
-	defer h.mu.RUnlock()
-
-	log.Printf("COUNT CLIENT %v", len(h.clients))
+	// Pakai Lock (write) bukan RLock agar tidak terjadi race
+	// dengan unregister yang menutup client.send. RLock memungkinkan
+	// dua broadcast berjalan paralel + unregister di tengahnya,
+	// yang bisa menyebabkan "send on closed channel" panic.
+	h.mu.Lock()
+	defer h.mu.Unlock()
 
 	for client := range h.clients {
-		log.Printf("SEND TO CLIENT: %v", len(h.clients))
 		if subscribed, ok := h.subscriptions[client][message.Type]; ok && subscribed {
 			select {
 			case client.send <- payload:
-				log.Println("Message sent to client")
 			default:
-				log.Println("WebSocket client send channel full, dropping message")
+				// channel penuh, drop pesan agar tidak blocking
 			}
 		}
 	}
@@ -148,24 +146,25 @@ func (h *Hub) SendToAddress(address string, msgType entity.MessageType, data any
 	}
 
 	payload, err := json.Marshal(message)
-
 	if err != nil {
-		log.Printf("Websocket send to users marshal error %v", err)
+		log.Printf("[WS] gagal marshal pesan ke address: %v", err)
+		return
 	}
 
-	h.mu.RLock()
-	defer h.mu.RUnlock()
+	// Pakai write lock agar konsisten dengan broadcastMessageToSubscribers
+	// dan tidak terjadi race dengan close pada saat unregister.
+	h.mu.Lock()
+	defer h.mu.Unlock()
 
 	if clients, ok := h.address[address]; ok {
 		for client := range clients {
 			if subscribed, ok := h.subscriptions[client][message.Type]; ok && subscribed {
 				select {
 				case client.send <- payload:
-					log.Printf("Message sent to client at address %s", address)
 				case <-h.stopChan:
-					log.Println("Hub is closing, message dropped")
+					return
 				default:
-					log.Println("WebSocket client send channel full, dropping message")
+					// channel penuh, drop
 				}
 			}
 		}

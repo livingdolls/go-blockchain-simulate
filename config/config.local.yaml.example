@@ -1,0 +1,21 @@
+# Salin file ini menjadi config.local.yaml dan isi dengan nilai Anda.
+# File ini TIDAK di-commit (lihat .gitignore).
+# Prioritas: environment variable > file ini > config.yaml.
+
+database:
+  dsn: "user:password@tcp(host:3306)/blockchain?parseTime=true&loc=Local"
+
+redis:
+  addr: "localhost:6379"
+  password: ""
+
+rabbitmq:
+  url: "amqp://guest:guest@localhost:5672/"
+
+jwt:
+  user_secret: "your-very-secret-key-min-32-chars"
+  admin_secret: "your-admin-secret-key-min-32-chars"
+
+server:
+  allowed_origins:
+    - "http://localhost:3000"

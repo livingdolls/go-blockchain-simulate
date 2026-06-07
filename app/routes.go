@@ -1,15 +1,31 @@
 package app
 
 import (
+	"time"
+
 	"github.com/gin-gonic/gin"
 	"github.com/livingdolls/go-blockchain-simulate/app/handler"
+	mw "github.com/livingdolls/go-blockchain-simulate/app/middleware"
 	"github.com/livingdolls/go-blockchain-simulate/app/websocket"
 )
 
 // SetupRoutes configures all HTTP routes
 func (a *AppConfig) SetupRoutes(r *gin.Engine) {
+	// Health check (public, tidak butuh auth). Liveness untuk livenessProbe,
+	// readiness untuk readinessProbe atau load balancer health check.
+	r.GET("/healthz", a.HealthHandler.Liveness)
+	r.GET("/readyz", a.HealthHandler.Readiness)
+
+	// Rate limiter untuk endpoint sensitif. Redis-backed sehingga terdistribusi
+	// aman di multiple instance. Identifier: client IP (atau X-Forwarded-For).
+	authLimiter := mw.RateLimitMiddleware(a.deps.RedisClient,
+		mw.RateLimiter{KeyPrefix: "ratelimit:auth", Limit: 10, Window: time.Minute},
+		mw.RateLimiter{KeyPrefix: "ratelimit:tx", Limit: 30, Window: time.Minute},
+	)
+
 	// Auth routes
 	authGroup := r.Group("")
+	authGroup.Use(authLimiter)
 	{
 		authGroup.POST("/register", a.UserHandler.Register)
 		authGroup.POST("/challenge/:address", a.UserHandler.Challenge)
@@ -18,6 +34,21 @@ func (a *AppConfig) SetupRoutes(r *gin.Engine) {
 
 	// Transaction routes
 	txGroup := r.Group("/transaction")
+	txGroup.Use(authLimiter)
+	// Idempotency-Key untuk mencegah double-submit saat client retry.
+	// Hanya POST /transaction/send dan /transaction/buy yang di-cache
+	// (idempotency key hanya relevan untuk operasi non-idempotent).
+	idemCfg := mw.IdempotencyConfig{
+		Memory:    a.RedisServices,
+		TTL:       24 * time.Hour,
+		KeyPrefix: "idempotency:tx",
+		RequiredScope: []string{
+			"POST /transaction/send",
+			"POST /transaction/buy",
+			"POST /transaction/sell",
+		},
+	}
+	txGroup.Use(mw.IdempotencyMiddleware(idemCfg))
 	{
 		txGroup.POST("/send", a.TransactionHandler.Send)
 		txGroup.GET("/:id", a.TransactionHandler.GetTransaction)

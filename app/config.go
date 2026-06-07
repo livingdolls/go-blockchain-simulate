@@ -80,6 +80,7 @@ type AppConfig struct {
 	CandleStreamHandler *handler.CandleStreamHandler
 	AdminHandler        *handler.AdminHandler
 	AdminLoginHandler   *handler.AdminLoginHandler
+	HealthHandler       *handler.HealthHandler
 	// Workers
 	BlockWorker  *worker.GenerateBlockWorker
 	CandleWorker *worker.GenerateCandleWorker

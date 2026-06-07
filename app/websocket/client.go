@@ -3,6 +3,7 @@ package websocket
 import (
 	"encoding/json"
 	"log"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -16,11 +17,21 @@ const (
 	maxMessageSize = 512
 )
 
+// ClientWS mewakili satu koneksi WebSocket aktif. Field done dan closeOnce
+// digunakan untuk mencegah race "send on closed channel" antara producer
+// (Hub broadcast/send) dan unregister handler.
 type ClientWS struct {
 	address string
 	conn    *websocket.Conn
 	send    chan []byte
 	hub     *Hub
+
+	// done ditutup saat client sudah tidak valid. Producer harus select
+	// terhadap done agar tidak terjadi send-on-closed-channel panic.
+	done chan struct{}
+	// closeOnce memastikan close() pada send/done dipanggil hanya sekali,
+	// mencegah double-close panic.
+	closeOnce sync.Once
 }
 
 func (c *ClientWS) Read() {

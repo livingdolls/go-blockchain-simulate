@@ -63,8 +63,7 @@ func (h *Hub) Run() {
 					}
 				}
 
-				close(c.send)
-				_ = c.conn.Close()
+				safeCloseClient(c)
 			}
 			h.mu.Unlock()
 			log.Printf("Client unregistered user=%s total=%d", c.address, len(h.clients))
@@ -75,6 +74,18 @@ func (h *Hub) Run() {
 			return
 		}
 	}
+}
+
+// safeCloseClient menutup send channel dan done channel secara idempotent.
+// Memicu dua hal sekaligus: producer yang sedang `select` di `done` akan
+// keluar, dan consumer (Write goroutine) akan melihat channel closed dan
+// keluar setelah mengirim close frame ke client.
+func safeCloseClient(c *ClientWS) {
+	c.closeOnce.Do(func() {
+		close(c.done)
+		close(c.send)
+		_ = c.conn.Close()
+	})
 }
 
 func (h *Hub) broadcastMessageToSubscribers(message *Message) {
@@ -93,8 +104,14 @@ func (h *Hub) broadcastMessageToSubscribers(message *Message) {
 
 	for client := range h.clients {
 		if subscribed, ok := h.subscriptions[client][message.Type]; ok && subscribed {
+			// Select terhadap client.done memastikan kita tidak panic
+			// "send on closed channel" bila unregister terjadi bersamaan
+			// dengan broadcast. default menjaga agar producer tidak blocking
+			// saat channel penuh.
 			select {
 			case client.send <- payload:
+			case <-client.done:
+				// client sudah di-unregister, skip
 			default:
 				// channel penuh, drop pesan agar tidak blocking
 			}
@@ -161,6 +178,8 @@ func (h *Hub) SendToAddress(address string, msgType entity.MessageType, data any
 			if subscribed, ok := h.subscriptions[client][message.Type]; ok && subscribed {
 				select {
 				case client.send <- payload:
+				case <-client.done:
+					// client sudah di-unregister, skip
 				case <-h.stopChan:
 					return
 				default:
@@ -178,8 +197,7 @@ func (h *Hub) closeAllConnections() {
 	log.Printf("Closing all %d client connections...\n", len(h.clients))
 
 	for client := range h.clients {
-		close(client.send)
-		_ = client.conn.Close()
+		safeCloseClient(client)
 	}
 
 	// clear maps

@@ -232,6 +232,7 @@ func (a *AppConfig) InitializeHandlers() {
 	a.CandleStreamHandler = handler.NewCandleStreamHandler(services.NewCandleStreamService(a.RedisServices), a.CandleService)
 	a.AdminLoginHandler = handler.NewAdminLoginHandler(a.AdminAuthService, a.JWTAdmin)
 	a.AdminHandler = handler.NewAdminHandler(a.AdminService)
+	a.HealthHandler = handler.NewHealthHandler(a.DBConn, a.deps.RedisClient, a.deps.Config.App.Name, a.deps.Config.App.Version)
 	logger.LogInfo("All handlers initialized successfully")
 }
 

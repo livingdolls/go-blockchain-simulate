@@ -86,6 +86,8 @@ func main() {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
 	r.Use(gin.Recovery())
+	r.Use(logger.RequestIDMiddleware())
+	r.Use(logger.RequestLogMiddleware())
 	r.Use(app.CORSMiddleware(&cfg.Server))
 	appConfig.SetupRoutes(r)
 

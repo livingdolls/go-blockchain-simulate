@@ -1,6 +1,7 @@
 package logger
 
 import (
+	"context"
 	"time"
 
 	"go.uber.org/zap"
@@ -27,6 +28,30 @@ func LogInfo(msg string, fields ...zap.Field) {
 // LogDebug logs debug message
 func LogDebug(msg string, fields ...zap.Field) {
 	L.WithOptions(zap.AddCallerSkip(1)).Debug(msg, fields...)
+}
+
+// LogErrorCtx logs error dengan field dari context (request_id, user_id, dll).
+// Gunakan ini dari service/repository yang sudah menerima context.Context.
+func LogErrorCtx(ctx context.Context, msg string, err error, fields ...zap.Field) {
+	all := make([]zap.Field, 0, len(fields)+1)
+	all = append(all, fields...)
+	all = append(all, zap.Error(err))
+	FromContext(ctx).WithOptions(zap.AddCallerSkip(1)).Error(msg, all...)
+}
+
+// LogWarnCtx logs warning dengan field dari context.
+func LogWarnCtx(ctx context.Context, msg string, fields ...zap.Field) {
+	FromContext(ctx).WithOptions(zap.AddCallerSkip(1)).Warn(msg, fields...)
+}
+
+// LogInfoCtx logs info dengan field dari context (request_id otomatis muncul).
+func LogInfoCtx(ctx context.Context, msg string, fields ...zap.Field) {
+	FromContext(ctx).WithOptions(zap.AddCallerSkip(1)).Info(msg, fields...)
+}
+
+// LogDebugCtx logs debug dengan field dari context.
+func LogDebugCtx(ctx context.Context, msg string, fields ...zap.Field) {
+	FromContext(ctx).WithOptions(zap.AddCallerSkip(1)).Debug(msg, fields...)
 }
 
 // LogWithDuration logs message with execution duration

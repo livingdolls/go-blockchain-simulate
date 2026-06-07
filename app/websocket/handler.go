@@ -49,6 +49,7 @@ func GinHandler(hub *Hub, jwt security.JWTService) gin.HandlerFunc {
 			hub:     hub,
 			conn:    conn,
 			send:    make(chan []byte, 256),
+			done:    make(chan struct{}),
 		}
 
 		hub.register <- client

@@ -1,6 +1,7 @@
 package database
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -19,6 +20,7 @@ type DBConn struct {
 type Database interface {
 	GetDB() *sqlx.DB
 	Close() error
+	Ping(ctx context.Context) error
 }
 
 // Config berisi parameter koneksi database.
@@ -49,6 +51,12 @@ func (d *DBConn) Close() error {
 // GetDB mengembalikan instance sqlx.DB untuk diakses oleh repository.
 func (d *DBConn) GetDB() *sqlx.DB {
 	return d.db
+}
+
+// Ping memverifikasi koneksi database masih hidup dalam batas waktu ctx.
+// Dipakai oleh endpoint /readyz health check.
+func (d *DBConn) Ping(ctx context.Context) error {
+	return d.db.PingContext(ctx)
 }
 
 func openDatabase(cfg Config) (*sqlx.DB, error) {

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/livingdolls/go-blockchain-simulate/app/entity"
 	"github.com/livingdolls/go-blockchain-simulate/app/models"
 	"github.com/livingdolls/go-blockchain-simulate/app/repository"
 	"github.com/livingdolls/go-blockchain-simulate/redis"
@@ -153,9 +154,9 @@ func (s *transactionService) Buy(ctx context.Context, address, signature, nonce 
 		return models.Transaction{}, fmt.Errorf("amount must be greater than zero")
 	}
 
-	//sistem sebagai penjual adalah address "MINER_ACCOUNT"
+	//sistem sebagai penjual adalah address MinerAccountAddress
 	buyerAddress := address
-	sellerAddress := "MINER_ACCOUNT"
+	sellerAddress := entity.MinerAccountAddress
 
 	// ensure buyer wallet exists
 	_, buyerWallet, err := s.users.GetUserWithWallet(buyerAddress)
@@ -237,9 +238,9 @@ func (s *transactionService) Sell(ctx context.Context, address, nonce, signature
 		return models.Transaction{}, fmt.Errorf("amount must be greater than zero")
 	}
 
-	//sistem sebagai pembeli adalah address "MINER_ACCOUNT"
+	//sistem sebagai pembeli adalah address MinerAccountAddress
 	sellerAddress := address
-	buyerAddress := "MINER_ACCOUNT"
+	buyerAddress := entity.MinerAccountAddress
 
 	// verify user exists
 	_, sellerWallet, err := s.users.GetUserWithWallet(sellerAddress)

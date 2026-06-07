@@ -124,7 +124,7 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 	}
 
 	// Added miner acount
-	addresses = append(addresses, "MINER_ACCOUNT")
+	addresses = append(addresses, entity.MinerAccountAddress)
 
 	// Get all users at once (read-only)
 	users, err := s.userRepo.GetMultipleByAddress(addresses)
@@ -258,8 +258,8 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 	}
 
 	// verify miner address
-	if _, exists := currentBalances["MINER_ACCOUNT"]; !exists {
-		return models.Block{}, fmt.Errorf("MINER_ACCOUNT not found in locked users")
+	if _, exists := currentBalances[entity.MinerAccountAddress]; !exists {
+		return models.Block{}, fmt.Errorf("%s not found in locked users", entity.MinerAccountAddress)
 	}
 
 	// Prepare basic info for block creation
@@ -273,7 +273,7 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 		totalDeduction := t.Amount + t.Fee
 		txBalanceChanges[t.FromAddress] = currentBalances[t.FromAddress] - totalDeduction
 		txBalanceChanges[t.ToAddress] = currentBalances[t.ToAddress] + t.Amount
-		txBalanceChanges["MINER_ACCOUNT"] = currentBalances["MINER_ACCOUNT"] + t.Fee
+		txBalanceChanges[entity.MinerAccountAddress] = currentBalances[entity.MinerAccountAddress] + t.Fee
 
 		totalFees += t.Fee
 		txIDs = append(txIDs, t.ID)
@@ -293,7 +293,7 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 		Difficulty:   miningResult.Difficulty,
 		Timestamp:    time.Now().Unix(),
 		MerkleRoot:   merkleRoot,
-		MinerAddress: "MINER_ACCOUNT",
+		MinerAddress: entity.MinerAccountAddress,
 		BlockReward:  blockReward,
 		TotalFees:    totalFees,
 	}
@@ -328,9 +328,9 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 			repository.LedgerEntry{
 				BlockID:      blockID,
 				TxID:         txIDPtr,
-				Address:      "MINER_ACCOUNT",
+				Address:      entity.MinerAccountAddress,
 				Amount:       t.Fee,
-				BalanceAfter: txBalanceChanges["MINER_ACCOUNT"],
+				BalanceAfter: txBalanceChanges[entity.MinerAccountAddress],
 			},
 		)
 	}
@@ -350,7 +350,7 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 	// Bulk update user balances (1 query instead of N)
 	walletUpdates := make(map[string]float64)
 	for addr, bal := range currentBalances {
-		if addr != "MINER_ACCOUNT" {
+		if addr != entity.MinerAccountAddress {
 			walletUpdates[addr] = bal
 		}
 	}
@@ -377,7 +377,7 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 
 	// get all USD with lock
 	allUSDAddresses := append(buyerAddresses, sellerAddresses...)
-	allUSDAddresses = append(allUSDAddresses, "MINER_ACCOUNT") // miner gets fee
+	allUSDAddresses = append(allUSDAddresses, entity.MinerAccountAddress) // miner gets fee
 
 	if len(allUSDAddresses) > 0 {
 		lockedUSDBalances, err := s.balanceRepo.GetMultipleByAddressWithTxForUpdate(tx, allUSDAddresses)
@@ -426,9 +426,9 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 			}
 
 			// miner fee receives USD
-			minerBalance := usdBalances["MINER_ACCOUNT"]
+			minerBalance := usdBalances[entity.MinerAccountAddress]
 			minerBalance.USDBalance += t.Fee
-			usdBalances["MINER_ACCOUNT"] = minerBalance
+			usdBalances[entity.MinerAccountAddress] = minerBalance
 
 		} else if strings.EqualFold(t.Type, "SELL") {
 			sellerAddr := t.FromAddress
@@ -451,9 +451,9 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 			}
 
 			// miner fee receives USD
-			minerBalance := usdBalances["MINER_ACCOUNT"]
+			minerBalance := usdBalances[entity.MinerAccountAddress]
 			minerBalance.USDBalance += usdFee
-			usdBalances["MINER_ACCOUNT"] = minerBalance
+			usdBalances[entity.MinerAccountAddress] = minerBalance
 		}
 	}
 
@@ -570,17 +570,17 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 	if s.publisherWS != nil && len(newBlock.Transactions) > 0 {
 		for _, tx := range newBlock.Transactions {
 			payload := tx
-			if tx.FromAddress != "MINER_ACCOUNT" {
+			if tx.FromAddress != entity.MinerAccountAddress {
 				s.publisherWS.PublishToAddress(strings.ToLower(tx.FromAddress), entity.EventTransactionUpdate, payload)
 			}
 
-			if tx.ToAddress != "MINER_ACCOUNT" {
+			if tx.ToAddress != entity.MinerAccountAddress {
 				s.publisherWS.PublishToAddress(strings.ToLower(tx.ToAddress), entity.EventTransactionUpdate, payload)
 			}
 		}
 	}
 
-	minerWallet, _ := s.walletRepo.GetByAddress("MINER_ACCOUNT")
+	minerWallet, _ := s.walletRepo.GetByAddress(entity.MinerAccountAddress)
 	logger.LogBlockEvent(
 		int64(newBlock.BlockNumber),
 		"mined",

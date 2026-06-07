@@ -39,3 +39,9 @@ var ErrConflict = errors.New("resource conflict")
 
 // INIT ERRORS
 var ErrDependenciesNotInitialized = errors.New("dependensi aplikasi belum diinisialisasi")
+
+// ADMIN ERRORS
+var ErrAdminNotFound = errors.New("admin not found")
+var ErrDuplicateAdminUsername = errors.New("duplicate admin username")
+var ErrAdminContextMissing = errors.New("admin not found in context")
+var ErrInvalidAdminContext = errors.New("invalid admin context")

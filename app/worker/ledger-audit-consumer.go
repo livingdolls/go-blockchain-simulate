@@ -13,6 +13,10 @@ import (
 	"go.uber.org/zap"
 )
 
+// DefaultMaxAuditTrailEntries adalah batas default jumlah entry audit trail
+// yang disimpan di memori. Entry terlama akan di-drop (FIFO) saat batas tercapai.
+const DefaultMaxAuditTrailEntries = 10000
+
 type LedgerAuditConsumer struct {
 	client            *rabbitmq.Client
 	mu                sync.Mutex
@@ -22,6 +26,7 @@ type LedgerAuditConsumer struct {
 	processingTimeout time.Duration
 	auditTrail        []dto.AuditTrailEntry
 	auditTrailMu      sync.RWMutex
+	maxAuditTrail     int
 }
 
 func NewLedgerAuditConsumer(rmqClient *rabbitmq.Client, workerCount int) *LedgerAuditConsumer {
@@ -30,7 +35,33 @@ func NewLedgerAuditConsumer(rmqClient *rabbitmq.Client, workerCount int) *Ledger
 		stopChan:          make(chan struct{}),
 		workerCount:       workerCount,
 		processingTimeout: 30 * time.Second,
-		auditTrail:        make([]dto.AuditTrailEntry, 0),
+		auditTrail:        make([]dto.AuditTrailEntry, 0, DefaultMaxAuditTrailEntries),
+		maxAuditTrail:     DefaultMaxAuditTrailEntries,
+	}
+}
+
+// SetMaxAuditTrailSize mengubah batas maksimum entry audit trail.
+// Nilai <= 0 akan diabaikan dan batas default tetap dipakai.
+func (l *LedgerAuditConsumer) SetMaxAuditTrailSize(n int) {
+	if n <= 0 {
+		return
+	}
+	l.auditTrailMu.Lock()
+	defer l.auditTrailMu.Unlock()
+	l.maxAuditTrail = n
+	if len(l.auditTrail) > n {
+		l.auditTrail = l.auditTrail[len(l.auditTrail)-n:]
+	}
+}
+
+// appendAuditTrail menambahkan entry ke audit trail dengan batas atas FIFO.
+// Entry terlama di-drop saat capacity tercapai, sehingga pemakaian memori
+// tetap O(maxAuditTrail) alih-alih O(total events).
+func (l *LedgerAuditConsumer) appendAuditTrail(entry dto.AuditTrailEntry) {
+	l.auditTrail = append(l.auditTrail, entry)
+	if len(l.auditTrail) > l.maxAuditTrail {
+		// geser slice: buang entry terlama, pertahankan maxAuditTrail entry terakhir
+		l.auditTrail = l.auditTrail[len(l.auditTrail)-l.maxAuditTrail:]
 	}
 }
 
@@ -96,7 +127,7 @@ func (l *LedgerAuditConsumer) processAuditTrail(ctx context.Context, batch dto.L
 			Reconciled:  false,
 		}
 
-		l.auditTrail = append(l.auditTrail, auditEntry)
+		l.appendAuditTrail(auditEntry)
 
 		if entry.Amount < -1000 || entry.Amount > 1000 {
 			logger.LogWarn("Large transaction detected",

@@ -15,6 +15,7 @@ import (
 	"github.com/livingdolls/go-blockchain-simulate/logger"
 	"github.com/livingdolls/go-blockchain-simulate/redis"
 	"github.com/livingdolls/go-blockchain-simulate/security"
+	"github.com/livingdolls/go-blockchain-simulate/utils"
 )
 
 type RegisterService interface {
@@ -132,11 +133,11 @@ func (r *registerService) Verify(ctx context.Context, address, nonce, signature,
 	}
 
 	// hash
-	hash := prefixedHash([]byte(msg))
+	hash := utils.PrefixedHash([]byte(msg))
 
 	// recover with Ecrecover using the given parity; toggle only if primary fails
 	var pubBytes []byte
-	for _, vTry := range []byte{v, toggleV(v)} {
+	for _, vTry := range []byte{v, utils.ToggleV(v)} {
 		test := make([]byte, 65)
 		copy(test, raw[:64])
 		test[64] = vTry - 27 // Ecrecover expects 0/1
@@ -182,16 +183,4 @@ func (r *registerService) Verify(ctx context.Context, address, nonce, signature,
 		return "", fmt.Errorf("failed to generate jwt: %w", err)
 	}
 	return token, nil
-}
-
-func toggleV(v byte) byte {
-	if v == 27 {
-		return 28
-	}
-	return 27
-}
-
-func prefixedHash(data []byte) []byte {
-	prefix := fmt.Sprintf("\x19Ethereum Signed Message:\n%d", len(data))
-	return crypto.Keccak256([]byte(prefix), data)
 }

@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"github.com/jmoiron/sqlx"
+	"github.com/livingdolls/go-blockchain-simulate/app/entity"
 	"github.com/livingdolls/go-blockchain-simulate/app/models"
 )
 
@@ -39,7 +40,7 @@ func NewAdminRepository(db *sqlx.DB) AdminRepository {
 
 // GetAdminByID fetches admin by ID
 func (r *adminRepository) GetAdminByID(ctx context.Context, adminID int) (*models.Admin, error) {
-	query := `SELECT id, user_id, role, permissions, status, last_login_at, created_at FROM admins WHERE id = ? AND status = 'active'`
+	query := fmt.Sprintf(`SELECT id, user_id, role, permissions, status, last_login_at, created_at FROM admins WHERE id = ? AND status = '%s'`, entity.AdminStatusActive)
 
 	admin := &models.Admin{}
 	err := r.db.QueryRow(query, adminID).Scan(
@@ -49,7 +50,7 @@ func (r *adminRepository) GetAdminByID(ctx context.Context, adminID int) (*model
 
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, fmt.Errorf("admin not found")
+			return nil, entity.ErrAdminNotFound
 		}
 		return nil, err
 	}
@@ -59,14 +60,14 @@ func (r *adminRepository) GetAdminByID(ctx context.Context, adminID int) (*model
 
 // GetAdminByUserID fetches admin by user ID
 func (r *adminRepository) GetAdminByUserID(ctx context.Context, userID int) (*models.AdminWithUser, error) {
-	query := `
-		SELECT 
-			a.id, a.user_id, u.name, u.address, a.role, a.permissions, 
+	query := fmt.Sprintf(`
+		SELECT
+			a.id, a.user_id, u.name, u.address, a.role, a.permissions,
 			a.status, a.last_login_at, a.created_at
 		FROM admins a
 		JOIN users u ON a.user_id = u.id
-		WHERE a.user_id = ? AND a.status = 'active'
-	`
+		WHERE a.user_id = ? AND a.status = '%s'
+	`, entity.AdminStatusActive)
 
 	admin := &models.AdminWithUser{}
 	err := r.db.QueryRow(query, userID).Scan(
@@ -77,7 +78,7 @@ func (r *adminRepository) GetAdminByUserID(ctx context.Context, userID int) (*mo
 
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, fmt.Errorf("admin not found")
+			return nil, entity.ErrAdminNotFound
 		}
 		return nil, err
 	}
@@ -273,7 +274,7 @@ func (r *adminRepository) GetDashboardStats(ctx context.Context) (*models.AdminD
 	_ = r.db.QueryRow("SELECT COUNT(*) FROM blocks").Scan(&stats.TotalBlocks)
 
 	// Total admins
-	_ = r.db.QueryRow("SELECT COUNT(*) FROM admins WHERE status = 'active'").Scan(&stats.TotalAdmins)
+	_ = r.db.QueryRow(fmt.Sprintf("SELECT COUNT(*) FROM admins WHERE status = '%s'", entity.AdminStatusActive)).Scan(&stats.TotalAdmins)
 
 	// Active users (last 7 days)
 	_ = r.db.QueryRow(`
@@ -313,16 +314,16 @@ func (r *adminRepository) DeleteAdmin(ctx context.Context, adminID int) error {
 }
 
 func (r *adminRepository) GetAdminByUsername(ctx context.Context, username string) (*models.AdminWithUser, error) {
-	queryByName := `
-		SELECT 
-			a.id, a.user_id, u.name, u.address, a.role, a.permissions, 
+	queryByName := fmt.Sprintf(`
+		SELECT
+			a.id, a.user_id, u.name, u.address, a.role, a.permissions,
 			a.status, a.last_login_at, a.created_at
 		FROM admins a
 		JOIN users u ON a.user_id = u.id
-		WHERE u.name = ? AND a.status = 'active'
+		WHERE u.name = ? AND a.status = '%s'
 		ORDER BY a.id DESC
 		LIMIT 2
-	`
+	`, entity.AdminStatusActive)
 
 	rows, err := r.db.Query(queryByName, username)
 	if err != nil {
@@ -353,18 +354,18 @@ func (r *adminRepository) GetAdminByUsername(ctx context.Context, username strin
 	}
 
 	if len(admins) > 1 {
-		return nil, fmt.Errorf("duplicate admin username")
+		return nil, entity.ErrDuplicateAdminUsername
 	}
 
-	queryByAddress := `
-		SELECT 
-			a.id, a.user_id, u.name, u.address, a.role, a.permissions, 
+	queryByAddress := fmt.Sprintf(`
+		SELECT
+			a.id, a.user_id, u.name, u.address, a.role, a.permissions,
 			a.status, a.last_login_at, a.created_at
 		FROM admins a
 		JOIN users u ON a.user_id = u.id
-		WHERE u.address = ? AND a.status = 'active'
+		WHERE u.address = ? AND a.status = '%s'
 		LIMIT 1
-	`
+	`, entity.AdminStatusActive)
 
 	admin := &models.AdminWithUser{}
 	err = r.db.QueryRow(queryByAddress, username).Scan(
@@ -374,7 +375,7 @@ func (r *adminRepository) GetAdminByUsername(ctx context.Context, username strin
 	)
 
 	if err == sql.ErrNoRows {
-		return nil, fmt.Errorf("admin not found")
+		return nil, entity.ErrAdminNotFound
 	}
 
 	if err != nil {
@@ -385,16 +386,16 @@ func (r *adminRepository) GetAdminByUsername(ctx context.Context, username strin
 }
 
 func (r *adminRepository) GetAdminByUsernameWithPassword(ctx context.Context, username string) (*models.AdminWithPassword, error) {
-	queryByName := `
-		SELECT 
-			a.id, a.user_id, u.name, u.address, a.role, a.permissions, 
+	queryByName := fmt.Sprintf(`
+		SELECT
+			a.id, a.user_id, u.name, u.address, a.role, a.permissions,
 			a.status, a.last_login_at, a.password_hash, a.created_at
 		FROM admins a
 		JOIN users u ON a.user_id = u.id
-		WHERE u.name = ? AND a.status = 'active'
+		WHERE u.name = ? AND a.status = '%s'
 		ORDER BY a.id DESC
 		LIMIT 2
-	`
+	`, entity.AdminStatusActive)
 
 	rows, err := r.db.Query(queryByName, username)
 	if err != nil {
@@ -425,18 +426,18 @@ func (r *adminRepository) GetAdminByUsernameWithPassword(ctx context.Context, us
 	}
 
 	if len(admins) > 1 {
-		return nil, fmt.Errorf("duplicate admin username")
+		return nil, entity.ErrDuplicateAdminUsername
 	}
 
-	queryByAddress := `
-		SELECT 
-			a.id, a.user_id, u.name, u.address, a.role, a.permissions, 
+	queryByAddress := fmt.Sprintf(`
+		SELECT
+			a.id, a.user_id, u.name, u.address, a.role, a.permissions,
 			a.status, a.last_login_at, a.password_hash, a.created_at
 		FROM admins a
 		JOIN users u ON a.user_id = u.id
-		WHERE u.address = ? AND a.status = 'active'
+		WHERE u.address = ? AND a.status = '%s'
 		LIMIT 1
-	`
+	`, entity.AdminStatusActive)
 
 	admin := &models.AdminWithPassword{}
 	err = r.db.QueryRow(queryByAddress, username).Scan(

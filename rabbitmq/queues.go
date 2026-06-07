@@ -27,6 +27,14 @@ const (
 	NotificationSMSQueue      = "notification.sms"
 	NotificationAuditQueue    = "notification.audit"
 
+	// DLQ exchange dan queue untuk menangani pesan yang gagal diproses.
+	// Pesan yang gagal (JSON rusak atau error bisnis setelah retry) akan di-publish
+	// ke DLQExchange dengan routing key DLXRoutingKey, lalu disimpan di TransactionDLQ
+	// untuk inspeksi atau replay manual.
+	DLQExchange   = "dlx.transactions"
+	TransactionDLQ = "transaction.dlq"
+	DLXRoutingKey = "transaction.dead"
+
 	// Routing Keys
 	TransactionSubmittedKey = "transaction.submitted"
 	TransactionConfirmedKey = "transaction.confirmed"

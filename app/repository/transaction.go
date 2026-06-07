@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/jmoiron/sqlx"
+	"github.com/livingdolls/go-blockchain-simulate/app/entity"
 	"github.com/livingdolls/go-blockchain-simulate/app/models"
 )
 
@@ -240,9 +241,9 @@ func (r *transactionRepository) GetTransactionByAddress(filter models.Transactio
 		whereCondition = append(whereCondition, "LOWER(to_address) = LOWER(?)")
 		args = append(args, filter.Address)
 	case "buy":
-		whereCondition = append(whereCondition, "LOWER(from_address) = 'MINER_ACCOUNT'")
+		whereCondition = append(whereCondition, fmt.Sprintf("LOWER(from_address) = '%s'", entity.MinerAccountAddress))
 	case "sell":
-		whereCondition = append(whereCondition, "LOWER(to_address) = 'MINER_ACCOUNT'")
+		whereCondition = append(whereCondition, fmt.Sprintf("LOWER(to_address) = '%s'", entity.MinerAccountAddress))
 	}
 
 	// status filter
@@ -269,13 +270,13 @@ func (r *transactionRepository) GetTransactionByAddress(filter models.Transactio
 	offset := (result.Page - 1) * result.Limit
 
 	query := fmt.Sprintf(`
-		SELECT id, 
+		SELECT id,
 		CASE
-			WHEN from_address = 'MINER_ACCOUNT' THEN 'BUYER SYSTEM'
+			WHEN from_address = '%s' THEN 'BUYER SYSTEM'
 			ELSE from_address
 		END AS from_address,
 		CASE
-			WHEN to_address = 'MINER_ACCOUNT' THEN 'SELLER SYSTEM'
+			WHEN to_address = '%s' THEN 'SELLER SYSTEM'
 			ELSE to_address
 		END AS to_address,
 		amount, fee, signature, status, 
@@ -291,7 +292,7 @@ func (r *transactionRepository) GetTransactionByAddress(filter models.Transactio
 		FROM transactions
 		WHERE %s
 		ORDER BY %s %s
-		LIMIT ? OFFSET ?`, whereClause, filter.SortBy, filter.Order)
+		LIMIT ? OFFSET ?`, entity.MinerAccountAddress, entity.MinerAccountAddress, whereClause, filter.SortBy, filter.Order)
 
 	// Append pagination args
 	args = append([]interface{}{filter.Address}, args...)

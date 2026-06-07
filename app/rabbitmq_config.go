@@ -20,6 +20,7 @@ func getQueueDefinitions() []models.QueueDef {
 		{Name: rabbitmq.LedgerPresistenceQueue, Durable: true, AutoDelete: false},
 		{Name: rabbitmq.LedgerAuditQueue, Durable: true, AutoDelete: false},
 		{Name: rabbitmq.LedgerReconcileQueue, Durable: true, AutoDelete: false},
+		{Name: rabbitmq.TransactionDLQ, Durable: true, AutoDelete: false},
 	}
 }
 
@@ -31,6 +32,7 @@ func getExchangeDefinitions() []models.ExchangeDef {
 		{Name: rabbitmq.MarketExchange, Kind: "topic", Durable: true},
 		{Name: rabbitmq.LedgerExchange, Kind: "topic", Durable: true},
 		{Name: rabbitmq.RewardExchange, Kind: "topic", Durable: true},
+		{Name: rabbitmq.DLQExchange, Kind: "direct", Durable: true},
 	}
 }
 
@@ -49,5 +51,6 @@ func getBindingDefinitions() []models.BindDef {
 		{Queue: rabbitmq.LedgerPresistenceQueue, Exchange: rabbitmq.LedgerExchange, RoutingKey: rabbitmq.LedgerBatchKey},
 		{Queue: rabbitmq.LedgerAuditQueue, Exchange: rabbitmq.LedgerExchange, RoutingKey: rabbitmq.LedgerBatchKey},
 		{Queue: rabbitmq.LedgerReconcileQueue, Exchange: rabbitmq.LedgerExchange, RoutingKey: rabbitmq.LedgerBatchKey},
+		{Queue: rabbitmq.TransactionDLQ, Exchange: rabbitmq.DLQExchange, RoutingKey: rabbitmq.DLXRoutingKey},
 	}
 }

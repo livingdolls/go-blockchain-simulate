@@ -2,12 +2,14 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/livingdolls/go-blockchain-simulate/app/dto"
+	"github.com/livingdolls/go-blockchain-simulate/app/entity"
 	"github.com/livingdolls/go-blockchain-simulate/app/models"
 	"github.com/livingdolls/go-blockchain-simulate/app/repository"
 	"github.com/livingdolls/go-blockchain-simulate/security"
@@ -37,7 +39,7 @@ func AdminMiddleware(jwtService security.AdminJWTService, adminRepo repository.A
 		// check if user is admin
 		admin, err := adminRepo.GetAdminByID(ctx, claims.UserID)
 		if err != nil {
-			if err.Error() == "admin not found" {
+			if errors.Is(err, entity.ErrAdminNotFound) {
 				c.AbortWithStatusJSON(http.StatusForbidden, dto.NewErrorResponse[string]("Forbidden: not an admin"))
 			} else {
 				c.AbortWithStatusJSON(http.StatusInternalServerError, dto.NewErrorResponse[string]("Internal Server Error"))
@@ -47,7 +49,7 @@ func AdminMiddleware(jwtService security.AdminJWTService, adminRepo repository.A
 		}
 
 		// check admin status
-		if admin.Status != "active" {
+		if admin.Status != entity.AdminStatusActive {
 			c.AbortWithStatusJSON(http.StatusForbidden, dto.NewErrorResponse[string]("Forbidden: admin account is not active"))
 			return
 		}
@@ -85,7 +87,7 @@ func AdminWithPermissionMiddleware(jwtService security.AdminJWTService, adminRep
 		ctx := c.Request.Context()
 		admin, err := adminRepo.GetAdminByID(ctx, claims.UserID)
 		if err != nil {
-			if err.Error() == "admin not found" {
+			if errors.Is(err, entity.ErrAdminNotFound) {
 				c.AbortWithStatusJSON(http.StatusForbidden, dto.NewErrorResponse[string]("Forbidden: not an admin"))
 			} else {
 				c.AbortWithStatusJSON(http.StatusInternalServerError, dto.NewErrorResponse[string]("Internal Server Error"))
@@ -94,7 +96,7 @@ func AdminWithPermissionMiddleware(jwtService security.AdminJWTService, adminRep
 		}
 
 		// check admin status
-		if admin.Status != "active" {
+		if admin.Status != entity.AdminStatusActive {
 			c.AbortWithStatusJSON(http.StatusForbidden, dto.NewErrorResponse[string]("Forbidden: admin account is not active"))
 			return
 		}
@@ -119,7 +121,7 @@ func AdminWithPermissionMiddleware(jwtService security.AdminJWTService, adminRep
 func hasPermission(admin *models.Admin, requiredPermission string) bool {
 	// admin with * role has all permissions
 
-	if admin.Role == "admin" {
+	if admin.Role == entity.AdminRoleSuper {
 		return true
 	}
 
@@ -136,7 +138,7 @@ func hasPermission(admin *models.Admin, requiredPermission string) bool {
 
 	// check if required permission is in the list
 	for _, perm := range permissions {
-		if perm == "*" || perm == requiredPermission {
+		if perm == entity.AdminPermissionWildcard || perm == requiredPermission {
 			return true
 		}
 	}
@@ -148,12 +150,12 @@ func hasPermission(admin *models.Admin, requiredPermission string) bool {
 func GetAdminFromContext(c *gin.Context) (*models.Admin, error) {
 	adminVal, exists := c.Get("admin")
 	if !exists {
-		return nil, fmt.Errorf("admin not found in context")
+		return nil, entity.ErrAdminContextMissing
 	}
 
 	admin, ok := adminVal.(*models.Admin)
 	if !ok {
-		return nil, fmt.Errorf("invalid admin context")
+		return nil, entity.ErrInvalidAdminContext
 	}
 
 	return admin, nil

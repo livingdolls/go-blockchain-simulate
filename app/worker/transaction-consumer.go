@@ -24,6 +24,17 @@ type TransactionMessage struct {
 	Signature string  `json:"signature"`
 }
 
+// DLQEnvelope membungkus pesan asli yang gagal diproses beserta
+// metadata error untuk inspeksi manual di transaction.dlq.
+type DLQEnvelope struct {
+	OriginalBody json.RawMessage `json:"original_body"`
+	FailureStage string          `json:"failure_stage"`
+	Error        string          `json:"error"`
+	FailedAt     time.Time       `json:"failed_at"`
+	RoutingKey   string          `json:"routing_key"`
+	Exchange     string          `json:"exchange"`
+}
+
 type TransactionConsumer struct {
 	client            *rabbitmq.Client
 	txService         services.TransactionService
@@ -45,6 +56,30 @@ func NewTransactionConsumer(
 		stopChan:          make(chan struct{}),
 		workerCount:       workerCount,
 		processingTimeout: 30 * time.Second,
+	}
+}
+
+// sendToDLQ mem-publish envelope pesan gagal ke DLQ exchange.
+// Error dari publish di-log tapi tidak menggangu alur: pesan asli tetap
+// di-Ack agar tidak terjadi requeue loop pada broker.
+func (tc *TransactionConsumer) sendToDLQ(ctx context.Context, delivery amqp091.Delivery, stage string, processErr error) {
+	envelope := DLQEnvelope{
+		OriginalBody: json.RawMessage(delivery.Body),
+		FailureStage: stage,
+		Error:        processErr.Error(),
+		FailedAt:     time.Now().UTC(),
+		RoutingKey:   delivery.RoutingKey,
+		Exchange:     delivery.Exchange,
+	}
+
+	body, err := json.Marshal(envelope)
+	if err != nil {
+		logger.LogError("gagal membuat envelope DLQ", err)
+		return
+	}
+
+	if err := tc.client.Publish(ctx, rabbitmq.DLQExchange, rabbitmq.DLXRoutingKey, body); err != nil {
+		logger.LogError("gagal publish ke DLQ", err)
 	}
 }
 
@@ -73,9 +108,8 @@ func (tc *TransactionConsumer) Start(ctx context.Context) error {
 
 		if err := json.Unmarshal(delivery.Body, &msg); err != nil {
 			logger.LogError("Failed to parse message", err)
-
-			// negative acknowledge, without requeue (discard message)
-			delivery.Nack(false, false)
+			tc.sendToDLQ(ctx, delivery, "parse", err)
+			delivery.Ack(false)
 			return
 		}
 
@@ -117,8 +151,8 @@ func (tc *TransactionConsumer) Start(ctx context.Context) error {
 
 		if err != nil {
 			logger.LogError(fmt.Sprintf("Error processing %s transaction", msg.Type), err)
-			// negative acknowledge, with requeue
-			delivery.Nack(false, true)
+			tc.sendToDLQ(ctx, delivery, "process", err)
+			delivery.Ack(false)
 			return
 		}
 

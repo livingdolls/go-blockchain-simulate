@@ -1,0 +1,116 @@
+# Docker Compose untuk development lokal.
+#
+# Stack:
+#   - app     : aplikasi Go (image dari Dockerfile lokal)
+#   - mysql   : database MySQL 8
+#   - redis   : cache + nonce store
+#   - rabbitmq: message broker
+#
+# Cara pakai:
+#   docker compose up -d        # start semua service
+#   docker compose logs -f app  # tail log app
+#   docker compose down -v      # stop + hapus volume (HATI-HATI: data hilang)
+#
+# Semua secret di bawah HANYA untuk development. Untuk production,
+# gunakan Docker secrets atau env var dari CI/CD.
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VERSION: dev
+        COMMIT: local
+    container_name: blockchain-app
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    ports:
+      - "3010:3010"
+    environment:
+      # Override default config via env var (viper otomatis baca).
+      # Prioritas: env > config.local.yaml > config.yaml (lihat config/config.go).
+      APP_ENV: development
+      LOG_LEVEL: debug
+      DATABASE_DSN: "yurina:hirate@tcp(mysql:3306)/blockchain?parseTime=true&loc=Local"
+      REDIS_ADDR: "redis:6379"
+      REDIS_PASSWORD: ""
+      RABBITMQ_URL: "amqp://guest:guest@rabbitmq:5672/"
+      JWT_USER_SECRET: "dev-secret-user-min-32-chars-aaaaaa"
+      JWT_ADMIN_SECRET: "dev-secret-admin-min-32-chars-bbbbbb"
+      SERVER_ALLOWED_ORIGINS: "http://localhost:3000,http://localhost:3001,http://localhost:3002"
+    networks:
+      - blockchain-net
+
+  mysql:
+    image: mysql:8.0
+    container_name: blockchain-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpw
+      MYSQL_DATABASE: blockchain
+      MYSQL_USER: yurina
+      MYSQL_PASSWORD: hirate
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-prootpw"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - blockchain-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: blockchain-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: ["redis-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - blockchain-net
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: blockchain-rabbitmq
+    restart: unless-stopped
+    ports:
+      - "5672:5672"   # AMQP
+      - "15672:15672" # Management UI (http://localhost:15672, guest/guest)
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks:
+      - blockchain-net
+
+networks:
+  blockchain-net:
+    driver: bridge
+
+volumes:
+  mysql-data:
+  redis-data:
+  rabbitmq-data:

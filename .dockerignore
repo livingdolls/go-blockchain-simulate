@@ -1,0 +1,41 @@
+# File yang TIDAK perlu di-copy ke konteks Docker saat build.
+# Mempercepat build dan mengurangi ukuran image.
+
+# Output build
+bin/
+tmp/
+
+# File konfigurasi lokal (berisi secret)
+config/config.local.yaml
+**/*.local.yaml
+
+# VCS
+.git/
+.gitignore
+.gitattributes
+
+# Dokumentasi dan resource yang tidak dipakai binary
+docs/
+*.md
+LICENSE
+
+# File editor dan OS
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Docker (jika ada nested docker, hindari recursion)
+Dockerfile
+.dockerignore
+docker-compose*.yml
+
+# Test artifacts dan coverage
+*.test
+*.out
+coverage.html
+
+# Log
+*.log

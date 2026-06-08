@@ -13,8 +13,10 @@ rabbitmq:
   url: "amqp://guest:guest@localhost:5672/"
 
 jwt:
-  user_secret: "your-very-secret-key-min-32-chars"
-  admin_secret: "your-admin-secret-key-min-32-chars"
+  # Generate dengan: openssl rand -base64 48
+  # Validasi menolak panjang < 32 byte (lihat config.go validate()).
+  user_secret: "your-user-jwt-secret-min-32-chars-replace-this"
+  admin_secret: "your-admin-jwt-secret-min-32-chars-replace-this"
 
 server:
   allowed_origins:

@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/livingdolls/go-blockchain-simulate/app/entity"
 	"github.com/spf13/viper"
 )
 
@@ -145,8 +146,9 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("rabbitmq.url", "amqp://guest:guest@localhost:5672/")
 	v.SetDefault("rabbitmq.pool_size", 10)
 
-	v.SetDefault("jwt.user_secret", "change-me-in-production")
-	v.SetDefault("jwt.admin_secret", "change-me-in-production-admin")
+	// JWT secret TIDAK punya default di repo. Harus di-set via env var
+	// atau config.local.yaml. Validasi panjang (min 32 byte) dilakukan
+	// di validate() untuk mencegah deploy dengan secret lemah.
 	v.SetDefault("jwt.user_ttl", "24h")
 	v.SetDefault("jwt.admin_ttl", "24h")
 	v.SetDefault("jwt.cookie_max_age", "24h")
@@ -164,11 +166,19 @@ func setDefaults(v *viper.Viper) {
 }
 
 func (c *Config) validate() error {
+	// JWT secret harus diisi DAN minimal 32 byte.
+	// 32 byte = 256 bit, sesuai rekomendasi HS256 (RFC 7518).
 	if c.JWT.UserSecret == "" {
 		return fmt.Errorf("jwt.user_secret wajib diisi")
 	}
+	if len(c.JWT.UserSecret) < 32 {
+		return fmt.Errorf("%w: user_secret %d byte, butuh ≥ 32", entity.ErrJWTSecretTooShort, len(c.JWT.UserSecret))
+	}
 	if c.JWT.AdminSecret == "" {
 		return fmt.Errorf("jwt.admin_secret wajib diisi")
+	}
+	if len(c.JWT.AdminSecret) < 32 {
+		return fmt.Errorf("%w: admin_secret %d byte, butuh ≥ 32", entity.ErrJWTSecretTooShort, len(c.JWT.AdminSecret))
 	}
 	if c.Database.DSN == "" {
 		return fmt.Errorf("database.dsn wajib diisi")
@@ -178,6 +188,14 @@ func (c *Config) validate() error {
 	}
 	if c.Redis.Addr == "" {
 		return fmt.Errorf("redis.addr wajib diisi")
+	}
+	// Server port harus valid
+	if c.Server.Port <= 0 || c.Server.Port > 65535 {
+		return fmt.Errorf("server.port harus 1-65535, dapat %d", c.Server.Port)
+	}
+	// Shutdown timeout harus positif
+	if c.Server.ShutdownTimeout <= 0 {
+		return fmt.Errorf("server.shutdown_timeout harus > 0, dapat %v", c.Server.ShutdownTimeout)
 	}
 	return nil
 }

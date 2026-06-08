@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/livingdolls/go-blockchain-simulate/app/dto"
@@ -87,6 +88,18 @@ func (h *BalanceHandler) TopUpUSDBalance(c *gin.Context) {
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(400, dto.NewErrorResponse[string]("invalid request body"))
+		return
+	}
+
+	// Self-only: user hanya boleh topup saldo untuk address sendiri.
+	// Admin topup untuk address lain akan di-handle via endpoint admin terpisah.
+	claims, ok := GetUserClaims(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, dto.NewErrorResponse[string]("unauthorized"))
+		return
+	}
+	if !strings.EqualFold(claims.Address, req.Address) {
+		c.JSON(http.StatusForbidden, dto.NewErrorResponse[string]("forbidden: hanya bisa topup saldo sendiri"))
 		return
 	}
 

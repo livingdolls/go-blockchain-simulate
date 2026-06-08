@@ -71,6 +71,7 @@ func main() {
 
 	if err := appConfig.SetupRabbitMQTopology(); err != nil {
 		logger.LogError("[INIT] Gagal setup RabbitMQ topology", err)
+		os.Exit(1)
 	}
 
 	appConfig.InitializeWebSocket()

@@ -22,8 +22,9 @@ rabbitmq:
   pool_size: 10
 
 jwt:
-  user_secret: "change-me-in-production"
-  admin_secret: "change-me-in-production-admin"
+  # user_secret dan admin_secret TIDAK boleh di-commit.
+  # Set via env var (JWT_USER_SECRET, JWT_ADMIN_SECRET) atau
+  # config.local.yaml. Validasi di config.go menolak nilai < 32 byte.
   user_ttl: "24h"
   admin_ttl: "24h"
   cookie_max_age: "24h"

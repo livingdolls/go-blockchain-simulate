@@ -40,6 +40,12 @@ var ErrConflict = errors.New("resource conflict")
 // INIT ERRORS
 var ErrDependenciesNotInitialized = errors.New("dependensi aplikasi belum diinisialisasi")
 
+// CONFIG ERRORS
+// ErrJWTSecretTooShort dipicu saat secret JWT (HS256) < 32 byte.
+// HS256 idealnya butuh kunci ≥ 32 byte; default yang lebih pendek
+// membuka peluang brute-force pada token.
+var ErrJWTSecretTooShort = errors.New("jwt secret minimal 32 byte untuk HS256")
+
 // ADMIN ERRORS
 var ErrAdminNotFound = errors.New("admin not found")
 var ErrDuplicateAdminUsername = errors.New("duplicate admin username")

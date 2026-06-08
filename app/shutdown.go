@@ -11,7 +11,10 @@ import (
 )
 
 // Shutdown menghentikan seluruh komponen aplikasi secara graceful.
-// Urutan: worker/consumer → websocket hub → RabbitMQ connection.
+// Urutan: worker/consumer → websocket hub → RabbitMQ → Redis → DB.
+// Worker/consumer di-stop duluan agar tidak ada publish baru ke broker
+// setelah broker ditutup. Redis & DB di-close paling akhir karena worker
+// bisa saja masih menggunakan cache atau menulis audit log.
 func (a *AppConfig) Shutdown() {
 	logger.LogInfo("Starting graceful shutdown...")
 
@@ -33,6 +36,27 @@ func (a *AppConfig) Shutdown() {
 
 	if a.RMQClient != nil {
 		a.RMQClient.Close()
+		logger.LogInfo("RabbitMQ connection ditutup")
+	}
+
+	// Tutup Redis setelah RMQ. Worker bisa saja sempat publish di detik
+	// terakhir; setelah itu baru pool Redis di-release.
+	if a.deps != nil && a.deps.RedisClient != nil {
+		if err := a.deps.RedisClient.Close(); err != nil {
+			logger.LogError("gagal menutup Redis client", err)
+		} else {
+			logger.LogInfo("Redis client ditutup")
+		}
+	}
+
+	// DB di-close paling akhir. Consumer bisa saja commit transaksi
+	// final di detik-detik shutdown (mis. balance update).
+	if a.deps != nil && a.deps.DBConn != nil {
+		if err := a.deps.DBConn.Close(); err != nil {
+			logger.LogError("gagal menutup DB connection", err)
+		} else {
+			logger.LogInfo("DB connection ditutup")
+		}
 	}
 
 	logger.LogInfo("Shutdown complete")

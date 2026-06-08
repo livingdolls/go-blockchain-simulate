@@ -35,6 +35,10 @@ func (a *AppConfig) SetupRoutes(r *gin.Engine) {
 	// Transaction routes
 	txGroup := r.Group("/transaction")
 	txGroup.Use(authLimiter)
+	// Per-address rate limit (defense in depth di samping IP-based).
+	// Mengambil address dari body (from_address / address) untuk membatasi
+	// request per address wallet, bukan per IP. Mitigasi DoS flood RMQ.
+	txGroup.Use(mw.PerAddressRateLimiter(a.deps.RedisClient, "ratelimit:tx-address", 10, time.Minute))
 	// Idempotency-Key untuk mencegah double-submit saat client retry.
 	// Hanya POST /transaction/send dan /transaction/buy yang di-cache
 	// (idempotency key hanya relevan untuk operasi non-idempotent).
@@ -80,20 +84,23 @@ func (a *AppConfig) SetupRoutes(r *gin.Engine) {
 	// Nonce generation
 	r.GET("/generate-tx-nonce/:address", a.TransactionHandler.GenerateNonce)
 
-	// Balance routes
+	// Balance routes. GET publik (read-only), topup wajib JWT
+	// (self-only: address di-body harus match address di-claims).
 	balanceGroup := r.Group("/balance")
 	{
 		balanceGroup.GET("/:address", a.BalanceHandler.GetUserWithUSDBalance)
-		balanceGroup.POST("/topup", a.BalanceHandler.TopUpUSDBalance)
+		balanceGroup.POST("/topup", handler.JWTMiddleware(a.JWT), a.BalanceHandler.TopUpUSDBalance)
 	}
 
 	// Wallet routes
 	r.GET("/wallet/:address", a.BalanceHandler.GetWalletBalance)
 
-	// Block routes
+	// Block routes. Generate adalah operasi privileged (mining CPU-heavy
+	// dan mempengaruhi integritas chain) sehingga hanya admin yang boleh
+	// memicu manual. Worker periodik (GenerateBlockWorker) tetap men-trigger
+	// otomatis setiap 10 detik tanpa lewat endpoint.
 	blockGroup := r.Group("/blocks")
 	{
-		blockGroup.POST("/generate", a.BlockHandler.GenerateBlock)
 		blockGroup.GET("", a.BlockHandler.GetBlocks)
 		blockGroup.GET("/:id", a.BlockHandler.GetBlockByID)
 		blockGroup.GET("/detail/:number", a.BlockHandler.GetBlockByBlockNumber)
@@ -104,6 +111,9 @@ func (a *AppConfig) SetupRoutes(r *gin.Engine) {
 		blockGroup.GET("/stats", a.BlockHandler.GetBlockStats)
 		blockGroup.GET("/search/miner/", a.BlockHandler.SearchBlocksByMinerAddress)
 	}
+	// /blocks/generate dipisah di luar group agar middleware admin bisa
+	// dipasang spesifik hanya untuk endpoint ini.
+	r.POST("/blocks/generate", handler.AdminMiddleware(a.JWTAdmin, a.AdminRepo), a.BlockHandler.GenerateBlock)
 
 	// Reward routes
 	rewardGroup := r.Group("/reward")

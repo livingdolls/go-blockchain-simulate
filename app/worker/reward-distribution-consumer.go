@@ -59,6 +59,11 @@ type RewardDistributionConsumer struct {
 	retryQueue    chan dto.RewardDistributionEvent
 	retryTickerC  <-chan time.Time
 	cleanupTicker <-chan time.Time
+
+	// pendingHandles menunggu semua handleMessage yang sedang dalam proses
+	// push ke distQueue. Mencegah panic "send on closed channel" saat
+	// Stop() dipanggil di tengah handleMessage yang aktif.
+	pendingHandles sync.WaitGroup
 }
 
 func NewRewardDistributionConsumer(client *rabbitmq.Client, walletRepo repository.UserWalletRepository, cfg RewardDistConfig) *RewardDistributionConsumer {
@@ -115,6 +120,9 @@ func (rdc *RewardDistributionConsumer) Start() error {
 }
 
 func (rdc *RewardDistributionConsumer) handleMessage(msg amqp091.Delivery) {
+	rdc.pendingHandles.Add(1)
+	defer rdc.pendingHandles.Done()
+
 	var event dto.RewardDistributionEvent
 
 	if err := json.Unmarshal(msg.Body, &event); err != nil {
@@ -443,17 +451,21 @@ func (rdc *RewardDistributionConsumer) GetAllStats() map[string]RewardStats {
 // Stop gracefully stops the reward distribution consumer
 func (rdc *RewardDistributionConsumer) Stop() {
 	rdc.mu.Lock()
-	defer rdc.mu.Unlock()
 
 	if !rdc.isRunning {
+		rdc.mu.Unlock()
 		return
 	}
 
 	logger.LogInfo("Stopping consumer")
 	rdc.stopCancel()
+	// Tunggu handleMessage yang sedang push ke distQueue selesai dulu
+	// agar tidak terjadi panic "send on closed channel".
+	rdc.pendingHandles.Wait()
 	close(rdc.distQueue)
 	close(rdc.retryQueue)
 	rdc.isRunning = false
+	rdc.mu.Unlock()
 	logger.LogInfo("Consumer stopped")
 }
 

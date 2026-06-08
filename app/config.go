@@ -94,6 +94,7 @@ type AppConfig struct {
 	ReconcileConsumer          *worker.LedgerReconcileConsumer
 	RewardCalculationConsumer  *worker.RewardCalculationConsumer
 	RewardDistributionConsumer *worker.RewardDistributionConsumer
+	NotificationWSConsumer     *worker.NotificationWSConsumer
 }
 
 // AppDependencies adalah container untuk seluruh dependency yang dibuat dari konfigurasi.

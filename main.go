@@ -11,6 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/livingdolls/go-blockchain-simulate/app"
+	"github.com/livingdolls/go-blockchain-simulate/app/middleware"
 	"github.com/livingdolls/go-blockchain-simulate/config"
 	"github.com/livingdolls/go-blockchain-simulate/logger"
 	"go.uber.org/zap/zapcore"
@@ -87,6 +88,10 @@ func main() {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
 	r.Use(gin.Recovery())
+	// Body size limit: 1 MiB cukup untuk semua endpoint JSON.
+	// Default rendah untuk mencegah DoS via JSON bomb; bisa di-override
+	// per-route dengan middleware spesifik untuk upload besar.
+	r.Use(middleware.MaxBodySizeMiddleware(1 << 20))
 	r.Use(logger.RequestIDMiddleware())
 	r.Use(logger.RequestLogMiddleware())
 	r.Use(app.CORSMiddleware(&cfg.Server))
@@ -98,18 +103,27 @@ func main() {
 	}
 
 	// Jalankan server di goroutine terpisah agar main thread bisa menunggu sinyal.
+	// ListenAndServe() error (mis. port already-in-use) dikirim ke errorChan
+	// agar main thread bisa trigger graceful shutdown alih-alih diam selamanya.
+	errorChan := make(chan error, 1)
 	go func() {
 		logger.LogInfo("HTTP server mulai di " + cfg.Server.Addr())
 		if err := httpSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			logger.LogError("HTTP server error", err)
+			errorChan <- err
 		}
+		close(errorChan)
 	}()
 
-	// Tunggu sinyal shutdown (SIGINT atau SIGTERM).
+	// Tunggu sinyal shutdown (SIGINT atau SIGTERM) atau HTTP server error.
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-	sig := <-sigChan
-	logger.LogInfo("Sinyal shutdown diterima: " + sig.String())
+	select {
+	case sig := <-sigChan:
+		logger.LogInfo("Sinyal shutdown diterima: " + sig.String())
+	case err := <-errorChan:
+		logger.LogError("HTTP server fatal, trigger shutdown", err)
+	}
 
 	// Graceful shutdown HTTP server dengan timeout.
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.Server.ShutdownTimeout)

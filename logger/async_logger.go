@@ -152,13 +152,27 @@ func asyncWorker(id int, queue *asyncQueue) {
 	}
 }
 
-// Shutdown gracefully closes the logger
+// Shutdown gracefully closes the logger. Urutan:
+//  1. Set closed flag di queue agar push() berikutnya drop silent
+//     (mencegah panic "send on closed channel" dari goroutine user
+//     yang log di detik-detik terakhir).
+//  2. Tutup channel (worker akan exit saat range loop selesai).
+//  3. Tunggu worker selesai (via done channel) atau timeout.
+//
+// Setelah Shutdown return, panggilan LogInfo/LogError berikutnya
+// akan menjadi no-op (lihat guard `if L == nil` atau isClosed di push).
 func Shutdown(timeout time.Duration) error {
+	if queue == nil {
+		return nil
+	}
+
 	ticker := time.NewTicker(timeout)
 	defer ticker.Stop()
 
 	go func() {
-		close(queue.ch)
+		// Set flag dulu agar push berikutnya drop early tanpa blocking.
+		queue.markClosed()
+		queue.closeCh()
 		done <- struct{}{}
 	}()
 

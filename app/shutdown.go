@@ -6,9 +6,16 @@ import (
 	"time"
 
 	"github.com/livingdolls/go-blockchain-simulate/app/websocket"
-	"github.com/livingdolls/go-blockchain-simulate/app/worker"
 	"github.com/livingdolls/go-blockchain-simulate/logger"
 )
+
+// stoppable adalah interface internal untuk semua worker/consumer yang
+// bisa di-Stop(). Implementasi interface ini WAJIB ada di setiap
+// worker/consumer; tidak menggunakan type-switch (yang silent skip
+// kalau struct baru ditambahkan tanpa update switch).
+type stoppable interface {
+	Stop()
+}
 
 // Shutdown menghentikan seluruh komponen aplikasi secara graceful.
 // Urutan: worker/consumer → websocket hub → RabbitMQ → Redis → DB.
@@ -28,6 +35,7 @@ func (a *AppConfig) Shutdown() {
 		a.ReconcileConsumer,
 		a.RewardCalculationConsumer,
 		a.RewardDistributionConsumer,
+		a.NotificationWSConsumer,
 	)
 
 	if a.Hub != nil {
@@ -65,7 +73,7 @@ func (a *AppConfig) Shutdown() {
 // stopWorkers menghentikan semua worker secara paralel dengan total timeout 30 detik.
 // Setiap worker di-stop di goroutine-nya sendiri; kita tunggu semua selesai
 // atau timeout. Tidak ada blocking antar worker.
-func stopWorkers(workers ...interface{}) {
+func stopWorkers(workers ...stoppable) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -76,9 +84,13 @@ func stopWorkers(workers ...interface{}) {
 
 	go func() {
 		for _, w := range workers {
-			go func(workerInstance interface{}) {
+			if w == nil {
+				wg.Done()
+				continue
+			}
+			go func(workerInstance stoppable) {
 				defer wg.Done()
-				stopOne(workerInstance)
+				workerInstance.Stop()
 			}(w)
 		}
 		wg.Wait()
@@ -90,40 +102,6 @@ func stopWorkers(workers ...interface{}) {
 		logger.LogInfo("All workers stopped")
 	case <-ctx.Done():
 		logger.LogInfo("Timeout while stopping workers")
-	}
-}
-
-// stopOne memanggil Stop() sesuai tipe konkret worker. Type switch memastikan
-// setiap worker dipanggil method yang sesuai. Worker yang tidak dikenal di-skip.
-func stopOne(w interface{}) {
-	switch v := w.(type) {
-	case *worker.GenerateBlockWorker:
-		v.Stop()
-		logger.LogInfo("Block worker stopped")
-	case *worker.GenerateCandleWorker:
-		v.Stop()
-		logger.LogInfo("Candle worker stopped")
-	case *worker.TransactionConsumer:
-		v.Stop()
-		logger.LogInfo("Transaction consumer stopped")
-	case *worker.MarketPricingConsumer:
-		v.Stop()
-		logger.LogInfo("Market pricing consumer stopped")
-	case *worker.MarketVolumeConsumer:
-		v.Stop()
-		logger.LogInfo("Market volume consumer stopped")
-	case *worker.LedgerAuditConsumer:
-		v.Stop()
-		logger.LogInfo("Ledger audit consumer stopped")
-	case *worker.LedgerReconcileConsumer:
-		v.Stop()
-		logger.LogInfo("Ledger reconcile consumer stopped")
-	case *worker.RewardCalculationConsumer:
-		v.Stop()
-		logger.LogInfo("Reward calculation consumer stopped")
-	case *worker.RewardDistributionConsumer:
-		v.Stop()
-		logger.LogInfo("Reward distribution consumer stopped")
 	}
 }
 

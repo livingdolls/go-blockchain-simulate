@@ -30,9 +30,12 @@ func NewGenerateCandlesWorker(candleService services.CandleService, workerCount 
 	return &GenerateCandleWorker{
 		candleService: candleService,
 		workerCount:   workerCount,
-		jobTimeout:    30 * time.Second,
-		jobs:          make(chan CandleJob, len([]string{"1m", "5m", "15m", "30m", "1h", "4h", "1d"})*2),
-		stopChan:      make(chan struct{}),
+		// jobTimeout HARUS < shutdown timeout (30s di app/shutdown.go)
+		// agar worker dapat menyelesaikan job dalam window shutdown.
+		// Margin 5 detik: stop timeout (30s) - jobTimeout (25s) = 5s untuk cleanup.
+		jobTimeout: 25 * time.Second,
+		jobs:       make(chan CandleJob, len([]string{"1m", "5m", "15m", "30m", "1h", "4h", "1d"})*2),
+		stopChan:   make(chan struct{}),
 	}
 }
 
@@ -79,7 +82,11 @@ func (w *GenerateCandleWorker) worker(id int) {
 	defer w.wg.Done()
 
 	for job := range w.jobs {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		// Pakai w.jobTimeout (bukan hard-coded 30s) agar konsisten dengan
+		// default NewGenerateCandlesWorker dan mudah di-override via
+		// SetJobTimeout. Shutdown timeout 30s harus > jobTimeout + margin
+		// agar Stop() bisa selesai dalam window shutdown.
+		ctx, cancel := context.WithTimeout(context.Background(), w.jobTimeout)
 		if err := w.candleService.AggregateCandle(ctx, job.Interval, job.Timestamp); err != nil {
 			if ctx.Err() == context.DeadlineExceeded {
 				logger.LogInfo(fmt.Sprintf("[worker-%d] timeout: interval %s took > %v", id, job.Interval, w.jobTimeout))

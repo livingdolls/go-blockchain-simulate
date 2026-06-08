@@ -44,6 +44,11 @@ func (a *AppConfig) InitializeConsumers() {
 	}
 	a.RewardDistributionConsumer = worker.NewRewardDistributionConsumer(a.RMQClient, a.WalletRepo, rewardDistConfig)
 
+	// NotificationWebSocketConsumer membaca dari queue 'notification.realtime'
+	// (yang di-declare di topology) dan push ke WebSocket Hub. Sebelumnya
+	// queue ini declared tapi TIDAK ada consumer, menyebabkan dead letter grows.
+	a.NotificationWSConsumer = worker.NewNotificationWebSocketConsumer(a.RMQClient, a.PublisherWS, 3)
+
 	logger.LogInfo("All message consumers initialized successfully")
 }
 
@@ -62,6 +67,7 @@ func (a *AppConfig) StartConsumers() {
 		{"reconcile", func() error { return a.ReconcileConsumer.Start() }},
 		{"reward-calculation", func() error { return a.RewardCalculationConsumer.Start() }},
 		{"reward-distribution", func() error { return a.RewardDistributionConsumer.Start() }},
+		{"notification-ws", func() error { return a.NotificationWSConsumer.Start() }},
 	}
 
 	for _, s := range starters {

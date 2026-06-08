@@ -12,13 +12,6 @@ import (
 	"github.com/livingdolls/go-blockchain-simulate/rabbitmq"
 )
 
-type SendTransactionRequest struct {
-	FromAddress string  `json:"from_address"`
-	ToAddress   string  `json:"to_address"`
-	Amount      float64 `json:"amount"`
-	PrivateKey  string  `json:"private_key"`
-}
-
 type SendTransactionWithSignatureRequest struct {
 	FromAddress string  `json:"from_address"`
 	ToAddress   string  `json:"to_address"`

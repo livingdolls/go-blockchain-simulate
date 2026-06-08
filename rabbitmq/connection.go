@@ -48,6 +48,14 @@ func (c *RabbitMQConn) connect() error {
 		return fmt.Errorf("[RABBITMQ] failed to connect to RabbitMQ: %w", err)
 	}
 
+	// Post-connect health check. Beberapa skenario network half-open
+	// bisa membuat Dial() sukses tapi connection langsung broken
+	// (firewall timeout, broker baru restart, dst). Detect early.
+	if conn.IsClosed() {
+		_ = conn.Close()
+		return fmt.Errorf("[RABBITMQ] connection closed immediately after dial (network half-open?)")
+	}
+
 	c.mu.Lock()
 	c.conn = conn
 	c.mu.Unlock()

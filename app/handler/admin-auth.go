@@ -60,7 +60,7 @@ func (h *AdminLoginHandler) Login(c *gin.Context) {
 		return
 	}
 
-	c.SetCookie("admin_token", token, int(24*time.Hour.Seconds()), "/", "", false, true)
+	setAuthCookie(c, "admin_token", token, 24*3600)
 
 	resp := AdminLoginResponse{
 		ID:       admin.ID,
@@ -74,6 +74,8 @@ func (h *AdminLoginHandler) Login(c *gin.Context) {
 }
 
 func (h *AdminLoginHandler) Logout(c *gin.Context) {
-	c.SetCookie("admin_token", "", -1, "/", "", false, true)
+	// MaxAge=-1 untuk hapus cookie. Pakai helper yang sama dengan login
+	// agar SameSite policy konsisten.
+	setAuthCookie(c, "admin_token", "", -3600)
 	c.JSON(http.StatusOK, dto.NewSuccessResponse("Logged out successfully"))
 }

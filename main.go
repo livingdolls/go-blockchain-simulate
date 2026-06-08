@@ -3,9 +3,11 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -38,24 +40,39 @@ func main() {
 	// agar staging/testing tidak salah label.
 	logCfg.Env = env
 
-	// Override log level jika LOG_LEVEL env di-set.
+	// Wire up dari config (logger.level, logger.path, rotation settings).
+	// Override via cfg.Logger di sini; env var LOG_LEVEL tetap di-support
+	// untuk emergency override (mis. LOG_LEVEL=debug tanpa restart).
+	if cfg.Logger.Path != "" {
+		logCfg.LogPath = cfg.Logger.Path
+		logCfg.MaxSize = cfg.Logger.MaxSize
+		logCfg.MaxBackups = cfg.Logger.MaxBackups
+		logCfg.MaxAge = cfg.Logger.MaxAge
+		logCfg.Compress = cfg.Logger.Compress
+	}
+	if cfg.Logger.Level != "" {
+		if lvl := parseLogLevel(cfg.Logger.Level); lvl != -1 {
+			logCfg.Level = lvl
+		}
+	}
+
+	// Override log level jika LOG_LEVEL env di-set (priority di atas cfg).
 	if logLevelStr := os.Getenv("LOG_LEVEL"); logLevelStr != "" {
-		switch logLevelStr {
-		case "debug":
-			logCfg.Level = zapcore.DebugLevel
-		case "info":
-			logCfg.Level = zapcore.InfoLevel
-		case "warn":
-			logCfg.Level = zapcore.WarnLevel
-		case "error":
-			logCfg.Level = zapcore.ErrorLevel
+		if lvl := parseLogLevel(logLevelStr); lvl != -1 {
+			logCfg.Level = lvl
 		}
 	}
 
 	if err := logger.Init(logCfg); err != nil {
 		panic("Gagal inisialisasi logger: " + err.Error())
 	}
-	defer logger.Shutdown(5 * time.Second)
+	// Defer Shutdown dan log error ke stderr kalau gagal (logger sudah
+	// rusak sehingga kita tidak bisa pakai logger.LogError di sini).
+	defer func() {
+		if err := logger.Shutdown(5 * time.Second); err != nil {
+			fmt.Fprintf(os.Stderr, "logger shutdown error: %v\n", err)
+		}
+	}()
 
 	logger.L.Info("Aplikasi mulai")
 
@@ -139,4 +156,20 @@ func main() {
 	appConfig.Shutdown()
 
 	logger.LogInfo("Aplikasi berhenti dengan baik")
+}
+
+// parseLogLevel mengkonversi string level ("debug", "info", "warn", "error")
+// ke zapcore.Level. Return -1 kalau invalid (logger pakai nilai default).
+func parseLogLevel(s string) zapcore.Level {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "debug":
+		return zapcore.DebugLevel
+	case "info":
+		return zapcore.InfoLevel
+	case "warn", "warning":
+		return zapcore.WarnLevel
+	case "error":
+		return zapcore.ErrorLevel
+	}
+	return -1
 }

@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -17,7 +19,9 @@ import (
 
 // mockMemoryAdapter adalah implementasi in-memory dari MemoryAdapter untuk
 // testing idempotency middleware tanpa dependensi Redis.
+// Thread-safe (sync.Mutex) agar test yang parallel tidak trigger race.
 type mockMemoryAdapter struct {
+	mu   sync.Mutex
 	data map[string][]byte
 }
 
@@ -26,15 +30,21 @@ func newMockMemoryAdapter() *mockMemoryAdapter {
 }
 
 func (m *mockMemoryAdapter) Get(_ context.Context, key string) ([]byte, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	v, ok := m.data[key]
 	return v, ok
 }
 
 func (m *mockMemoryAdapter) Set(_ context.Context, key string, value []byte, _ time.Duration) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.data[key] = value
 }
 
 func (m *mockMemoryAdapter) Del(_ context.Context, key string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	delete(m.data, key)
 }
 
@@ -181,8 +191,9 @@ func TestIdempotency_ScopeFiltering(t *testing.T) {
 	assert.Equal(t, int64(2), counter.Get(), "/other harus selalu handler call (di luar scope)")
 }
 
-// atomicInt untuk test counter tanpa sync.Mutex (race-detector safe).
-type atomicInt struct{ v int64 }
+// atomicInt untuk test counter. Pakai sync/atomic.AddInt64 agar
+// race-detector bersih saat test concurrent.
+type atomicInt struct{ v atomic.Int64 }
 
-func (a *atomicInt) Inc()    { a.v++ }
-func (a *atomicInt) Get() int64 { return a.v }
+func (a *atomicInt) Inc()       { a.v.Add(1) }
+func (a *atomicInt) Get() int64 { return a.v.Load() }

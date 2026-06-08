@@ -58,8 +58,12 @@ type JWTConfig struct {
 }
 
 type LoggerConfig struct {
-	Level string `mapstructure:"level"`
-	Path  string `mapstructure:"path"`
+	Level      string `mapstructure:"level"`
+	Path       string `mapstructure:"path"`
+	MaxSize    int    `mapstructure:"max_size"`    // MB per file
+	MaxBackups int    `mapstructure:"max_backups"` // jumlah file backup
+	MaxAge     int    `mapstructure:"max_age"`     // hari sebelum dihapus
+	Compress   bool   `mapstructure:"compress"`    // gzip file lama
 }
 
 type ServerConfig struct {
@@ -153,8 +157,15 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("jwt.admin_ttl", "24h")
 	v.SetDefault("jwt.cookie_max_age", "24h")
 
+	// Logger: default path kosong (stdout-only) dan level 'debug' untuk
+	// development, 'info' untuk production. Bisa override via env
+	// LOG_LEVEL atau config.yaml logger.level.
 	v.SetDefault("logger.level", "debug")
 	v.SetDefault("logger.path", "")
+	v.SetDefault("logger.max_size", 100)
+	v.SetDefault("logger.max_backups", 10)
+	v.SetDefault("logger.max_age", 30)
+	v.SetDefault("logger.compress", true)
 
 	v.SetDefault("server.host", "")
 	v.SetDefault("server.port", 3010)

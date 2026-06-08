@@ -30,6 +30,18 @@ func JWTMiddleware(jwtService security.JWTService) gin.HandlerFunc {
 			return
 		}
 
+		// Validate claims.Address non-empty. Token tanpa address (corrupt
+		// atau format lama) tidak boleh dipakai untuk akses endpoint
+		// yang butuh self-only check (mis. /balance/topup).
+		if strings.TrimSpace(claims.Address) == "" {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+				"success": false,
+				"code":    http.StatusUnauthorized,
+				"error":   "Unauthorized: token tidak memiliki address",
+			})
+			return
+		}
+
 		// Set user info ke context
 		c.Set("user", claims)
 		c.Next()

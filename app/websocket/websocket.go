@@ -17,7 +17,18 @@ type Hub struct {
 	broadcast     chan *Message
 
 	stopChan chan struct{}
-	mu       sync.RWMutex
+	// closeOnce mencegah close(stopChan) kedua -> panic.
+	// Defensive: meski main hanya panggil Close() sekali, handler SIGTERM
+	// ganda atau race antara cleanup path berbeda bisa trigger double-close.
+	closeOnce sync.Once
+	mu        sync.RWMutex
+
+	// ready di-close oleh Run() saat loop sudah mulai consume channel.
+	// Producer (BroadCast, register client) bisa wait di ready untuk
+	// guarantee bahwa Run() sudah aktif. Tanpa ini, ada race window
+	// di mana publish pertama bisa block selamanya (register channel
+	// unbuffered).
+	ready chan struct{}
 }
 
 func NewHub() *Hub {
@@ -29,10 +40,22 @@ func NewHub() *Hub {
 		unregister:    make(chan *ClientWS),
 		broadcast:     make(chan *Message, 256),
 		stopChan:      make(chan struct{}),
+		ready:         make(chan struct{}),
 	}
 }
 
+// Ready mengembalikan channel yang di-close saat Hub.Run() loop sudah
+// aktif. Caller bisa <-h.Ready() untuk guarantee bahwa register/unregister
+// sudah dijamin akan di-consume.
+func (h *Hub) Ready() <-chan struct{} {
+	return h.ready
+}
+
 func (h *Hub) Run() {
+	// Tandai ready SEBELUM masuk loop agar producer yang wait di
+	// Ready() mendapat signal segera. close(ready) idempotent-safe.
+	close(h.ready)
+
 	for {
 		select {
 		case c := <-h.register:
@@ -210,6 +233,10 @@ func (h *Hub) closeAllConnections() {
 
 func (h *Hub) Close() {
 	log.Println("shutting down websocket hub...")
-	close(h.stopChan)
+	// Idempotent: aman dipanggil beberapa kali (mis. dari shutdown handler
+	// DAN dari test cleanup). Sebelumnya double-close akan panic.
+	h.closeOnce.Do(func() {
+		close(h.stopChan)
+	})
 	log.Println("websocket hub stopped")
 }

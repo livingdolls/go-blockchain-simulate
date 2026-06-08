@@ -2,13 +2,40 @@ package handler
 
 import (
 	"net/http"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/livingdolls/go-blockchain-simulate/app/dto"
 	"github.com/livingdolls/go-blockchain-simulate/app/models"
 	"github.com/livingdolls/go-blockchain-simulate/app/services"
 )
+
+// setAuthCookie menulis JWT ke cookie browser dengan SameSite=Strict.
+// Set-Cookie via http.SetCookie langsung agar bisa specify SameSite
+// (gin.Context.SetCookie tidak support parameter ini).
+//
+// maxAgeSeconds adalah lifetime cookie dalam detik. Gunakan nilai negatif
+// untuk delete cookie (logout).
+//
+// SameSite=Strict dipilih (bukan Lax) karena auth_token tidak perlu
+// dikirim untuk cross-site GET; semua endpoint yang butuh auth adalah
+// state-changing (POST/PUT/DELETE). Trade-off: link eksternal ke
+// dashboard akan butuh login ulang setelah navigate, tapi ini
+// acceptable untuk aplikasi ini.
+//
+// Secure flag di-skip (false) untuk kompatibilitas development HTTP.
+// Production harus override via reverse proxy (HTTPS) atau tambah
+// middleware force-redirect ke HTTPS.
+func setAuthCookie(c *gin.Context, name, token string, maxAgeSeconds int) {
+	http.SetCookie(c.Writer, &http.Cookie{
+		Name:     name,
+		Value:    token,
+		Path:     "/",
+		MaxAge:   maxAgeSeconds,
+		HttpOnly: true,
+		Secure:   false, // dev mode; production via reverse proxy HTTPS
+		SameSite: http.SameSiteStrictMode,
+	})
+}
 
 type RegisterHandler struct {
 	service services.RegisterService
@@ -36,7 +63,7 @@ func (h *RegisterHandler) Register(c *gin.Context) {
 		Username: user.Username,
 	}
 
-	c.SetCookie("auth_token", user.Token, int(24*time.Hour.Seconds()), "/", "", false, true)
+	setAuthCookie(c, "auth_token", user.Token, 24*3600)
 
 	c.JSON(200, dto.NewSuccessResponse(resp))
 }
@@ -72,7 +99,7 @@ func (h *RegisterHandler) Verify(c *gin.Context) {
 		return
 	}
 
-	c.SetCookie("auth_token", valid, int(24*time.Hour.Seconds()), "/", "", false, true)
+	setAuthCookie(c, "auth_token", valid, 24*3600)
 
 	c.JSON(200, gin.H{"valid": true})
 }

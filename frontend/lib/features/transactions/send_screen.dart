@@ -1,10 +1,14 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:uuid/uuid.dart';
 import '../../core/api/api_client.dart';
 import '../../core/theme/app_theme.dart';
+import '../../shared/utils/formatters.dart';
 import '../../shared/widgets/app_widgets.dart';
+import '../qr/qr_data.dart';
+import '../qr/qr_scanner_screen.dart';
 import 'transaction_helper.dart';
 
 /// Screen untuk mengirim transaksi transfer (SEND).
@@ -128,6 +132,35 @@ class _SendScreenState extends State<SendScreen> {
     });
   }
 
+  Future<void> _scanQr() async {
+    final result = await Navigator.push<QrData>(
+      context,
+      MaterialPageRoute(builder: (_) => const QrScannerScreen()),
+    );
+
+    if (result != null && mounted) {
+      setState(() {
+        _toController.text = result.address;
+        if (result.amount != null) {
+          _amountController.text = result.amount!.toString();
+        }
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              result.amount != null
+                  ? 'QR di-scan: ${shortAddress(result.address)} (${result.amount} YTE)'
+                  : 'QR di-scan: ${shortAddress(result.address)}',
+            ),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -174,10 +207,17 @@ class _SendScreenState extends State<SendScreen> {
                   TextFormField(
                     controller: _toController,
                     readOnly: _isSigningMode,
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: 'Ke Address',
                       hintText: '0x...',
-                      prefixIcon: Icon(Icons.send),
+                      prefixIcon: const Icon(Icons.send),
+                      suffixIcon: _isSigningMode || kIsWeb
+                          ? null
+                          : IconButton(
+                              icon: const Icon(Icons.qr_code_scanner),
+                              onPressed: _scanQr,
+                              tooltip: 'Scan QR code',
+                            ),
                     ),
                     validator: (v) {
                       if (v == null || v.trim().isEmpty) {

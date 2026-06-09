@@ -5,6 +5,7 @@ import '../../core/models/models.dart';
 import '../../core/theme/app_theme.dart';
 import '../../shared/utils/formatters.dart';
 import '../../shared/widgets/app_widgets.dart';
+import '../qr/receive_screen.dart';
 
 class WalletScreen extends StatefulWidget {
   final String address;
@@ -60,6 +61,18 @@ class _WalletScreenState extends State<WalletScreen> {
       appBar: AppBar(
         title: Text(shortAddress(widget.address)),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.qr_code),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => ReceiveScreen(address: widget.address),
+                ),
+              );
+            },
+            tooltip: 'Terima YTE (QR)',
+          ),
           IconButton(icon: const Icon(Icons.refresh), onPressed: _loadData),
         ],
       ),

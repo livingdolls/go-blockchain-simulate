@@ -8,6 +8,7 @@ import '../../features/transactions/transaction_detail_screen.dart';
 import '../../features/transactions/send_screen.dart';
 import '../../features/transactions/buy_screen.dart';
 import '../../features/transactions/sell_screen.dart';
+import '../../features/qr/receive_screen.dart';
 import '../../features/market/market_screen.dart';
 
 /// Router konfigurasi aplikasi.
@@ -50,6 +51,13 @@ final appRouter = GoRouter(
       builder: (context, state) {
         final address = state.pathParameters['address']!;
         return WalletScreen(address: address);
+      },
+    ),
+    GoRoute(
+      path: '/receive',
+      builder: (context, state) {
+        final address = state.uri.queryParameters['address'] ?? '';
+        return ReceiveScreen(address: address);
       },
     ),
     GoRoute(

@@ -23,6 +23,13 @@ type RabbitMQConn struct {
 	binds     []models.BindDef
 
 	pool *ChannelPool
+
+	// onReconnect dipanggil setelah reconnect sukses + topology restored.
+	// Dipakai oleh Client untuk re-register consumers yang mati saat
+	// connection drop. Tanpa ini, consumers permanen dead setelah
+	// reconnect (msgs channel closed, goroutine exit, nobody restart).
+	onReconnect     func()
+	onReconnectOnce sync.Once
 }
 
 func NewRabbitMQConn(url string) (*RabbitMQConn, error) {
@@ -39,6 +46,16 @@ func NewRabbitMQConn(url string) (*RabbitMQConn, error) {
 
 	return c, nil
 
+}
+
+// RegisterOnReconnect mendaftarkan callback yang dipanggil setiap kali
+// reconnect sukses. Consumer menggunakan callback ini untuk re-register
+// diri setelah connection drop. Hanya satu callback yang diizinkan
+// (overwrite jika dipanggil beberapa kali).
+func (c *RabbitMQConn) RegisterOnReconnect(fn func()) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.onReconnect = fn
 }
 
 func (c *RabbitMQConn) connect() error {
@@ -107,6 +124,17 @@ func (c *RabbitMQConn) reconnect() {
 
 		if c.pool != nil {
 			c.pool.Rebuild()
+		}
+
+		// Panggil callback re-register consumers. Tanpa ini, semua
+		// consumer goroutine yang exit saat msgs channel close tidak
+		// akan pernah di-restart → pipeline processing mati permanen.
+		c.mu.RLock()
+		cb := c.onReconnect
+		c.mu.RUnlock()
+		if cb != nil {
+			logger.LogInfo("Re-registering consumers after reconnect")
+			cb()
 		}
 
 		log.Println("[RABBITMQ] Reconnected to RabbitMQ successfully")

@@ -53,6 +53,12 @@ func (c *Client) ConsumeWithContext(ctx context.Context, queueName string, worke
 	return c.conn.ConsumeWithContext(ctx, queueName, workerCount, handler)
 }
 
+// RegisterOnReconnect mendaftarkan callback yang dipanggil setiap kali
+// reconnect sukses. Consumer menggunakan callback ini untuk re-register.
+func (c *Client) RegisterOnReconnect(fn func()) {
+	c.conn.RegisterOnReconnect(fn)
+}
+
 func (c *Client) Close() {
 	c.conn.Close()
 }

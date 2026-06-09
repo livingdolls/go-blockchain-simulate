@@ -78,5 +78,20 @@ func (a *AppConfig) StartConsumers() {
 		}(s.name, s.fn)
 	}
 
+	// Register reconnect callback: ketika koneksi RabbitMQ drop lalu
+	// reconnect sukses, consumers harus di-restart. Tanpa ini, goroutine
+	// consumer yang exit saat msgs channel close tidak akan pernah
+	// di-restart → pipeline processing mati permanen sampai app restart.
+	a.RMQClient.RegisterOnReconnect(func() {
+		logger.LogInfo("Reconnect detected, re-registering all consumers")
+		for _, s := range starters {
+			go func(name string, fn func() error) {
+				if err := fn(); err != nil {
+					logger.LogError("Error re-starting "+name+" consumer after reconnect", err)
+				}
+			}(s.name, s.fn)
+		}
+	})
+
 	logger.LogInfo("All message consumers started successfully")
 }

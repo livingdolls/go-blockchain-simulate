@@ -49,7 +49,9 @@ func (h *AdminLoginHandler) Login(c *gin.Context) {
 
 	admin, err := h.authService.AuthenticateAdmin(ctx, req.Username, req.Password)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, dto.NewErrorResponse[string]("Authentication failed: "+err.Error()))
+		// Generic message: jangan leak apakah username ada atau password
+		// salah (mencegah username enumeration). Log error asli di server.
+		c.JSON(http.StatusUnauthorized, dto.NewErrorResponse[string]("Invalid username or password"))
 		return
 	}
 

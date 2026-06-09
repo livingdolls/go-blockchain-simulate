@@ -60,8 +60,10 @@ func (a *AppConfig) SetupRoutes(r *gin.Engine) {
 		txGroup.POST("/sell", a.TransactionHandler.Sell)
 	}
 
-	// Admin Auth routes (public - no middleware required)
+	// Admin Auth routes. Rate limit untuk mencegah brute force.
+	// Sebelumnya TIDAK ada rate limiter → seribu attempts/menit.
 	adminAuthGroup := r.Group("/admin/auth")
+	adminAuthGroup.Use(authLimiter)
 	{
 		adminAuthGroup.POST("/login", a.AdminLoginHandler.Login)
 		adminAuthGroup.POST("/logout", a.AdminLoginHandler.Logout)
@@ -148,7 +150,8 @@ func (a *AppConfig) SetupRoutes(r *gin.Engine) {
 	}
 }
 
-// setupWebSocketHandler creates WebSocket handler
+// setupWebSocketHandler creates WebSocket handler dengan origin validation
+// dari config.Server.AllowedOrigins.
 func (a *AppConfig) setupWebSocketHandler() gin.HandlerFunc {
-	return websocket.GinHandler(a.Hub, a.JWT)
+	return websocket.GinHandler(a.Hub, a.JWT, a.deps.Config.Server.AllowedOrigins)
 }

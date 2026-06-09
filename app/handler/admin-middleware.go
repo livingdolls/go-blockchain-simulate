@@ -3,7 +3,6 @@ package handler
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"strings"
 
@@ -33,8 +32,6 @@ func AdminMiddleware(jwtService security.AdminJWTService, adminRepo repository.A
 		}
 
 		ctx := c.Request.Context()
-
-		fmt.Printf("AdminMiddleware: Validated token for user_id=%d, username=%s, role=%s\n", claims.UserID, claims.Username, claims.Role)
 
 		// check if user is admin
 		admin, err := adminRepo.GetAdminByID(ctx, claims.UserID)

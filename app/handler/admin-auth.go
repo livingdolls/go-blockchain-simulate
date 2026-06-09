@@ -39,8 +39,7 @@ func NewAdminLoginHandler(authService services.AdminAuthService, jwtService secu
 func (h *AdminLoginHandler) Login(c *gin.Context) {
 	var req AdminLoginRequest
 
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, dto.NewErrorResponse[string]("Invalid request payload"))
+	if !dto.BindJSON(c, &req) {
 		return
 	}
 

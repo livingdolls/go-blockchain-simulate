@@ -86,8 +86,7 @@ func (h *BalanceHandler) GetWalletBalance(c *gin.Context) {
 func (h *BalanceHandler) TopUpUSDBalance(c *gin.Context) {
 	var req dto.TopUpRequestDTO
 
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(400, dto.NewErrorResponse[string]("invalid request body"))
+	if !dto.BindJSON(c, &req) {
 		return
 	}
 

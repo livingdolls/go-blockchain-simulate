@@ -85,8 +85,7 @@ func (h *AdminHandler) CreateAdmin(c *gin.Context) {
 		Permissions []string `json:"permissions"`
 	}
 
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, dto.NewErrorResponse[string]("Invalid request body"))
+	if !dto.BindJSON(c, &req) {
 		return
 	}
 
@@ -118,8 +117,7 @@ func (h *AdminHandler) UpdateAdminRole(c *gin.Context) {
 		Permissions []string `json:"permissions"`
 	}
 
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, dto.NewErrorResponse[string]("Invalid request body"))
+	if !dto.BindJSON(c, &req) {
 		return
 	}
 
@@ -150,8 +148,7 @@ func (h *AdminHandler) UpdateAdminStatus(c *gin.Context) {
 		Status string `json:"status" binding:"required,oneof=ACTIVE INACTIVE SUSPENDED"`
 	}
 
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, dto.NewErrorResponse[string]("Invalid request body"))
+	if !dto.BindJSON(c, &req) {
 		return
 	}
 

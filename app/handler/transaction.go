@@ -41,8 +41,7 @@ func NewTransactionHandler(transactionService services.TransactionService, rmqCl
 
 func (h *TransactionHandler) Send(c *gin.Context) {
 	var req SendTransactionWithSignatureRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
+	if !dto.BindJSON(c, &req) {
 		return
 	}
 
@@ -74,8 +73,7 @@ func (h *TransactionHandler) Send(c *gin.Context) {
 
 func (h *TransactionHandler) Buy(c *gin.Context) {
 	var req BuySellTransactionRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
+	if !dto.BindJSON(c, &req) {
 		return
 	}
 
@@ -106,8 +104,7 @@ func (h *TransactionHandler) Buy(c *gin.Context) {
 
 func (h *TransactionHandler) Sell(c *gin.Context) {
 	var req BuySellTransactionRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
+	if !dto.BindJSON(c, &req) {
 		return
 	}
 

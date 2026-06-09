@@ -47,8 +47,7 @@ func NewRegisterHandler(service services.RegisterService) *RegisterHandler {
 
 func (h *RegisterHandler) Register(c *gin.Context) {
 	var req models.UserRegister
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, dto.NewErrorResponse[string]("invalid request body"))
+	if !dto.BindJSON(c, &req) {
 		return
 	}
 
@@ -88,8 +87,7 @@ func (h *RegisterHandler) Verify(c *gin.Context) {
 		Username  string `json:"username" binding:"required,min=3,max=50"`
 	}
 
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
+	if !dto.BindJSON(c, &req) {
 		return
 	}
 

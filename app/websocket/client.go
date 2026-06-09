@@ -2,12 +2,12 @@ package websocket
 
 import (
 	"encoding/json"
-	"log"
 	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/livingdolls/go-blockchain-simulate/app/entity"
+	"github.com/livingdolls/go-blockchain-simulate/logger"
 )
 
 const (
@@ -52,13 +52,13 @@ func (c *ClientWS) Read() {
 
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				log.Printf("WebSocket read error: %v", err)
+				logger.LogError("WebSocket read error", err)
 			}
 			break
 		}
 
 		// Here you can handle incoming messages from the client if needed
-		log.Printf("Received message from client: %s", message)
+		logger.LogDebug("Received message from client")
 		c.handleMessage(message)
 	}
 }
@@ -83,7 +83,7 @@ func (c *ClientWS) Write() {
 
 			// Write the message
 			if err := c.conn.WriteMessage(websocket.TextMessage, message); err != nil {
-				log.Printf("WebSocket write error: %v", err)
+				logger.LogError("WebSocket write error", err)
 				return
 			}
 
@@ -100,7 +100,7 @@ func (c *ClientWS) handleMessage(data []byte) {
 	var msg Message
 
 	if err := json.Unmarshal(data, &msg); err != nil {
-		log.Printf("WebSocket handleMessage unmarshal error: %v", err)
+		logger.LogError("WebSocket handleMessage unmarshal error", err)
 		return
 	}
 
@@ -119,10 +119,10 @@ func (c *ClientWS) handleMessage(data []byte) {
 					Events:  subReq.Events,
 				})
 			} else {
-				log.Printf("WebSocket handleMessage subscribe unmarshal error: %v", err)
+				logger.LogError("WebSocket subscribe unmarshal error", err)
 			}
 		} else {
-			log.Printf("WebSocket handleMessage subscribe marshal error: %v", err)
+			logger.LogError("WebSocket subscribe marshal error", err)
 		}
 
 	case entity.EventTypeUnsubscribe:
@@ -147,7 +147,7 @@ func (c *ClientWS) sendResponse(msgType entity.MessageType, data any) {
 		select {
 		case c.send <- payload:
 		default:
-			log.Println("WebSocket client send channel full, dropping response")
+			logger.LogWarn("WebSocket client send channel full, dropping response")
 		}
 	}
 }

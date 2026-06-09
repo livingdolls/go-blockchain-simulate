@@ -65,6 +65,11 @@ func (h *RewardHandler) GetRewardSchedule(c *gin.Context) {
 	if err != nil || blockCount <= 0 {
 		blockCount = 10 // default to 10 blocks
 	}
+	// Cap: tanpa upper bound, attacker bisa request 999999999 blocks
+	// → expensive computation + response payload besar.
+	if blockCount > 1000 {
+		blockCount = 1000
+	}
 
 	schedule, err := h.svr.GetRewardSchedule(blockCount)
 	if err != nil {

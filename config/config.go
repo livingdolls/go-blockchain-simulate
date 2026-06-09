@@ -136,7 +136,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("app.environment", "development")
 
 	v.SetDefault("database.driver", "mysql")
-	v.SetDefault("database.dsn", "yurina:hirate@tcp(127.0.0.1:3306)/blockchain?parseTime=true&loc=Local")
+	v.SetDefault("database.dsn", "")
 	v.SetDefault("database.max_open_conns", 100)
 	v.SetDefault("database.max_idle_conns", 20)
 	v.SetDefault("database.conn_max_lifetime", "5m")
@@ -147,7 +147,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("redis.pool_size", 10)
 	v.SetDefault("redis.min_idle_conns", 5)
 
-	v.SetDefault("rabbitmq.url", "amqp://guest:guest@localhost:5672/")
+	v.SetDefault("rabbitmq.url", "")
 	v.SetDefault("rabbitmq.pool_size", 10)
 
 	// JWT secret TIDAK punya default di repo. Harus di-set via env var

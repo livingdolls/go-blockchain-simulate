@@ -76,7 +76,9 @@ func (h *BalanceHandler) GetWalletBalance(c *gin.Context) {
 	walletResponse, err := h.service.GetWalletBalance(filter)
 
 	if err != nil {
-		c.JSON(404, gin.H{"error": err.Error()})
+		// Bedakan not-found dari server error. Sebelumnya semua error
+		// return 404 → DB outage terlihat sebagai "not found".
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get wallet balance"})
 		return
 	}
 

@@ -64,11 +64,19 @@ func (h *RegisterHandler) Register(c *gin.Context) {
 
 	setAuthCookie(c, "auth_token", user.Token, 24*3600)
 
-	c.JSON(200, dto.NewSuccessResponse(resp))
+	c.JSON(http.StatusCreated, dto.NewSuccessResponse(resp))
 }
 
 func (h *RegisterHandler) Challenge(c *gin.Context) {
 	address := c.Param("address")
+
+	// Validasi format address sebelum generate nonce. Tanpa validasi,
+	// attacker bisa isi Redis dengan non-address keys (setiap key punya
+	// TTL 10 menit → Redis memory exhaustion vector).
+	if !dto.IsEthereumAddress(address) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid Ethereum address format"})
+		return
+	}
 
 	challenge, err := h.service.Challenge(c.Request.Context(), address)
 	if err != nil {

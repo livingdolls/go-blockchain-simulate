@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/livingdolls/go-blockchain-simulate/logger"
@@ -54,15 +55,30 @@ func (h *CandleStreamHandler) StreamCandles(c *gin.Context) {
 	// listen untuk client
 	logger.LogInfo("SSE connected for interval: " + interval)
 
+	// writeMu melindungi concurrent write ke http.ResponseWriter.
+	// Sebelumnya: goroutine initial candle (line 58) dan goroutine
+	// subscribe (line 75) menulis ke w secara bersamaan → race condition.
+	// http.ResponseWriter bukan thread-safe untuk concurrent writes.
+	var writeMu sync.Mutex
+
+	// writeSSE helper yang safe untuk dipanggil dari goroutine manapun.
+	writeSSE := func(data []byte) error {
+		writeMu.Lock()
+		defer writeMu.Unlock()
+		if _, err := fmt.Fprintf(w, "data: %s\n\n", string(data)); err != nil {
+			return err
+		}
+		flusher.Flush()
+		return nil
+	}
+
 	// write initial candle
 	go func() {
 		latestCandle, err := h.candleService.GetLatestCandleByInterval(interval)
 		if err == nil {
 			data, err := json.Marshal(latestCandle)
-
 			if err == nil {
-				fmt.Fprintf(w, "data: %s\n\n", string(data))
-				flusher.Flush()
+				writeSSE(data)
 				logger.LogInfo("Initial candle sent for interval: " + interval)
 			}
 		}
@@ -96,15 +112,8 @@ func (h *CandleStreamHandler) StreamCandles(c *gin.Context) {
 					logger.LogInfo(fmt.Sprintf("Recovered in candle stream SSE: %v", r))
 				}
 			}()
-			// safe write
 
-			if _, err := fmt.Fprintf(w, "data: %s\n\n", string(data)); err != nil {
-				logger.LogError("Write to SSE error", err)
-				return err
-			}
-
-			flusher.Flush()
-			return nil
+			return writeSSE(data)
 		})
 
 		if err != nil && err != context.Canceled {

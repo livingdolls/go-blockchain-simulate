@@ -11,6 +11,41 @@ import (
 	"github.com/livingdolls/go-blockchain-simulate/app/services"
 )
 
+// parseAdminID mem-parse ID dari URL path parameter dengan validasi.
+// Return 0 dan false jika ID invalid (bukan angka atau ≤ 0).
+// Sebelumnya: strconv.Atoi(c.Param("id")) error discards → ID=0 silently.
+func parseAdminID(c *gin.Context) (int, bool) {
+	idStr := c.Param("id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil || id <= 0 {
+		c.JSON(http.StatusBadRequest, dto.NewErrorResponse[string]("invalid admin ID"))
+		return 0, false
+	}
+	return id, true
+}
+
+// parseLimitOffset mem-parse limit dan offset dari query parameters
+// dengan validasi range. Return defaults jika tidak di-set.
+// Sebelumnya: strconv.Atoi error discards → limit/offset negatif lolos.
+func parseLimitOffset(c *gin.Context, defaultLimit, maxLimit int) (limit, offset int) {
+	limit = defaultLimit
+	offset = 0
+
+	if l := c.Query("limit"); l != "" {
+		if v, err := strconv.Atoi(l); err == nil && v > 0 && v <= maxLimit {
+			limit = v
+		}
+	}
+
+	if o := c.Query("offset"); o != "" {
+		if v, err := strconv.Atoi(o); err == nil && v >= 0 {
+			offset = v
+		}
+	}
+
+	return limit, offset
+}
+
 type AdminHandler struct {
 	service services.AdminService
 }
@@ -51,16 +86,7 @@ func (h *AdminHandler) ListAdmins(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	limit := 10
-	offset := 0
-
-	if l := c.Query("limit"); l != "" {
-		limit, _ = strconv.Atoi(l)
-	}
-
-	if o := c.Query("offset"); o != "" {
-		offset, _ = strconv.Atoi(o)
-	}
+	limit, offset := parseLimitOffset(c, 10, 100)
 
 	admins, err := h.service.GetAllAdmins(ctx, admin, limit, offset)
 	if err != nil {
@@ -110,7 +136,10 @@ func (h *AdminHandler) UpdateAdminRole(c *gin.Context) {
 		return
 	}
 
-	targetAdminID, _ := strconv.Atoi(c.Param("id"))
+	targetAdminID, ok := parseAdminID(c)
+	if !ok {
+		return
+	}
 
 	var req struct {
 		Role        string   `json:"role" binding:"required,oneof=admin moderator support"`
@@ -142,7 +171,10 @@ func (h *AdminHandler) UpdateAdminStatus(c *gin.Context) {
 		return
 	}
 
-	targetAdminID, _ := strconv.Atoi(c.Param("id"))
+	targetAdminID, ok := parseAdminID(c)
+	if !ok {
+		return
+	}
 
 	var req struct {
 		Status string `json:"status" binding:"required,oneof=active inactive suspended"`
@@ -173,7 +205,10 @@ func (h *AdminHandler) DeleteAdmin(c *gin.Context) {
 		return
 	}
 
-	targetAdminID, _ := strconv.Atoi(c.Param("id"))
+	targetAdminID, ok := parseAdminID(c)
+	if !ok {
+		return
+	}
 
 	ctx := c.Request.Context()
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
@@ -197,20 +232,13 @@ func (h *AdminHandler) GetActivityLogs(c *gin.Context) {
 
 	targetAdminID := 0
 	if aid := c.Query("admin_id"); aid != "" {
-		targetAdminID, _ = strconv.Atoi(aid)
+		if v, err := strconv.Atoi(aid); err == nil && v > 0 {
+			targetAdminID = v
+		}
 	}
 
 	action := c.Query("action")
-	limit := 50
-	offset := 0
-
-	if l := c.Query("limit"); l != "" {
-		limit, _ = strconv.Atoi(l)
-	}
-
-	if o := c.Query("offset"); o != "" {
-		offset, _ = strconv.Atoi(o)
-	}
+	limit, offset := parseLimitOffset(c, 50, 200)
 
 	ctx := c.Request.Context()
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)

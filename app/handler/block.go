@@ -124,7 +124,7 @@ func (h *BlockHandler) GetTransactionsByBlockNumber(c *gin.Context) {
 	var blockNumber int64
 	_, err := fmt.Sscan(numberParam, &blockNumber)
 	if err != nil {
-		c.JSON(http.StatusBadGateway, dto.NewErrorResponse[string]("invalid block number"))
+		c.JSON(http.StatusBadRequest, dto.NewErrorResponse[string]("invalid block number"))
 		return
 	}
 
@@ -190,6 +190,13 @@ func (h *BlockHandler) GetBlocksInRange(c *gin.Context) {
 
 	if from > to {
 		c.JSON(http.StatusBadRequest, dto.NewErrorResponse[string]("from block number must be less than or equal to to block number"))
+		return
+	}
+
+	// Range size limit: tanpa limit, request ?from=1&to=999999999
+	// → DB query unbounded → high latency + memory consumption.
+	if to-from > 1000 {
+		c.JSON(http.StatusBadRequest, dto.NewErrorResponse[string]("range terlalu besar, maksimum 1000 blocks"))
 		return
 	}
 

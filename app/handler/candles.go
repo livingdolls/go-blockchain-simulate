@@ -23,7 +23,7 @@ func (h *CandleHandler) GetCandle(c *gin.Context) {
 	limit := c.DefaultQuery("limit", "100")
 
 	// validation intervalType
-	if !validateIntervalType(intervalType) {
+	if !dto.IsValidInterval(intervalType) {
 		c.JSON(400, dto.NewErrorResponse[string]("invalid interval type"))
 		return
 	}
@@ -50,7 +50,7 @@ func (h *CandleHandler) GetCandleFrom(c *gin.Context) {
 	limit := c.DefaultQuery("limit", "100")
 
 	// validation intervalType
-	if !validateIntervalType(intervalType) {
+	if !dto.IsValidInterval(intervalType) {
 		c.JSON(400, dto.NewErrorResponse[string]("invalid interval type"))
 		return
 	}
@@ -75,18 +75,4 @@ func (h *CandleHandler) GetCandleFrom(c *gin.Context) {
 	}
 
 	c.JSON(200, dto.NewSuccessResponse(candles))
-}
-
-func validateIntervalType(intervalType string) bool {
-	validIntervals := map[string]bool{
-		"1m":  true,
-		"5m":  true,
-		"15m": true,
-		"30m": true,
-		"1h":  true,
-		"4h":  true,
-		"1d":  true,
-	}
-
-	return validIntervals[intervalType]
 }

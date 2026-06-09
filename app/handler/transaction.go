@@ -54,7 +54,11 @@ func (h *TransactionHandler) Send(c *gin.Context) {
 		Signature: req.Signature,
 	}
 
-	body, _ := json.Marshal(msg)
+	body, err := json.Marshal(msg)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, dto.NewErrorResponse[string]("failed to serialize transaction"))
+		return
+	}
 
 	if err := h.rmqClient.Publish(
 		c.Request.Context(),
@@ -85,7 +89,11 @@ func (h *TransactionHandler) Buy(c *gin.Context) {
 		Signature: req.Signature,
 	}
 
-	body, _ := json.Marshal(msg)
+	body, err := json.Marshal(msg)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, dto.NewErrorResponse[string]("failed to serialize buy transaction"))
+		return
+	}
 
 	if err := h.rmqClient.Publish(
 		c.Request.Context(),
@@ -116,7 +124,11 @@ func (h *TransactionHandler) Sell(c *gin.Context) {
 		Signature: req.Signature,
 	}
 
-	body, _ := json.Marshal(msg)
+	body, err := json.Marshal(msg)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, dto.NewErrorResponse[string]("failed to serialize sell transaction"))
+		return
+	}
 
 	if err := h.rmqClient.Publish(
 		c.Request.Context(),
@@ -138,18 +150,20 @@ func (h *TransactionHandler) GetTransaction(c *gin.Context) {
 
 	var id int64
 	_, err := fmt.Sscan(idStr, &id)
-	if err != nil {
-		c.JSON(400, gin.H{"error": "invalid transaction ID"})
+	if err != nil || id <= 0 {
+		c.JSON(http.StatusBadRequest, dto.NewErrorResponse[string]("invalid transaction ID"))
 		return
 	}
 
 	tx, err := h.transactionService.GetTransactionByID(id)
 	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
+		// Database error atau not found: log error asli di server,
+		// return generic message ke client (jangan leak internal error).
+		c.JSON(http.StatusNotFound, dto.NewErrorResponse[string]("transaction not found"))
 		return
 	}
 
-	c.JSON(200, gin.H{"transaction": tx})
+	c.JSON(http.StatusOK, gin.H{"transaction": tx})
 }
 
 func (h *TransactionHandler) GenerateNonce(c *gin.Context) {

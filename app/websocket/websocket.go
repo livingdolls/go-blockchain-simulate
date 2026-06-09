@@ -2,10 +2,10 @@ package websocket
 
 import (
 	"encoding/json"
-	"log"
 	"sync"
 
 	"github.com/livingdolls/go-blockchain-simulate/app/entity"
+	"github.com/livingdolls/go-blockchain-simulate/logger"
 )
 
 type Hub struct {
@@ -70,7 +70,7 @@ func (h *Hub) Run() {
 
 			h.address[c.address][c] = true
 			h.mu.Unlock()
-			log.Printf("Client registered user=%s, total :%d", c.address, len(h.clients))
+			logger.LogInfo("Client registered")
 
 		case c := <-h.unregister:
 			h.mu.Lock()
@@ -89,7 +89,7 @@ func (h *Hub) Run() {
 				safeCloseClient(c)
 			}
 			h.mu.Unlock()
-			log.Printf("Client unregistered user=%s total=%d", c.address, len(h.clients))
+			logger.LogInfo("Client unregistered")
 		case msg := <-h.broadcast:
 			h.broadcastMessageToSubscribers(msg)
 		case <-h.stopChan:
@@ -114,7 +114,7 @@ func safeCloseClient(c *ClientWS) {
 func (h *Hub) broadcastMessageToSubscribers(message *Message) {
 	payload, err := json.Marshal(message)
 	if err != nil {
-		log.Printf("[WS] gagal marshal broadcast: %v", err)
+		logger.LogError("gagal marshal broadcast", err)
 		return
 	}
 
@@ -150,7 +150,7 @@ func (h *Hub) Subscribe(client *ClientWS, evenType entity.MessageType) {
 		subs[evenType] = true
 	}
 
-	log.Printf("Client subscribed to %v", evenType)
+	logger.LogInfo("Client subscribed")
 }
 
 func (h *Hub) Unsubscribe(client *ClientWS, eventType entity.MessageType) {
@@ -161,7 +161,7 @@ func (h *Hub) Unsubscribe(client *ClientWS, eventType entity.MessageType) {
 		delete(subs, eventType)
 	}
 
-	log.Printf("Client unsubscribed from %v", eventType)
+	logger.LogInfo("Client unsubscribed")
 }
 
 func (h *Hub) BroadCast(msgType entity.MessageType, data any) {
@@ -173,9 +173,9 @@ func (h *Hub) BroadCast(msgType entity.MessageType, data any) {
 	select {
 	case h.broadcast <- message:
 	case <-h.stopChan:
-		log.Println("Hub is closing, broadcast message dropped")
+		logger.LogWarn("Hub is closing, broadcast message dropped")
 	default:
-		log.Println("WebSocket broadcast channel full, dropping message")
+		logger.LogWarn("WebSocket broadcast channel full, dropping message")
 	}
 }
 
@@ -187,7 +187,7 @@ func (h *Hub) SendToAddress(address string, msgType entity.MessageType, data any
 
 	payload, err := json.Marshal(message)
 	if err != nil {
-		log.Printf("[WS] gagal marshal pesan ke address: %v", err)
+		logger.LogError("gagal marshal pesan ke address", err)
 		return
 	}
 
@@ -217,7 +217,7 @@ func (h *Hub) closeAllConnections() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	log.Printf("Closing all %d client connections...\n", len(h.clients))
+	logger.LogInfo("Closing all client connections")
 
 	for client := range h.clients {
 		safeCloseClient(client)
@@ -228,15 +228,15 @@ func (h *Hub) closeAllConnections() {
 	h.address = make(map[string]map[*ClientWS]bool)
 	h.subscriptions = make(map[*ClientWS]map[entity.MessageType]bool)
 
-	log.Println("All client connections closed.")
+	logger.LogInfo("All client connections closed")
 }
 
 func (h *Hub) Close() {
-	log.Println("shutting down websocket hub...")
+	logger.LogInfo("shutting down websocket hub")
 	// Idempotent: aman dipanggil beberapa kali (mis. dari shutdown handler
 	// DAN dari test cleanup). Sebelumnya double-close akan panic.
 	h.closeOnce.Do(func() {
 		close(h.stopChan)
 	})
-	log.Println("websocket hub stopped")
+	logger.LogInfo("websocket hub stopped")
 }

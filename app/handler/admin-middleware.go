@@ -62,59 +62,6 @@ func AdminMiddleware(jwtService security.AdminJWTService, adminRepo repository.A
 	}
 }
 
-// AdminWithPermissionMiddleware checks if admin has required permission
-func AdminWithPermissionMiddleware(jwtService security.AdminJWTService, adminRepo repository.AdminRepository, requiredPermission string) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		// extract token from cookie
-		token := getTokenFromCookie(c)
-
-		if token == "" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, dto.NewErrorResponse[string]("Unauthorized: missing token"))
-			return
-		}
-
-		// validate token
-		claims, err := jwtService.ValidateAdminToken(token)
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, dto.NewErrorResponse[string]("Unauthorized: invalid token"))
-			return
-		}
-
-		// check if user is admin
-		ctx := c.Request.Context()
-		admin, err := adminRepo.GetAdminByID(ctx, claims.UserID)
-		if err != nil {
-			if errors.Is(err, entity.ErrAdminNotFound) {
-				c.AbortWithStatusJSON(http.StatusForbidden, dto.NewErrorResponse[string]("Forbidden: not an admin"))
-			} else {
-				c.AbortWithStatusJSON(http.StatusInternalServerError, dto.NewErrorResponse[string]("Internal Server Error"))
-			}
-			return
-		}
-
-		// check admin status
-		if admin.Status != entity.AdminStatusActive {
-			c.AbortWithStatusJSON(http.StatusForbidden, dto.NewErrorResponse[string]("Forbidden: admin account is not active"))
-			return
-		}
-
-		// check permission
-		if !hasPermission(admin, requiredPermission) {
-			c.AbortWithStatusJSON(http.StatusForbidden, dto.NewErrorResponse[string]("Forbidden: insufficient permissions"))
-			return
-		}
-
-		// set admin info to context
-		c.Set("admin", admin)
-		c.Set("user", claims)
-
-		// update last login time
-		_ = adminRepo.UpdateLastLogin(ctx, admin.ID)
-
-		c.Next()
-	}
-}
-
 func hasPermission(admin *models.Admin, requiredPermission string) bool {
 	// admin with * role has all permissions
 

@@ -260,13 +260,13 @@ class ApiClient {
 
   Future<Response> getCandleRange({
     required String interval,
-    required int from,
-    required int to,
+    required int startTime,
+    int limit = 100,
   }) {
     return _dio.get('/candles/range', queryParameters: {
       'interval': interval,
-      'from': from,
-      'to': to,
+      'start_time': startTime,
+      'limit': limit,
     });
   }
 
@@ -305,6 +305,66 @@ class ApiClient {
       'limit': limit,
       'offset': offset,
     });
+  }
+
+  Future<Response> getRecentActivityLogs() {
+    return _dio.get('/admin/activity-logs/recent');
+  }
+
+  Future<Response> createAdmin({
+    required int userId,
+    required String role,
+    List<String>? permissions,
+  }) {
+    return _dio.post('/admin/admins', data: {
+      'user_id': userId,
+      'role': role,
+      if (permissions != null) 'permissions': permissions,
+    });
+  }
+
+  Future<Response> updateAdminRole({
+    required int id,
+    required String role,
+    List<String>? permissions,
+  }) {
+    return _dio.put('/admin/admins/$id/role', data: {
+      'role': role,
+      if (permissions != null) 'permissions': permissions,
+    });
+  }
+
+  Future<Response> updateAdminStatus({
+    required int id,
+    required String status,
+  }) {
+    return _dio.put('/admin/admins/$id/status', data: {
+      'status': status,
+    });
+  }
+
+  Future<Response> deleteAdmin(int id) {
+    return _dio.delete('/admin/admins/$id');
+  }
+
+  Future<Response> getTransactionsByBlockNumber(int blockNumber) {
+    return _dio.get('/blocks/transaction/$blockNumber');
+  }
+
+  Future<Response> searchByMiner({
+    required String address,
+    int limit = 10,
+    int offset = 0,
+  }) {
+    return _dio.get('/blocks/search/miner/', queryParameters: {
+      'address': address,
+      'limit': limit,
+      'offset': offset,
+    });
+  }
+
+  Future<Response> generateBlock() {
+    return _dio.post('/blocks/generate');
   }
 }
 

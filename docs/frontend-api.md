@@ -680,8 +680,15 @@ GET /candles?interval=1m&type=latest
 ### 27. Get Candle Range
 
 ```
-GET /candles/range?interval=1h&from=1705312200&to=1705398600
+GET /candles/range?interval=1h&start_time=1705312200&limit=100
 ```
+
+**Query Parameters:**
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `interval` | (required) | `1m`, `5m`, `15m`, `30m`, `1h`, `4h`, `1d` |
+| `start_time` | (required) | Unix timestamp mulai |
+| `limit` | `100` | Jumlah candle yang dikembalikan |
 
 ---
 

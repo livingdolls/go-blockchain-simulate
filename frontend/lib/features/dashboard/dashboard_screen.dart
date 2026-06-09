@@ -98,6 +98,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
           if (_market != null) _buildMarketCard(),
           const SizedBox(height: 16),
 
+          // Quick action buttons
+          _buildActionButtons(),
+          const SizedBox(height: 16),
+
           // Stats grid
           if (_stats != null) _buildStatsGrid(),
           const SizedBox(height: 16),
@@ -111,6 +115,39 @@ class _DashboardScreenState extends State<DashboardScreen> {
             _buildRecentBlocks(),
         ],
       ),
+    );
+  }
+
+  Widget _buildActionButtons() {
+    return Row(
+      children: [
+        Expanded(
+          child: _ActionButton(
+            icon: Icons.send,
+            label: 'Kirim',
+            color: AppTheme.primary,
+            onTap: () => context.go('/transactions/send'),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: _ActionButton(
+            icon: Icons.shopping_cart,
+            label: 'Beli',
+            color: AppTheme.success,
+            onTap: () => context.go('/transactions/buy'),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: _ActionButton(
+            icon: Icons.sell,
+            label: 'Jual',
+            color: AppTheme.warning,
+            onTap: () => context.go('/transactions/sell'),
+          ),
+        ),
+      ],
     );
   }
 
@@ -348,6 +385,50 @@ class _DashboardScreenState extends State<DashboardScreen> {
           Text(label, style: TextStyle(color: AppTheme.darkTextSecondary)),
           Text(value, style: const TextStyle(fontWeight: FontWeight.w600)),
         ],
+      ),
+    );
+  }
+}
+
+/// Action button untuk quick actions di dashboard.
+class _ActionButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _ActionButton({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: color.withValues(alpha: 0.12),
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          child: Column(
+            children: [
+              Icon(icon, color: color, size: 28),
+              const SizedBox(height: 8),
+              Text(
+                label,
+                style: TextStyle(
+                  color: color,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

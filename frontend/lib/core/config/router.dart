@@ -5,6 +5,9 @@ import '../../features/blocks/blocks_screen.dart';
 import '../../features/blocks/block_detail_screen.dart';
 import '../../features/wallet/wallet_screen.dart';
 import '../../features/transactions/transaction_detail_screen.dart';
+import '../../features/transactions/send_screen.dart';
+import '../../features/transactions/buy_screen.dart';
+import '../../features/transactions/sell_screen.dart';
 import '../../features/market/market_screen.dart';
 
 /// Router konfigurasi aplikasi.
@@ -16,6 +19,9 @@ import '../../features/market/market_screen.dart';
 /// - `/blocks/:id` → Block detail
 /// - `/wallet/:address` → Wallet detail
 /// - `/transactions/:id` → Transaction detail
+/// - `/transactions/send` → Send YTE
+/// - `/transactions/buy` → Buy YTE
+/// - `/transactions/sell` → Sell YTE
 /// - `/market` → Market data
 final appRouter = GoRouter(
   initialLocation: '/',
@@ -45,6 +51,18 @@ final appRouter = GoRouter(
         final address = state.pathParameters['address']!;
         return WalletScreen(address: address);
       },
+    ),
+    GoRoute(
+      path: '/transactions/send',
+      builder: (context, state) => const SendScreen(),
+    ),
+    GoRoute(
+      path: '/transactions/buy',
+      builder: (context, state) => const BuyScreen(),
+    ),
+    GoRoute(
+      path: '/transactions/sell',
+      builder: (context, state) => const SellScreen(),
     ),
     GoRoute(
       path: '/transactions/:id',

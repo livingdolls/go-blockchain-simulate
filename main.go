@@ -12,7 +12,10 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin/binding"
+	"github.com/go-playground/validator/v10"
 	"github.com/livingdolls/go-blockchain-simulate/app"
+	"github.com/livingdolls/go-blockchain-simulate/app/dto"
 	"github.com/livingdolls/go-blockchain-simulate/app/middleware"
 	"github.com/livingdolls/go-blockchain-simulate/config"
 	"github.com/livingdolls/go-blockchain-simulate/logger"
@@ -65,6 +68,13 @@ func main() {
 
 	if err := logger.Init(logCfg); err != nil {
 		panic("Gagal inisialisasi logger: " + err.Error())
+	}
+
+	// Register custom validator tags (eth_addr) ke validator/v10.
+	// Harus dipanggil SEBELUM handler dipakai (sebelum ShouldBindJSON
+	// pertama). Idempotent untuk init yang sama.
+	if v, ok := binding.Validator.Engine().(*validator.Validate); ok {
+		dto.RegisterCustomValidators(v)
 	}
 	// Defer Shutdown dan log error ke stderr kalau gagal (logger sudah
 	// rusak sehingga kita tidak bisa pakai logger.LogError di sini).

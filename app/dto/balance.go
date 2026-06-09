@@ -10,8 +10,8 @@ type TopUpResultDTO struct {
 }
 
 type TopUpRequestDTO struct {
-	Address     string  `json:"address"`
-	Amount      float64 `json:"amount"`
-	ReferenceID string  `json:"reference_id,omitempty"`
-	Description string  `json:"description,omitempty"`
+	Address     string  `json:"address" binding:"required,eth_addr"`
+	Amount      float64 `json:"amount" binding:"required,gt=0"`
+	ReferenceID string  `json:"reference_id,omitempty" binding:"omitempty,max=100"`
+	Description string  `json:"description,omitempty" binding:"omitempty,max=500"`
 }

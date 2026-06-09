@@ -82,10 +82,10 @@ func (h *RegisterHandler) Challenge(c *gin.Context) {
 
 func (h *RegisterHandler) Verify(c *gin.Context) {
 	var req struct {
-		Address   string `json:"address"`
-		Signature string `json:"signature"`
-		Nonce     string `json:"nonce"`
-		Username  string `json:"username"`
+		Address   string `json:"address" binding:"required,eth_addr"`
+		Signature string `json:"signature" binding:"required,len=132"`
+		Nonce     string `json:"nonce" binding:"required"`
+		Username  string `json:"username" binding:"required,min=3,max=50"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {

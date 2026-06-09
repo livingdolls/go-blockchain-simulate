@@ -13,18 +13,18 @@ import (
 )
 
 type SendTransactionWithSignatureRequest struct {
-	FromAddress string  `json:"from_address"`
-	ToAddress   string  `json:"to_address"`
-	Amount      float64 `json:"amount"`
-	Nonce       string  `json:"nonce"`
-	Signature   string  `json:"signature"`
+	FromAddress string  `json:"from_address" binding:"required,eth_addr"`
+	ToAddress   string  `json:"to_address" binding:"required,eth_addr"`
+	Amount      float64 `json:"amount" binding:"required,gt=0"`
+	Nonce       string  `json:"nonce" binding:"required"`
+	Signature   string  `json:"signature" binding:"required,len=132"` // 0x + 130 hex
 }
 
 type BuySellTransactionRequest struct {
-	Address   string  `json:"address"`
-	Amount    float64 `json:"amount"`
-	Nonce     string  `json:"nonce"`
-	Signature string  `json:"signature"`
+	Address   string  `json:"address" binding:"required,eth_addr"`
+	Amount    float64 `json:"amount" binding:"required,gt=0"`
+	Nonce     string  `json:"nonce" binding:"required"`
+	Signature string  `json:"signature" binding:"required,len=132"`
 }
 
 type TransactionHandler struct {

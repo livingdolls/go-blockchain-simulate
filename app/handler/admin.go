@@ -80,8 +80,8 @@ func (h *AdminHandler) CreateAdmin(c *gin.Context) {
 	}
 
 	var req struct {
-		UserID      int      `json:"user_id" binding:"required"`
-		Role        string   `json:"role" binding:"required"`
+		UserID      int      `json:"user_id" binding:"required,gt=0"`
+		Role        string   `json:"role" binding:"required,oneof=SUPER ADMIN MODERATOR"`
 		Permissions []string `json:"permissions"`
 	}
 
@@ -114,7 +114,7 @@ func (h *AdminHandler) UpdateAdminRole(c *gin.Context) {
 	targetAdminID, _ := strconv.Atoi(c.Param("id"))
 
 	var req struct {
-		Role        string   `json:"role" binding:"required"`
+		Role        string   `json:"role" binding:"required,oneof=SUPER ADMIN MODERATOR"`
 		Permissions []string `json:"permissions"`
 	}
 
@@ -147,7 +147,7 @@ func (h *AdminHandler) UpdateAdminStatus(c *gin.Context) {
 	targetAdminID, _ := strconv.Atoi(c.Param("id"))
 
 	var req struct {
-		Status string `json:"status" binding:"required"`
+		Status string `json:"status" binding:"required,oneof=ACTIVE INACTIVE SUSPENDED"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {

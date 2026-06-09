@@ -16,8 +16,9 @@ func HashPassword(password string) (string, error) {
 
 // CheckPasswordHash memverifikasi password plaintext terhadap bcrypt hash.
 // Mengembalikan true jika cocok, false jika tidak.
+// Parameter: hash = bcrypt hash, password = plaintext yang di-verify.
 // PENTING: fungsi ini TIDAK boleh logging password plaintext ke console/log.
-func CheckPasswordHash(password, hash string) bool {
-	err := bcrypt.CompareHashAndPassword([]byte(password), []byte(hash))
+func CheckPasswordHash(hash, password string) bool {
+	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
 	return err == nil
 }

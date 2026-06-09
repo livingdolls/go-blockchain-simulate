@@ -271,21 +271,20 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 	var txIDs []int64
 	totalFees := 0.00000000
 
-	// Calculate balances per transaction
-	txBalanceChanges := make(map[string]float64)
+	// Hitung balance per transaksi dengan accumulate (bukan overwrite).
+	// Sebelumnya: txBalanceChanges[addr] = currentBalances[addr] - deduction
+	// → setiap iterasi OVERWRITE nilai sebelumnya, bukan accumulate.
+	// Jika address yang sama punya 2 transaksi, hanya yang terakhir yang
+	// dipakai → miner fee terpotong, sender balance salah.
+	// Fix: update currentBalances langsung (running balance).
 	for _, t := range pendingTxs {
 		totalDeduction := t.Amount + t.Fee
-		txBalanceChanges[t.FromAddress] = currentBalances[t.FromAddress] - totalDeduction
-		txBalanceChanges[t.ToAddress] = currentBalances[t.ToAddress] + t.Amount
-		txBalanceChanges[entity.MinerAccountAddress] = currentBalances[entity.MinerAccountAddress] + t.Fee
+		currentBalances[t.FromAddress] -= totalDeduction
+		currentBalances[t.ToAddress] += t.Amount
+		currentBalances[entity.MinerAccountAddress] += t.Fee
 
 		totalFees += t.Fee
 		txIDs = append(txIDs, t.ID)
-	}
-
-	// Update currentBalances
-	for addr, bal := range txBalanceChanges {
-		currentBalances[addr] = bal
 	}
 
 	// Create block FIRST to get blockID
@@ -308,7 +307,8 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 	}
 	newBlock.ID = blockID
 
-	// NOW create ledger entries dengan blockID yang sudah ada
+	// NOW create ledger entries. BalanceAfter menggunakan currentBalances
+	// yang sudah ter-update per-tx di atas (running balance).
 	for _, t := range pendingTxs {
 		txID := t.ID
 		txIDPtr := &txID
@@ -320,21 +320,21 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 				TxID:         txIDPtr,
 				Address:      t.FromAddress,
 				Amount:       -totalDeduction,
-				BalanceAfter: txBalanceChanges[t.FromAddress],
+				BalanceAfter: currentBalances[t.FromAddress],
 			},
 			repository.LedgerEntry{
 				BlockID:      blockID,
 				TxID:         txIDPtr,
 				Address:      t.ToAddress,
 				Amount:       t.Amount,
-				BalanceAfter: txBalanceChanges[t.ToAddress],
+				BalanceAfter: currentBalances[t.ToAddress],
 			},
 			repository.LedgerEntry{
 				BlockID:      blockID,
 				TxID:         txIDPtr,
 				Address:      entity.MinerAccountAddress,
 				Amount:       t.Fee,
-				BalanceAfter: txBalanceChanges[entity.MinerAccountAddress],
+				BalanceAfter: currentBalances[entity.MinerAccountAddress],
 			},
 		)
 	}
@@ -352,11 +352,13 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 	}
 
 	// Bulk update user balances (1 query instead of N)
+	// Miner TIDAK di-exclude: miner juga menerima YTE fee dari setiap
+	// transaksi. Sebelumnya miner di-skip dengan alasan "miner menerima
+	// reward via RabbitMQ", tapi itu hanya untuk block reward (YTE).
+	// YTE fee yang terakumulasi di currentBalances perlu di-flush ke DB.
 	walletUpdates := make(map[string]float64)
 	for addr, bal := range currentBalances {
-		if addr != entity.MinerAccountAddress {
-			walletUpdates[addr] = bal
-		}
+		walletUpdates[addr] = bal
 	}
 
 	err = s.walletRepo.BulkUpdateBalancesWithTx(tx, walletUpdates)
@@ -414,24 +416,31 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 	for _, t := range pendingTxs {
 		if strings.EqualFold(t.Type, "BUY") {
 			buyerAddr := t.ToAddress
-			totalCost := t.Amount + t.Fee
+
+			// BUY: user membeli YTE dari sistem, membayar dalam USD.
+			// Harga = amount * market price (konsisten dengan SELL).
+			// Sebelumnya: totalCost = t.Amount + t.Fee (tanpa price conversion)
+			// → BUY di harga 1:1 terlepas dari market price → arbitrage.
+			usdCost := t.Amount * currentMarket.Price
+			usdFee := t.Fee * currentMarket.Price
+			totalUSDCost := usdCost + usdFee
 
 			buyerBalance := usdBalances[buyerAddr]
-			balanceAfter := buyerBalance.USDBalance - totalCost
+			balanceAfter := buyerBalance.USDBalance - totalUSDCost
 
 			usdBalances[buyerAddr] = models.UserBalance{
 				UserAddress:     buyerAddr,
 				USDBalance:      balanceAfter,
 				LockedBalance:   buyerBalance.LockedBalance,
 				TotalDeposited:  buyerBalance.TotalDeposited,
-				TotalWithdrawn:  buyerBalance.TotalWithdrawn + totalCost,
-				TotalTraded:     buyerBalance.TotalTraded + t.Amount,
+				TotalWithdrawn:  buyerBalance.TotalWithdrawn + totalUSDCost,
+				TotalTraded:     buyerBalance.TotalTraded + usdCost,
 				LastTransaction: buyerBalance.LastTransaction,
 			}
 
-			// miner fee receives USD
+			// miner fee receives USD (dalam USD, bukan YTE)
 			minerBalance := usdBalances[entity.MinerAccountAddress]
-			minerBalance.USDBalance += t.Fee
+			minerBalance.USDBalance += usdFee
 			usdBalances[entity.MinerAccountAddress] = minerBalance
 
 		} else if strings.EqualFold(t.Type, "SELL") {

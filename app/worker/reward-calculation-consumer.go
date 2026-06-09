@@ -175,6 +175,10 @@ func (r *RewardCalculationConsumer) retryPendingBlocksWorker() {
 }
 
 func (r *RewardCalculationConsumer) retryPendingBlocks() {
+	// Copy pending events lalu release lock SEBELUM iterasi.
+	// Sebelumnya: Lock di line 178 tidak pernah di-release sebelum loop,
+	// lalu Lock lagi di line 193 → deadlock permanen (sync.RWMutex
+	// tidak reentrant). Fix: unlock setelah copy, re-lock untuk delete.
 	r.pendingBlocksMu.Lock()
 	pendingList := make([]dto.RewardCalculationEvent, 0)
 	pendingIDs := make([]int64, 0)
@@ -183,20 +187,19 @@ func (r *RewardCalculationConsumer) retryPendingBlocks() {
 		pendingList = append(pendingList, event)
 		pendingIDs = append(pendingIDs, blockID)
 	}
+	r.pendingBlocksMu.Unlock()
 
 	for i, event := range pendingList {
 		select {
 		case <-r.stopCtx.Done():
 			return
 		case r.calcQueue <- event:
-			// retry successful, remove from pending
 			r.pendingBlocksMu.Lock()
 			delete(r.pendingBlocks, pendingIDs[i])
 			r.pendingBlocksMu.Unlock()
 			r.recordRetry()
 			logger.LogInfo(fmt.Sprintf("Retry success for block %d", event.BlockNumber))
 		default:
-			// queue full, will retry later
 			logger.LogInfo(fmt.Sprintf("Calculation queue full, will retry block %d later", event.BlockNumber))
 		}
 	}

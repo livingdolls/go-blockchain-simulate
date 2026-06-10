@@ -2,13 +2,17 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart' hide Block;
+import 'package:provider/provider.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import '../../core/api/api_client.dart';
 import '../../core/config/app_config.dart';
 import '../../core/models/models.dart';
+import '../../core/models/notification.dart';
 import '../../core/theme/app_theme.dart';
 import '../../shared/utils/formatters.dart';
 import '../../shared/widgets/app_widgets.dart';
+import '../../shared/widgets/notification_bell.dart';
+import '../notifications/notification_provider.dart';
 import '../search/search_delegate.dart';
 
 /// Dashboard utama yang menampilkan ringkasan blockchain:
@@ -112,7 +116,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _channel!.sink.add(jsonEncode({
         'type': 'subscribe',
         'data': {
-          'events': ['market.update', 'block.mined'],
+          'events': [
+            'market.update',
+            'block.mined',
+            'notification.TRANSACTION_CONFIRMED',
+            'notification.TRANSACTION_SUBMITTED',
+            'notification.BLOCK_CONFIRMED',
+            'notification.BALANCE_UPDATED',
+            'notification.REWARD_EARNED',
+          ],
         },
       }));
 
@@ -139,6 +151,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ];
                 _isLive = true;
               });
+            } else if (type != null && type.startsWith('notification.') && mounted) {
+              // Notification events dari NotificationWSConsumer
+              final notification = AppNotification.fromWsMessage(msg);
+              final provider = context.read<NotificationProvider>();
+              provider.addNotification(notification);
+
+              // Tampilkan toast/snackbar untuk notifikasi baru
+              if (mounted) {
+                showNotificationToast(context, notification);
+              }
             }
           } catch (_) {}
         },
@@ -174,6 +196,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
             },
             tooltip: 'Cari',
           ),
+          // Notification bell
+          const NotificationBell(),
           // Live indicator
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 14),

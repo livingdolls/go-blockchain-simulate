@@ -9,6 +9,7 @@ import '../../features/transactions/transaction_history_screen.dart';
 import '../../features/transactions/send_screen.dart';
 import '../../features/transactions/buy_screen.dart';
 import '../../features/transactions/sell_screen.dart';
+import '../../features/notifications/notification_screen.dart';
 import '../../features/qr/receive_screen.dart';
 import '../../features/market/market_screen.dart';
 
@@ -90,6 +91,10 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/market',
       builder: (context, state) => const MarketScreen(),
+    ),
+    GoRoute(
+      path: '/notifications',
+      builder: (context, state) => const NotificationScreen(),
     ),
   ],
 );

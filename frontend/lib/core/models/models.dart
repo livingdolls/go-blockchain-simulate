@@ -52,8 +52,10 @@ class Block {
   DateTime get dateTime =>
       DateTime.fromMillisecondsSinceEpoch(timestamp * 1000);
 
-  String get shortHash =>
-      '${currentHash.substring(0, 8)}...${currentHash.substring(currentHash.length - 6)}';
+  String get shortHash {
+    if (currentHash.length <= 14) return currentHash;
+    return '${currentHash.substring(0, 8)}...${currentHash.substring(currentHash.length - 6)}';
+  }
 }
 
 class Transaction {

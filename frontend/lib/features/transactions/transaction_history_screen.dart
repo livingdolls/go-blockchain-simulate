@@ -46,6 +46,7 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
   }
 
   Future<void> _loadData() async {
+    if (!mounted) return;
     setState(() {
       _isLoading = true;
       _error = null;
@@ -62,14 +63,22 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
         order: _order,
       );
 
+      if (!mounted) return;
       setState(() {
         _data = TransactionWithTypeResponse.fromJson(
             resp.data as Map<String, dynamic>);
         _isLoading = false;
       });
     } on ApiException catch (e) {
+      if (!mounted) return;
       setState(() {
         _error = e.message;
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = 'Terjadi kesalahan: $e';
         _isLoading = false;
       });
     }

@@ -29,13 +29,21 @@ class _BlockDetailScreenState extends State<BlockDetailScreen> {
   Future<void> _loadBlock() async {
     try {
       final resp = await _api.getBlockById(widget.blockId);
+      if (!mounted) return;
       setState(() {
         _block = Block.fromJson(resp.data['data'] as Map<String, dynamic>);
         _isLoading = false;
       });
     } on ApiException catch (e) {
+      if (!mounted) return;
       setState(() {
         _error = e.message;
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = 'Terjadi kesalahan: $e';
         _isLoading = false;
       });
     }

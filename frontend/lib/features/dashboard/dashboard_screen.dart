@@ -58,6 +58,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _loadData() async {
+    if (!mounted) return;
     setState(() {
       _isLoading = true;
       _error = null;
@@ -72,6 +73,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _api.estimateFee(amount: 100, priority: 'low'),
       ]);
 
+      if (!mounted) return;
       setState(() {
         _stats = BlockStats.fromJson(
             results[0].data['data'] as Map<String, dynamic>);
@@ -86,8 +88,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _isLoading = false;
       });
     } on ApiException catch (e) {
+      if (!mounted) return;
       setState(() {
         _error = e.message;
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = 'Terjadi kesalahan: $e';
         _isLoading = false;
       });
     }
@@ -350,11 +359,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _buildCongestionCard() {
-    final congestionLevel = _congestion!['congestion_level'] as String;
-    final pendingCount = _congestion!['pending_count'] as int;
-    final congestionPct = _congestion!['congestion_percent'] as double;
-    final estimatedFee = _congestion!['estimated_fee'] as double;
-    final congestionMult = _congestion!['congestion_multiplier'] as double;
+    final congestionLevel = _congestion!['congestion_level'] as String? ?? 'low';
+    final pendingCount = _congestion!['pending_count'] as int? ?? 0;
+    final congestionPct = (_congestion!['congestion_percent'] as num?)?.toDouble() ?? 0;
+    final estimatedFee = (_congestion!['estimated_fee'] as num?)?.toDouble() ?? 0;
+    final congestionMult = (_congestion!['congestion_multiplier'] as num?)?.toDouble() ?? 1;
 
     final congestionColor = switch (congestionLevel) {
       'low' => AppTheme.success,

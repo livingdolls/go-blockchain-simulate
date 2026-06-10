@@ -22,6 +22,7 @@ class _MarketScreenState extends State<MarketScreen> {
   MarketState? _market;
   List<Candle> _candles = [];
   WebSocketChannel? _channel;
+  Timer? _reconnectTimer;
   bool _isLoading = true;
   String? _error;
 
@@ -34,11 +35,13 @@ class _MarketScreenState extends State<MarketScreen> {
 
   @override
   void dispose() {
+    _reconnectTimer?.cancel();
     _channel?.sink.close();
     super.dispose();
   }
 
   Future<void> _loadData() async {
+    if (!mounted) return;
     setState(() {
       _isLoading = true;
       _error = null;
@@ -50,6 +53,7 @@ class _MarketScreenState extends State<MarketScreen> {
         _api.getCandles(interval: '1h', type: 'all'),
       ]);
 
+      if (!mounted) return;
       setState(() {
         _market = MarketState.fromJson(
             results[0].data['data'] as Map<String, dynamic>);
@@ -59,8 +63,15 @@ class _MarketScreenState extends State<MarketScreen> {
         _isLoading = false;
       });
     } on ApiException catch (e) {
+      if (!mounted) return;
       setState(() {
         _error = e.message;
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = 'Terjadi kesalahan: $e';
         _isLoading = false;
       });
     }
@@ -98,8 +109,8 @@ class _MarketScreenState extends State<MarketScreen> {
         },
         onError: (_) {},
         onDone: () {
-          // Reconnect setelah delay
-          Future.delayed(const Duration(seconds: 5), () {
+          // Reconnect setelah delay menggunakan Timer (cancellable)
+          _reconnectTimer = Timer(const Duration(seconds: 5), () {
             if (mounted) _connectWebSocket();
           });
         },

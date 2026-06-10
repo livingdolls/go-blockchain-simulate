@@ -29,6 +29,7 @@ class _WalletScreenState extends State<WalletScreen> {
   }
 
   Future<void> _loadData() async {
+    if (!mounted) return;
     setState(() {
       _isLoading = true;
       _error = null;
@@ -40,6 +41,7 @@ class _WalletScreenState extends State<WalletScreen> {
         _api.getWallet(widget.address, limit: 20),
       ]);
 
+      if (!mounted) return;
       setState(() {
         _balance = UserBalance.fromJson(
             results[0].data['data'] as Map<String, dynamic>);
@@ -48,8 +50,15 @@ class _WalletScreenState extends State<WalletScreen> {
         _isLoading = false;
       });
     } on ApiException catch (e) {
+      if (!mounted) return;
       setState(() {
         _error = e.message;
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = 'Terjadi kesalahan: $e';
         _isLoading = false;
       });
     }

@@ -29,14 +29,22 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
   Future<void> _loadTx() async {
     try {
       final resp = await _api.getTransaction(widget.transactionId);
+      if (!mounted) return;
       setState(() {
         _tx = Transaction.fromJson(
             resp.data['data']['transaction'] as Map<String, dynamic>);
         _isLoading = false;
       });
     } on ApiException catch (e) {
+      if (!mounted) return;
       setState(() {
         _error = e.message;
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = 'Terjadi kesalahan: $e';
         _isLoading = false;
       });
     }

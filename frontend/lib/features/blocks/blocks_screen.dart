@@ -28,6 +28,7 @@ class _BlocksScreenState extends State<BlocksScreen> {
   }
 
   Future<void> _loadBlocks() async {
+    if (!mounted) return;
     setState(() {
       _isLoading = true;
       _error = null;
@@ -35,6 +36,7 @@ class _BlocksScreenState extends State<BlocksScreen> {
 
     try {
       final resp = await _api.getBlocks(limit: _limit, offset: _offset);
+      if (!mounted) return;
       setState(() {
         _blocks = (resp.data['data'] as List<dynamic>)
             .map((b) => Block.fromJson(b as Map<String, dynamic>))
@@ -42,8 +44,15 @@ class _BlocksScreenState extends State<BlocksScreen> {
         _isLoading = false;
       });
     } on ApiException catch (e) {
+      if (!mounted) return;
       setState(() {
         _error = e.message;
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = 'Terjadi kesalahan: $e';
         _isLoading = false;
       });
     }

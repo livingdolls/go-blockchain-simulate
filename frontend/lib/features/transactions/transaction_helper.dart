@@ -1,5 +1,3 @@
-import 'dart:convert';
-import 'package:crypto/crypto.dart';
 import '../../core/api/api_client.dart';
 
 /// Helper untuk flow transaksi blockchain:
@@ -15,7 +13,7 @@ class TransactionHelper {
   /// Generate nonce untuk address tertentu.
   Future<String> generateNonce(String address) async {
     final resp = await api.generateNonce(address);
-    return resp.data['nonce'] as String;
+    return resp.data['data']['nonce'] as String;
   }
 
   /// Bangun pesan canonical untuk SEND transaction.
@@ -44,15 +42,6 @@ class TransactionHelper {
     required String nonce,
   }) {
     return ' SELL ${amount.toStringAsFixed(2)} nonce:$nonce';
-  }
-
-  /// Hash pesan dengan Ethereum personal_sign prefix.
-  /// Format: "\x19Ethereum Signed Message:\n{len}{message}"
-  /// Ini sama dengan PrefixedHash di backend Go.
-  static List<int> prefixedHash(String message) {
-    final prefix = '\x19Ethereum Signed Message:\n${message.length}';
-    final bytes = utf8.encode(prefix + message);
-    return sha256.convert(bytes).bytes;
   }
 
   /// Submit SEND transaction.

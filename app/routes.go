@@ -59,6 +59,7 @@ func (a *AppConfig) SetupRoutes(r *gin.Engine) {
 		txGroup.GET("/:id", a.TransactionHandler.GetTransaction)
 		txGroup.POST("/buy", a.TransactionHandler.Buy)
 		txGroup.POST("/sell", a.TransactionHandler.Sell)
+		txGroup.GET("/fee/estimate", a.TransactionHandler.EstimateFee)
 	}
 
 	// Admin Auth routes. Rate limit untuk mencegah brute force.

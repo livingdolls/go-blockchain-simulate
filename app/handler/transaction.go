@@ -7,9 +7,11 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/livingdolls/go-blockchain-simulate/app/dto"
+	"github.com/livingdolls/go-blockchain-simulate/app/repository"
 	"github.com/livingdolls/go-blockchain-simulate/app/services"
 	"github.com/livingdolls/go-blockchain-simulate/app/worker"
 	"github.com/livingdolls/go-blockchain-simulate/rabbitmq"
+	"github.com/livingdolls/go-blockchain-simulate/utils"
 )
 
 type SendTransactionWithSignatureRequest struct {
@@ -30,12 +32,14 @@ type BuySellTransactionRequest struct {
 type TransactionHandler struct {
 	transactionService services.TransactionService
 	rmqClient          *rabbitmq.Client
+	txRepo             repository.TransactionRepository
 }
 
-func NewTransactionHandler(transactionService services.TransactionService, rmqClient *rabbitmq.Client) *TransactionHandler {
+func NewTransactionHandler(transactionService services.TransactionService, rmqClient *rabbitmq.Client, txRepo repository.TransactionRepository) *TransactionHandler {
 	return &TransactionHandler{
 		transactionService: transactionService,
 		rmqClient:          rmqClient,
+		txRepo:             txRepo,
 	}
 }
 
@@ -179,4 +183,47 @@ func (h *TransactionHandler) GenerateNonce(c *gin.Context) {
 	c.JSON(200, gin.H{
 		"nonce": nonce,
 	})
+}
+
+// EstimateFee menghitung estimasi fee berdasarkan:
+// - Base fee (tier amount-based)
+// - Network congestion (jumlah pending tx)
+// - Priority level (low/medium/high)
+//
+// Endpoint: GET /transaction/fee/estimate?amount=100&priority=medium
+func (h *TransactionHandler) EstimateFee(c *gin.Context) {
+	amountStr := c.Query("amount")
+	priority := c.DefaultQuery("priority", "low")
+
+	var amount float64
+	if _, err := fmt.Sscan(amountStr, &amount); err != nil || amount <= 0 {
+		c.JSON(http.StatusBadRequest, dto.NewErrorResponse[string]("invalid amount"))
+		return
+	}
+
+	// Hitung jumlah pending tx untuk congestion multiplier
+	pendingCount := 0
+	if h.txRepo != nil {
+		txs, err := h.txRepo.GetPendingTransactions(1000)
+		if err == nil {
+			pendingCount = len(txs)
+		}
+	}
+
+	priorityMultiplier := utils.EstimatePriorityMultiplier(priority)
+	estimatedFee := utils.EstimateFee(amount, pendingCount, priorityMultiplier)
+	congestionLevel := utils.CongestionLevel(pendingCount)
+	congestionPct := utils.CongestionPercentage(pendingCount)
+	congestionMultiplier := utils.CalculateCongestionMultiplier(pendingCount)
+	baseFee := utils.CalculateTransactionFee(amount)
+
+	c.JSON(http.StatusOK, dto.NewSuccessResponse(gin.H{
+		"base_fee":             baseFee,
+		"congestion_multiplier": congestionMultiplier,
+		"priority_multiplier":  priorityMultiplier,
+		"estimated_fee":        estimatedFee,
+		"pending_count":        pendingCount,
+		"congestion_level":     congestionLevel,
+		"congestion_percent":   congestionPct,
+	}))
 }

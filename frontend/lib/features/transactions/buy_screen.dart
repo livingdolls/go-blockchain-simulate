@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:uuid/uuid.dart';
 import '../../core/api/api_client.dart';
 import '../../core/theme/app_theme.dart';
+import '../../shared/utils/formatters.dart';
 import '../../shared/widgets/app_widgets.dart';
 import 'transaction_helper.dart';
 
@@ -34,6 +35,10 @@ class _BuyScreenState extends State<BuyScreen> {
   String? _canonicalMessage;
   String? _error;
   String? _success;
+
+  // Fee estimation
+  String _priority = 'low';
+  Map<String, dynamic>? _feeEstimate;
 
   @override
   void initState() {
@@ -119,7 +124,84 @@ class _BuyScreenState extends State<BuyScreen> {
       _success = null;
       _nonceController.clear();
       _signatureController.clear();
+      _feeEstimate = null;
     });
+  }
+
+  Future<void> _fetchFee() async {
+    final amountText = _amountController.text.trim();
+    final amount = double.tryParse(amountText);
+    if (amount == null || amount <= 0) {
+      setState(() => _feeEstimate = null);
+      return;
+    }
+
+    try {
+      final resp = await _api.estimateFee(amount: amount, priority: _priority);
+      setState(() {
+        _feeEstimate = resp.data['data'] as Map<String, dynamic>;
+      });
+    } on ApiException catch (_) {
+      setState(() => _feeEstimate = null);
+    }
+  }
+
+  Widget _buildFeeCard() {
+    if (_feeEstimate == null) return const SizedBox.shrink();
+
+    final baseFee = _feeEstimate!['base_fee'] as double;
+    final estimatedFee = _feeEstimate!['estimated_fee'] as double;
+    final congestionLevel = _feeEstimate!['congestion_level'] as String;
+    final pendingCount = _feeEstimate!['pending_count'] as int;
+    final congestionMult = _feeEstimate!['congestion_multiplier'] as double;
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppTheme.darkSurface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppTheme.darkBorder),
+      ),
+      child: Column(
+        children: [
+          _feeRow('Base Fee', formatYTE(baseFee)),
+          _feeRow('Congestion', '$congestionMult x ($pendingCount pending)'),
+          _feeRow('Prioritas', _priority),
+          const Divider(height: 16),
+          _feeRow('Estimasi Fee', formatYTE(estimatedFee), isBold: true),
+          const SizedBox(height: 8),
+          Text(
+            'Jaringan: $congestionLevel',
+            style: TextStyle(
+              color: congestionLevel == 'low'
+                  ? AppTheme.success
+                  : AppTheme.warning,
+              fontSize: 11,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _feeRow(String label, String value, {bool isBold = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label,
+              style: TextStyle(
+                  color: AppTheme.darkTextSecondary,
+                  fontSize: 12,
+                  fontWeight: isBold ? FontWeight.bold : FontWeight.normal)),
+          Text(value,
+              style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: isBold ? FontWeight.bold : FontWeight.w600)),
+        ],
+      ),
+    );
   }
 
   @override
@@ -175,6 +257,9 @@ class _BuyScreenState extends State<BuyScreen> {
                       hintText: '5.0',
                       prefixIcon: Icon(Icons.token),
                     ),
+                    onChanged: (_) {
+                      if (!_isSigningMode) _fetchFee();
+                    },
                     validator: (v) {
                       if (v == null || v.trim().isEmpty) {
                         return 'Jumlah wajib diisi';
@@ -187,6 +272,12 @@ class _BuyScreenState extends State<BuyScreen> {
                     },
                   ),
                   const SizedBox(height: 20),
+
+                  // Fee estimation
+                  if (!_isSigningMode && _feeEstimate != null) ...[
+                    _buildFeeCard(),
+                    const SizedBox(height: 20),
+                  ],
 
                   if (!_isSigningMode) ...[
                     ElevatedButton.icon(

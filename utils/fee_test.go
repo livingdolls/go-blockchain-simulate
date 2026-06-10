@@ -75,3 +75,80 @@ func TestFormatFee(t *testing.T) {
 		})
 	}
 }
+
+func TestCalculateCongestionMultiplier(t *testing.T) {
+	tests := []struct {
+		name   string
+		count  int
+		expect float64
+	}{
+		{"0 pending", 0, MultiplierNone},
+		{"10 pending (low)", 10, MultiplierNone},
+		{"11 pending (medium)", 11, MultiplierLow},
+		{"50 pending (medium)", 50, MultiplierLow},
+		{"51 pending (high)", 51, MultiplierMedium},
+		{"100 pending (high)", 100, MultiplierMedium},
+		{"101 pending (very high)", 101, MultiplierHigh},
+		{"200 pending (very high)", 200, MultiplierHigh},
+		{"201 pending (extreme)", 201, MultiplierVeryHigh},
+		{"1000 pending (extreme)", 1000, MultiplierVeryHigh},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expect, CalculateCongestionMultiplier(tt.count))
+		})
+	}
+}
+
+func TestEstimateFee(t *testing.T) {
+	// Low congestion, low priority
+	fee := EstimateFee(100, 5, PriorityLow)
+	assert.Equal(t, 0.1, fee) // base=0.1, congestion=1.0, priority=1.0
+
+	// Low congestion, high priority
+	fee = EstimateFee(100, 5, PriorityHigh)
+	assert.Equal(t, 0.2, fee) // base=0.1, congestion=1.0, priority=2.0
+
+	// High congestion, low priority
+	fee = EstimateFee(100, 150, PriorityLow)
+	assert.Equal(t, 0.2, fee) // base=0.1, congestion=2.0, priority=1.0
+
+	// High congestion, high priority
+	fee = EstimateFee(100, 150, PriorityHigh)
+	assert.Equal(t, 0.4, fee) // base=0.1, congestion=2.0, priority=2.0
+
+	// Small amount, no congestion
+	fee = EstimateFee(5, 0, PriorityLow)
+	assert.Equal(t, MinimumFee, fee) // base=0.001, congestion=1.0, priority=1.0
+
+	// Priority < 1.0 should be clamped to 1.0
+	fee = EstimateFee(100, 0, 0.5)
+	assert.Equal(t, 0.1, fee) // priority clamped to 1.0
+}
+
+func TestEstimatePriorityMultiplier(t *testing.T) {
+	assert.Equal(t, PriorityLow, EstimatePriorityMultiplier("low"))
+	assert.Equal(t, PriorityMedium, EstimatePriorityMultiplier("medium"))
+	assert.Equal(t, PriorityHigh, EstimatePriorityMultiplier("high"))
+	assert.Equal(t, PriorityLow, EstimatePriorityMultiplier(""))
+	assert.Equal(t, PriorityLow, EstimatePriorityMultiplier("unknown"))
+}
+
+func TestCongestionLevel(t *testing.T) {
+	assert.Equal(t, "low", CongestionLevel(0))
+	assert.Equal(t, "low", CongestionLevel(10))
+	assert.Equal(t, "medium", CongestionLevel(11))
+	assert.Equal(t, "medium", CongestionLevel(50))
+	assert.Equal(t, "high", CongestionLevel(51))
+	assert.Equal(t, "high", CongestionLevel(100))
+	assert.Equal(t, "very_high", CongestionLevel(101))
+	assert.Equal(t, "very_high", CongestionLevel(500))
+}
+
+func TestCongestionPercentage(t *testing.T) {
+	assert.Equal(t, 0.0, CongestionPercentage(0))
+	assert.Equal(t, 50.0, CongestionPercentage(100))
+	assert.Equal(t, 100.0, CongestionPercentage(200))
+	// Past 200 should be capped at 100
+	assert.Equal(t, 100.0, CongestionPercentage(500))
+}

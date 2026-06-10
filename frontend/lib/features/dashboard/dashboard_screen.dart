@@ -31,6 +31,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   RewardInfo? _reward;
   MarketState? _market;
   List<Block>? _recentBlocks;
+  Map<String, dynamic>? _congestion;
   bool _isLoading = true;
   bool _isLive = false;
   String? _error;
@@ -64,6 +65,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _api.getRewardInfo(),
         _api.getMarketState(),
         _api.getBlocks(limit: 5),
+        _api.estimateFee(amount: 100, priority: 'low'),
       ]);
 
       setState(() {
@@ -76,6 +78,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _recentBlocks = (results[3].data['data'] as List<dynamic>)
             .map((b) => Block.fromJson(b as Map<String, dynamic>))
             .toList();
+        _congestion = results[4].data['data'] as Map<String, dynamic>;
         _isLoading = false;
       });
     } on ApiException catch (e) {
@@ -213,6 +216,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
           if (_stats != null) _buildStatsGrid(),
           const SizedBox(height: 16),
 
+          // Network congestion indicator
+          if (_congestion != null) _buildCongestionCard(),
+          const SizedBox(height: 16),
+
           // Reward info
           if (_reward != null) _buildRewardCard(),
           const SizedBox(height: 16),
@@ -311,6 +318,86 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       color: AppTheme.darkTextSecondary,
                     ),
               ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCongestionCard() {
+    final congestionLevel = _congestion!['congestion_level'] as String;
+    final pendingCount = _congestion!['pending_count'] as int;
+    final congestionPct = _congestion!['congestion_percent'] as double;
+    final estimatedFee = _congestion!['estimated_fee'] as double;
+    final congestionMult = _congestion!['congestion_multiplier'] as double;
+
+    final congestionColor = switch (congestionLevel) {
+      'low' => AppTheme.success,
+      'medium' => AppTheme.warning,
+      'high' => AppTheme.error,
+      'very_high' => AppTheme.error,
+      _ => AppTheme.darkTextSecondary,
+    };
+
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.network_check, size: 20, color: AppTheme.primary),
+              const SizedBox(width: 8),
+              Text('Network Congestion',
+                  style: Theme.of(context).textTheme.titleMedium),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: LinearProgressIndicator(
+                    value: congestionPct / 100,
+                    backgroundColor: AppTheme.darkCard,
+                    valueColor:
+                        AlwaysStoppedAnimation<Color>(congestionColor),
+                    minHeight: 8,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: congestionColor.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  congestionLevel.toUpperCase(),
+                  style: TextStyle(
+                    color: congestionColor,
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('$pendingCount pending txns',
+                  style: const TextStyle(
+                      color: AppTheme.darkTextSecondary, fontSize: 12)),
+              Text('Fee mult: ${congestionMult}x',
+                  style: const TextStyle(
+                      color: AppTheme.darkTextSecondary, fontSize: 12)),
+              Text('Est: ${formatYTE(estimatedFee)}',
+                  style: const TextStyle(fontSize: 12)),
             ],
           ),
         ],

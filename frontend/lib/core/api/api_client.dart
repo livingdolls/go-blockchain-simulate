@@ -370,6 +370,16 @@ class ApiClient {
   Future<Response> generateBlock() {
     return _dio.post('/blocks/generate');
   }
+
+  Future<Response> estimateFee({
+    required double amount,
+    String priority = 'low',
+  }) {
+    return _dio.get('/transaction/fee/estimate', queryParameters: {
+      'amount': amount,
+      'priority': priority,
+    });
+  }
 }
 
 /// Interceptor yang mengkonversi DioException ke [ApiException]

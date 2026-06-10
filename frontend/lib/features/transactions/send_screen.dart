@@ -42,6 +42,11 @@ class _SendScreenState extends State<SendScreen> {
   String? _error;
   String? _success;
 
+  // Fee estimation
+  String _priority = 'low';
+  Map<String, dynamic>? _feeEstimate;
+  bool _isFeeLoading = false;
+
   @override
   void initState() {
     super.initState();
@@ -129,7 +134,32 @@ class _SendScreenState extends State<SendScreen> {
       _success = null;
       _nonceController.clear();
       _signatureController.clear();
+      _feeEstimate = null;
     });
+  }
+
+  Future<void> _fetchFee() async {
+    final amountText = _amountController.text.trim();
+    final amount = double.tryParse(amountText);
+    if (amount == null || amount <= 0) {
+      setState(() => _feeEstimate = null);
+      return;
+    }
+
+    setState(() => _isFeeLoading = true);
+
+    try {
+      final resp = await _api.estimateFee(amount: amount, priority: _priority);
+      setState(() {
+        _feeEstimate = resp.data['data'] as Map<String, dynamic>;
+        _isFeeLoading = false;
+      });
+    } on ApiException catch (_) {
+      setState(() {
+        _feeEstimate = null;
+        _isFeeLoading = false;
+      });
+    }
   }
 
   Future<void> _scanQr() async {
@@ -159,6 +189,145 @@ class _SendScreenState extends State<SendScreen> {
         );
       }
     }
+  }
+
+  Widget _buildFeeEstimation() {
+    if (_isFeeLoading) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 8),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            SizedBox(width: 8),
+            Text('Menghitung fee...', style: TextStyle(fontSize: 12)),
+          ],
+        ),
+      );
+    }
+
+    if (_feeEstimate == null) return const SizedBox.shrink();
+
+    final baseFee = _feeEstimate!['base_fee'] as double;
+    final estimatedFee = _feeEstimate!['estimated_fee'] as double;
+    final congestionLevel = _feeEstimate!['congestion_level'] as String;
+    final congestionPct = _feeEstimate!['congestion_percent'] as double;
+    final pendingCount = _feeEstimate!['pending_count'] as int;
+    final congestionMult = _feeEstimate!['congestion_multiplier'] as double;
+    final priorityMult = _feeEstimate!['priority_multiplier'] as double;
+
+    final congestionColor = switch (congestionLevel) {
+      'low' => AppTheme.success,
+      'medium' => AppTheme.warning,
+      'high' => AppTheme.error,
+      'very_high' => AppTheme.error,
+      _ => AppTheme.darkTextSecondary,
+    };
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Priority selector
+        Row(
+          children: [
+            const Text('Prioritas: ',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+            ...['low', 'medium', 'high'].map((p) {
+              final label = switch (p) {
+                'low' => 'Rendah',
+                'medium' => 'Sedang',
+                'high' => 'Tinggi',
+                _ => p,
+              };
+              final isSelected = _priority == p;
+              return Padding(
+                padding: const EdgeInsets.only(left: 4),
+                child: ChoiceChip(
+                  label: Text(label, style: const TextStyle(fontSize: 12)),
+                  selected: isSelected,
+                  onSelected: (_) {
+                    setState(() => _priority = p);
+                    _fetchFee();
+                  },
+                  selectedColor: AppTheme.primary.withValues(alpha: 0.3),
+                ),
+              );
+            }),
+          ],
+        ),
+        const SizedBox(height: 12),
+
+        // Fee details
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: AppTheme.darkSurface,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: AppTheme.darkBorder),
+          ),
+          child: Column(
+            children: [
+              _feeRow('Base Fee', formatYTE(baseFee)),
+              _feeRow('Congestion', '$congestionMult x (${pendingCount} pending)'),
+              _feeRow('Priority', '$priorityMult x ($_priority)'),
+              const Divider(height: 16),
+              _feeRow('Estimasi Fee', formatYTE(estimatedFee), isBold: true),
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+
+        // Congestion indicator
+        Row(
+          children: [
+            Expanded(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: LinearProgressIndicator(
+                  value: congestionPct / 100,
+                  backgroundColor: AppTheme.darkCard,
+                  valueColor:
+                      AlwaysStoppedAnimation<Color>(congestionColor),
+                  minHeight: 6,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              congestionLevel.toUpperCase(),
+              style: TextStyle(
+                color: congestionColor,
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _feeRow(String label, String value, {bool isBold = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label,
+              style: TextStyle(
+                  color: AppTheme.darkTextSecondary,
+                  fontSize: 12,
+                  fontWeight: isBold ? FontWeight.bold : FontWeight.normal)),
+          Text(value,
+              style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: isBold ? FontWeight.bold : FontWeight.w600)),
+        ],
+      ),
+    );
   }
 
   @override
@@ -242,6 +411,9 @@ class _SendScreenState extends State<SendScreen> {
                       hintText: '10.5',
                       prefixIcon: Icon(Icons.token),
                     ),
+                    onChanged: (_) {
+                      if (!_isSigningMode) _fetchFee();
+                    },
                     validator: (v) {
                       if (v == null || v.trim().isEmpty) {
                         return 'Jumlah wajib diisi';
@@ -254,6 +426,12 @@ class _SendScreenState extends State<SendScreen> {
                     },
                   ),
                   const SizedBox(height: 20),
+
+                  // Fee estimation (hanya tampil di step 1)
+                  if (!_isSigningMode) ...[
+                    _buildFeeEstimation(),
+                    const SizedBox(height: 20),
+                  ],
 
                   if (!_isSigningMode) ...[
                     ElevatedButton.icon(

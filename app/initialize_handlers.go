@@ -10,7 +10,7 @@ import (
 // membungkus service yang sesuai; tidak ada logika bisnis di sini.
 func (a *AppConfig) InitializeHandlers() {
 	a.UserHandler = handler.NewRegisterHandler(a.UserService, a.RedisServices)
-	a.TransactionHandler = handler.NewTransactionHandler(a.TransactionService, a.RMQClient)
+	a.TransactionHandler = handler.NewTransactionHandler(a.TransactionService, a.RMQClient, a.TxRepo)
 	a.BalanceHandler = handler.NewBalanceHandler(a.BalanceService)
 	a.BlockHandler = handler.NewBlockHandler(a.BlockService)
 	a.RewardHandler = handler.NewRewardHandler(a.RewardService, a.BlockService)

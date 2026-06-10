@@ -211,3 +211,47 @@ class EmptyState extends StatelessWidget {
     );
   }
 }
+
+/// Indikator live/offline untuk WebSocket connection status.
+/// Menampilkan dot hijau berkedip + "Live" atau dot abu-abu + "Offline".
+class LiveIndicator extends StatelessWidget {
+  final bool isLive;
+
+  const LiveIndicator({super.key, required this.isLive});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 300),
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(
+            color: isLive ? AppTheme.success : AppTheme.darkTextSecondary,
+            shape: BoxShape.circle,
+            boxShadow: isLive
+                ? [
+                    BoxShadow(
+                      color: AppTheme.success.withValues(alpha: 0.6),
+                      blurRadius: 6,
+                      spreadRadius: 1,
+                    ),
+                  ]
+                : null,
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          isLive ? 'Live' : 'Offline',
+          style: TextStyle(
+            color: isLive ? AppTheme.success : AppTheme.darkTextSecondary,
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    );
+  }
+}

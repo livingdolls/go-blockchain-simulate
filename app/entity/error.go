@@ -46,6 +46,11 @@ var ErrDependenciesNotInitialized = errors.New("dependensi aplikasi belum diinis
 // membuka peluang brute-force pada token.
 var ErrJWTSecretTooShort = errors.New("jwt secret minimal 32 byte untuk HS256")
 
+// TOKEN ERRORS
+// ErrTokenRevoked dipicu saat token ditemukan di Redis blacklist.
+// Token di-blacklist saat user logout atau admin suspend user.
+var ErrTokenRevoked = errors.New("token has been revoked")
+
 // ADMIN ERRORS
 var ErrAdminNotFound = errors.New("admin not found")
 var ErrDuplicateAdminUsername = errors.New("duplicate admin username")

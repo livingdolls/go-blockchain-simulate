@@ -8,12 +8,14 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/livingdolls/go-blockchain-simulate/app/dto"
 	"github.com/livingdolls/go-blockchain-simulate/app/services"
+	"github.com/livingdolls/go-blockchain-simulate/redis"
 	"github.com/livingdolls/go-blockchain-simulate/security"
 )
 
 type AdminLoginHandler struct {
 	authService services.AdminAuthService
 	jwtService  security.AdminJWTService
+	memory      redis.MemoryAdapter
 }
 
 type AdminLoginRequest struct {
@@ -29,10 +31,11 @@ type AdminLoginResponse struct {
 	Token    string `json:"token"`
 }
 
-func NewAdminLoginHandler(authService services.AdminAuthService, jwtService security.AdminJWTService) *AdminLoginHandler {
+func NewAdminLoginHandler(authService services.AdminAuthService, jwtService security.AdminJWTService, memory redis.MemoryAdapter) *AdminLoginHandler {
 	return &AdminLoginHandler{
 		authService: authService,
 		jwtService:  jwtService,
+		memory:      memory,
 	}
 }
 
@@ -75,8 +78,8 @@ func (h *AdminLoginHandler) Login(c *gin.Context) {
 }
 
 func (h *AdminLoginHandler) Logout(c *gin.Context) {
-	// MaxAge=-1 untuk hapus cookie. Pakai helper yang sama dengan login
-	// agar SameSite policy konsisten.
+	token, _ := c.Cookie("admin_token")
+	blacklistToken(c, token, h.memory)
 	setAuthCookie(c, "admin_token", "", -3600)
 	c.JSON(http.StatusOK, dto.NewSuccessResponse("Logged out successfully"))
 }

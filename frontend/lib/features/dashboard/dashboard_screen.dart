@@ -1,6 +1,10 @@
+import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart' hide Block;
+import 'package:web_socket_channel/web_socket_channel.dart';
 import '../../core/api/api_client.dart';
+import '../../core/config/app_config.dart';
 import '../../core/models/models.dart';
 import '../../core/theme/app_theme.dart';
 import '../../shared/utils/formatters.dart';
@@ -11,6 +15,7 @@ import '../../shared/widgets/app_widgets.dart';
 /// - Reward info (current supply, halving)
 /// - Market state (price, volume)
 /// - Block terbaru
+/// - Real-time updates via WebSocket
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
 
@@ -26,12 +31,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
   MarketState? _market;
   List<Block>? _recentBlocks;
   bool _isLoading = true;
+  bool _isLive = false;
   String? _error;
+
+  WebSocketChannel? _channel;
+  Timer? _reconnectTimer;
 
   @override
   void initState() {
     super.initState();
     _loadData();
+    _connectWebSocket();
+  }
+
+  @override
+  void dispose() {
+    _reconnectTimer?.cancel();
+    _channel?.sink.close();
+    super.dispose();
   }
 
   Future<void> _loadData() async {
@@ -68,15 +85,96 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  Future<void> _logout() async {
+    try {
+      await _api.userLogout();
+    } catch (_) {
+      // Logout best-effort: bahkan jika server error, tetap clear local state
+    }
+    _reconnectTimer?.cancel();
+    _channel?.sink.close();
+    if (mounted) context.go('/login');
+  }
+
+  void _connectWebSocket() {
+    try {
+      _channel = WebSocketChannel.connect(
+        Uri.parse('${AppConfig.wsUrl}/ws/market'),
+      );
+
+      // Kirim subscribe message setelah connect.
+      // Tanpa ini, backend tidak akan mengirim event apapun karena
+      // setiap client harus subscribe ke event types yang diinginkan.
+      _channel!.sink.add(jsonEncode({
+        'type': 'subscribe',
+        'data': {
+          'events': ['market.update', 'block.mined'],
+        },
+      }));
+
+      _channel!.stream.listen(
+        (data) {
+          try {
+            final msg = jsonDecode(data as String) as Map<String, dynamic>;
+            final type = msg['type'] as String?;
+            final payload = msg['data'];
+
+            if (payload is! Map<String, dynamic>) return;
+
+            if (type == 'market.update' && mounted) {
+              setState(() {
+                _market = MarketState.fromJson(payload);
+                _isLive = true;
+              });
+            } else if (type == 'block.mined' && mounted) {
+              final newBlock = Block.fromJson(payload);
+              setState(() {
+                _recentBlocks = [
+                  newBlock,
+                  if (_recentBlocks != null) ..._recentBlocks!.take(4),
+                ];
+                _isLive = true;
+              });
+            }
+          } catch (_) {}
+        },
+        onError: (_) {
+          if (mounted) setState(() => _isLive = false);
+        },
+        onDone: () {
+          if (mounted) {
+            setState(() => _isLive = false);
+            // Reconnect setelah 5 detik
+            _reconnectTimer = Timer(const Duration(seconds: 5), () {
+              if (mounted) _connectWebSocket();
+            });
+          }
+        },
+      );
+    } catch (_) {
+      if (mounted) setState(() => _isLive = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('YuteBlockchain Dashboard'),
         actions: [
+          // Live indicator
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            child: LiveIndicator(isLive: _isLive),
+          ),
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _loadData,
+          ),
+          IconButton(
+            icon: const Icon(Icons.logout),
+            onPressed: _logout,
+            tooltip: 'Logout',
           ),
         ],
       ),

@@ -5,10 +5,16 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/livingdolls/go-blockchain-simulate/app/entity"
+	"github.com/livingdolls/go-blockchain-simulate/redis"
 	"github.com/livingdolls/go-blockchain-simulate/security"
 )
 
-func JWTMiddleware(jwtService security.JWTService) gin.HandlerFunc {
+// blacklistPrefix adalah prefix key untuk Redis blacklist.
+// Format: "jwt:blacklist:<token_hash>" dengan TTL = sisa lifetime token.
+const blacklistPrefix = "jwt:blacklist:"
+
+func JWTMiddleware(jwtService security.JWTService, memory redis.MemoryAdapter) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		token, err := c.Cookie("auth_token")
 		if err != nil || strings.TrimSpace(token) == "" {
@@ -18,6 +24,21 @@ func JWTMiddleware(jwtService security.JWTService) gin.HandlerFunc {
 				"error":   "Unauthorized: missing or invalid token",
 			})
 			return
+		}
+
+		// Cek blacklist sebelum validasi crypto. Ini memastikan token
+		// yang sudah di-revoke (logout / admin suspend) ditolak meskipun
+		// secara kriptografis masih valid.
+		if memory != nil {
+			hash := security.TokenHash(token)
+			if _, found := memory.Get(c.Request.Context(), blacklistPrefix+hash); found {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+					"success": false,
+					"code":    http.StatusUnauthorized,
+					"error":   entity.ErrTokenRevoked.Error(),
+				})
+				return
+			}
 		}
 
 		claims, err := jwtService.ValidateToken(token)

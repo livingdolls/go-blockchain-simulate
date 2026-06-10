@@ -48,7 +48,7 @@ var _ security.JWTService = (*fakeJWTService)(nil)
 func newJWTMiddlewareTestRouter(jwtSvc security.JWTService) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	r.Use(JWTMiddleware(jwtSvc))
+	r.Use(JWTMiddleware(jwtSvc, nil)) // nil memory = skip blacklist check
 	r.GET("/profile", func(c *gin.Context) {
 		claims, _ := GetUserClaims(c)
 		c.JSON(http.StatusOK, gin.H{"address": claims.Address})

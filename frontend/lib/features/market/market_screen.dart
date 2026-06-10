@@ -72,13 +72,23 @@ class _MarketScreenState extends State<MarketScreen> {
         Uri.parse('${AppConfig.wsUrl}/ws/market'),
       );
 
+      // Kirim subscribe message setelah connect.
+      // Tanpa ini, backend tidak akan mengirim event apapun karena
+      // setiap client harus subscribe ke event types yang diinginkan.
+      _channel!.sink.add(jsonEncode({
+        'type': 'subscribe',
+        'data': {
+          'events': ['market.update'],
+        },
+      }));
+
       _channel!.stream.listen(
         (data) {
           try {
             final msg = jsonDecode(data as String) as Map<String, dynamic>;
             final type = msg['type'] as String?;
 
-            if (type == 'market_price' && mounted) {
+            if (type == 'market.update' && mounted) {
               final priceData = msg['data'] as Map<String, dynamic>;
               setState(() {
                 _market = MarketState.fromJson(priceData);

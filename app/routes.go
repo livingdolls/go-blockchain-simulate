@@ -30,6 +30,7 @@ func (a *AppConfig) SetupRoutes(r *gin.Engine) {
 		authGroup.POST("/register", a.UserHandler.Register)
 		authGroup.POST("/challenge/:address", a.UserHandler.Challenge)
 		authGroup.POST("/challenge/verify", a.UserHandler.Verify)
+		authGroup.POST("/auth/logout", a.UserHandler.Logout)
 	}
 
 	// Transaction routes
@@ -71,7 +72,7 @@ func (a *AppConfig) SetupRoutes(r *gin.Engine) {
 
 	// Admin dashboard & management routes (protected with middleware)
 	adminGroup := r.Group("/admin")
-	adminGroup.Use(handler.AdminMiddleware(a.JWTAdmin, a.AdminRepo))
+	adminGroup.Use(handler.AdminMiddleware(a.JWTAdmin, a.AdminRepo, a.RedisServices))
 	{
 		adminGroup.GET("/dashboard", a.AdminHandler.Dashboard)
 		adminGroup.GET("/admins", a.AdminHandler.ListAdmins)
@@ -91,7 +92,7 @@ func (a *AppConfig) SetupRoutes(r *gin.Engine) {
 	balanceGroup := r.Group("/balance")
 	{
 		balanceGroup.GET("/:address", a.BalanceHandler.GetUserWithUSDBalance)
-		balanceGroup.POST("/topup", handler.JWTMiddleware(a.JWT), a.BalanceHandler.TopUpUSDBalance)
+		balanceGroup.POST("/topup", handler.JWTMiddleware(a.JWT, a.RedisServices), a.BalanceHandler.TopUpUSDBalance)
 	}
 
 	// Wallet routes
@@ -115,7 +116,7 @@ func (a *AppConfig) SetupRoutes(r *gin.Engine) {
 	}
 	// /blocks/generate dipisah di luar group agar middleware admin bisa
 	// dipasang spesifik hanya untuk endpoint ini.
-	r.POST("/blocks/generate", handler.AdminMiddleware(a.JWTAdmin, a.AdminRepo), a.BlockHandler.GenerateBlock)
+	r.POST("/blocks/generate", handler.AdminMiddleware(a.JWTAdmin, a.AdminRepo, a.RedisServices), a.BlockHandler.GenerateBlock)
 
 	// Reward routes
 	rewardGroup := r.Group("/reward")
@@ -144,7 +145,7 @@ func (a *AppConfig) SetupRoutes(r *gin.Engine) {
 
 	// Protected routes
 	protected := r.Group("/profile")
-	protected.Use(handler.JWTMiddleware(a.JWT))
+	protected.Use(handler.JWTMiddleware(a.JWT, a.RedisServices))
 	{
 		protected.GET("", a.ProfileHandler.Me)
 	}

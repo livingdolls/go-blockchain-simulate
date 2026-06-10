@@ -78,6 +78,10 @@ class ApiClient {
     return _dio.post('/admin/auth/logout');
   }
 
+  Future<Response> userLogout() {
+    return _dio.post('/auth/logout');
+  }
+
   // ==================== Balance ====================
 
   Future<Response> getBalance(String address) {

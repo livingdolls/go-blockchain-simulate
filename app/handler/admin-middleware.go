@@ -11,10 +11,11 @@ import (
 	"github.com/livingdolls/go-blockchain-simulate/app/entity"
 	"github.com/livingdolls/go-blockchain-simulate/app/models"
 	"github.com/livingdolls/go-blockchain-simulate/app/repository"
+	"github.com/livingdolls/go-blockchain-simulate/redis"
 	"github.com/livingdolls/go-blockchain-simulate/security"
 )
 
-func AdminMiddleware(jwtService security.AdminJWTService, adminRepo repository.AdminRepository) gin.HandlerFunc {
+func AdminMiddleware(jwtService security.AdminJWTService, adminRepo repository.AdminRepository, memory redis.MemoryAdapter) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// extract token from cookie
 		token, err := c.Cookie("admin_token")
@@ -22,6 +23,15 @@ func AdminMiddleware(jwtService security.AdminJWTService, adminRepo repository.A
 		if err != nil || strings.TrimSpace(token) == "" {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, dto.NewErrorResponse[string]("Unauthorized: missing token"))
 			return
+		}
+
+		// Cek blacklist sebelum validasi crypto.
+		if memory != nil {
+			hash := security.TokenHash(token)
+			if _, found := memory.Get(c.Request.Context(), blacklistPrefix+hash); found {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, dto.NewErrorResponse[string](entity.ErrTokenRevoked.Error()))
+				return
+			}
 		}
 
 		// validate token

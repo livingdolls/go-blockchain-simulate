@@ -2,11 +2,14 @@ package handler
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/livingdolls/go-blockchain-simulate/app/dto"
 	"github.com/livingdolls/go-blockchain-simulate/app/models"
 	"github.com/livingdolls/go-blockchain-simulate/app/services"
+	"github.com/livingdolls/go-blockchain-simulate/redis"
+	"github.com/livingdolls/go-blockchain-simulate/security"
 )
 
 // setAuthCookie menulis JWT ke cookie browser dengan SameSite=Strict.
@@ -37,12 +40,26 @@ func setAuthCookie(c *gin.Context, name, token string, maxAgeSeconds int) {
 	})
 }
 
-type RegisterHandler struct {
-	service services.RegisterService
+// blacklistToken menghitung hash token dan menyimpannya di Redis
+// blacklist dengan TTL. Dipanggil saat logout untuk mencegah token
+// yang sudah di-logout dipakai ulang.
+func blacklistToken(c *gin.Context, token string, memory redis.MemoryAdapter) {
+	if memory == nil || strings.TrimSpace(token) == "" {
+		return
+	}
+	hash := security.TokenHash(token)
+	// TTL 24 jam (sama dengan max token lifetime). Redis otomatis
+	// menghapus entry setelah TTL habis, sehingga tidak perlu cleanup manual.
+	memory.Set(c.Request.Context(), blacklistPrefix+hash, []byte("1"), 24*3600)
 }
 
-func NewRegisterHandler(service services.RegisterService) *RegisterHandler {
-	return &RegisterHandler{service: service}
+type RegisterHandler struct {
+	service services.RegisterService
+	memory  redis.MemoryAdapter
+}
+
+func NewRegisterHandler(service services.RegisterService, memory redis.MemoryAdapter) *RegisterHandler {
+	return &RegisterHandler{service: service, memory: memory}
 }
 
 func (h *RegisterHandler) Register(c *gin.Context) {
@@ -108,4 +125,14 @@ func (h *RegisterHandler) Verify(c *gin.Context) {
 	setAuthCookie(c, "auth_token", valid, 24*3600)
 
 	c.JSON(200, gin.H{"valid": true})
+}
+
+// Logout menghapus cookie auth_token dan menambahkan token ke Redis
+// blacklist. Token yang sudah di-blacklist tidak bisa dipakai lagi
+// meskipun belum expired (sampai TTL 24 jam habis).
+func (h *RegisterHandler) Logout(c *gin.Context) {
+	token, _ := c.Cookie("auth_token")
+	blacklistToken(c, token, h.memory)
+	setAuthCookie(c, "auth_token", "", -3600)
+	c.JSON(http.StatusOK, dto.NewSuccessResponse("Logged out successfully"))
 }

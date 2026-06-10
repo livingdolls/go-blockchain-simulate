@@ -1,6 +1,8 @@
 package security
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"time"
 
@@ -15,6 +17,15 @@ type JWTClaims struct {
 type JWTService interface {
 	GenerateToken(address string) (string, error)
 	ValidateToken(token string) (*JWTClaims, error)
+}
+
+// TokenHash menghitung SHA-256 hash dari token string.
+// Dipakai sebagai key di Redis blacklist: "jwt:blacklist:<hash>".
+// Hash memastikan token asli tidak disimpan di Redis (hanya derivasi
+// satu-arah), sehingga tidak ada risiko leak token di Redis logs.
+func TokenHash(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:])
 }
 
 type JWTAdapter struct {

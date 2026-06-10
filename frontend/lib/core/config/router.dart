@@ -5,6 +5,7 @@ import '../../features/blocks/blocks_screen.dart';
 import '../../features/blocks/block_detail_screen.dart';
 import '../../features/wallet/wallet_screen.dart';
 import '../../features/transactions/transaction_detail_screen.dart';
+import '../../features/transactions/transaction_history_screen.dart';
 import '../../features/transactions/send_screen.dart';
 import '../../features/transactions/buy_screen.dart';
 import '../../features/transactions/sell_screen.dart';
@@ -51,6 +52,13 @@ final appRouter = GoRouter(
       builder: (context, state) {
         final address = state.pathParameters['address']!;
         return WalletScreen(address: address);
+      },
+    ),
+    GoRoute(
+      path: '/wallet/:address/history',
+      builder: (context, state) {
+        final address = state.pathParameters['address']!;
+        return TransactionHistoryScreen(address: address);
       },
     ),
     GoRoute(

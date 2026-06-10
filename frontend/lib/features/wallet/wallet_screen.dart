@@ -115,7 +115,16 @@ class _WalletScreenState extends State<WalletScreen> {
         ],
 
         // Transactions
-        Text('Riwayat Transaksi', style: Theme.of(context).textTheme.titleMedium),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text('Riwayat Transaksi', style: Theme.of(context).textTheme.titleMedium),
+            TextButton(
+              onPressed: () => context.go('/wallet/${widget.address}/history'),
+              child: const Text('Lihat Semua'),
+            ),
+          ],
+        ),
         const SizedBox(height: 8),
         if (_transactions != null && _transactions!.transactions.isNotEmpty)
           ..._transactions!.transactions.map((tx) => _buildTxCard(tx))

@@ -9,6 +9,7 @@ import '../../core/models/models.dart';
 import '../../core/theme/app_theme.dart';
 import '../../shared/utils/formatters.dart';
 import '../../shared/widgets/app_widgets.dart';
+import '../search/search_delegate.dart';
 
 /// Dashboard utama yang menampilkan ringkasan blockchain:
 /// - Block stats (total blocks, difficulty, fees)
@@ -162,6 +163,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
       appBar: AppBar(
         title: const Text('YuteBlockchain Dashboard'),
         actions: [
+          // Search button
+          IconButton(
+            icon: const Icon(Icons.search),
+            onPressed: () {
+              showSearch(context: context, delegate: BlockchainSearchDelegate());
+            },
+            tooltip: 'Cari',
+          ),
           // Live indicator
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 14),

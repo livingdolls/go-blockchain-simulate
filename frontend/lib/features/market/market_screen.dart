@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import '../../core/api/api_client.dart';
@@ -107,7 +108,9 @@ class _MarketScreenState extends State<MarketScreen> {
             }
           } catch (_) {}
         },
-        onError: (_) {},
+        onError: (e) {
+          debugPrint('Market WS error: $e');
+        },
         onDone: () {
           // Reconnect setelah delay menggunakan Timer (cancellable)
           _reconnectTimer = Timer(const Duration(seconds: 5), () {

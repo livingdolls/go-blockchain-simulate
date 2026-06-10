@@ -146,7 +146,7 @@ class _BlocksScreenState extends State<BlocksScreen> {
                     : null,
                 child: const Text('Previous'),
               ),
-              Text('Offset: $_offset'),
+              Text('Halaman ${(_offset ~/ _limit) + 1}'),
               ElevatedButton(
                 onPressed: _blocks!.length == _limit
                     ? () {

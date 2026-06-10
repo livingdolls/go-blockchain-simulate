@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart' hide Block;
 import 'package:provider/provider.dart';
@@ -173,8 +174,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
             }
           } catch (_) {}
         },
-        onError: (_) {
-          if (mounted) setState(() => _isLive = false);
+        onError: (e) {
+          if (mounted) {
+            setState(() => _isLive = false);
+            debugPrint('Dashboard WS error: $e');
+          }
         },
         onDone: () {
           if (mounted) {

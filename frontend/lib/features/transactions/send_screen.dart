@@ -7,6 +7,7 @@ import '../../core/api/api_client.dart';
 import '../../core/theme/app_theme.dart';
 import '../../shared/utils/formatters.dart';
 import '../../shared/widgets/app_widgets.dart';
+import '../../shared/widgets/fee_estimation_card.dart';
 import '../qr/qr_data.dart';
 import '../qr/qr_scanner_screen.dart';
 import 'transaction_helper.dart';
@@ -211,22 +212,6 @@ class _SendScreenState extends State<SendScreen> {
 
     if (_feeEstimate == null) return const SizedBox.shrink();
 
-    final baseFee = _feeEstimate!['base_fee'] as double;
-    final estimatedFee = _feeEstimate!['estimated_fee'] as double;
-    final congestionLevel = _feeEstimate!['congestion_level'] as String;
-    final congestionPct = _feeEstimate!['congestion_percent'] as double;
-    final pendingCount = _feeEstimate!['pending_count'] as int;
-    final congestionMult = _feeEstimate!['congestion_multiplier'] as double;
-    final priorityMult = _feeEstimate!['priority_multiplier'] as double;
-
-    final congestionColor = switch (congestionLevel) {
-      'low' => AppTheme.success,
-      'medium' => AppTheme.warning,
-      'high' => AppTheme.error,
-      'very_high' => AppTheme.error,
-      _ => AppTheme.darkTextSecondary,
-    };
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -259,74 +244,8 @@ class _SendScreenState extends State<SendScreen> {
           ],
         ),
         const SizedBox(height: 12),
-
-        // Fee details
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: AppTheme.darkSurface,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: AppTheme.darkBorder),
-          ),
-          child: Column(
-            children: [
-              _feeRow('Base Fee', formatYTE(baseFee)),
-              _feeRow('Congestion', '$congestionMult x (${pendingCount} pending)'),
-              _feeRow('Priority', '$priorityMult x ($_priority)'),
-              const Divider(height: 16),
-              _feeRow('Estimasi Fee', formatYTE(estimatedFee), isBold: true),
-            ],
-          ),
-        ),
-        const SizedBox(height: 8),
-
-        // Congestion indicator
-        Row(
-          children: [
-            Expanded(
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(4),
-                child: LinearProgressIndicator(
-                  value: congestionPct / 100,
-                  backgroundColor: AppTheme.darkCard,
-                  valueColor:
-                      AlwaysStoppedAnimation<Color>(congestionColor),
-                  minHeight: 6,
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Text(
-              congestionLevel.toUpperCase(),
-              style: TextStyle(
-                color: congestionColor,
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
-        ),
+        FeeEstimationCard(feeData: _feeEstimate!, priority: _priority),
       ],
-    );
-  }
-
-  Widget _feeRow(String label, String value, {bool isBold = false}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label,
-              style: TextStyle(
-                  color: AppTheme.darkTextSecondary,
-                  fontSize: 12,
-                  fontWeight: isBold ? FontWeight.bold : FontWeight.normal)),
-          Text(value,
-              style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: isBold ? FontWeight.bold : FontWeight.w600)),
-        ],
-      ),
     );
   }
 
@@ -554,7 +473,7 @@ class _SendScreenState extends State<SendScreen> {
                   // Error
                   if (_error != null) ...[
                     const SizedBox(height: 16),
-                    _ErrorBanner(message: _error!),
+                    ErrorBanner(message: _error!),
                   ],
 
                   // Success
@@ -590,33 +509,6 @@ class _SendScreenState extends State<SendScreen> {
                 ],
               ),
             ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ErrorBanner extends StatelessWidget {
-  final String message;
-  const _ErrorBanner({required this.message});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppTheme.error.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppTheme.error.withValues(alpha: 0.3)),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.error_outline, color: AppTheme.error, size: 18),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(message,
-                style: const TextStyle(color: AppTheme.error, fontSize: 13)),
           ),
         ],
       ),

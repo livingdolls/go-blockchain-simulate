@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/api/api_client.dart';
 import '../../core/theme/app_theme.dart';
+import '../../shared/widgets/app_widgets.dart';
 
 /// Auth screen terpadu dengan tab Register dan Login.
 ///
@@ -243,7 +244,7 @@ class _RegisterTabState extends State<_RegisterTab> {
           // Error
           if (_error != null) ...[
             const SizedBox(height: 16),
-            _ErrorBanner(message: _error!),
+            ErrorBanner(message: _error!),
           ],
         ],
       ),
@@ -458,7 +459,7 @@ class _LoginTabState extends State<_LoginTab> {
           // Error
           if (_error != null) ...[
             const SizedBox(height: 16),
-            _ErrorBanner(message: _error!),
+            ErrorBanner(message: _error!),
           ],
         ],
       ),
@@ -466,33 +467,3 @@ class _LoginTabState extends State<_LoginTab> {
   }
 }
 
-// ==================== SHARED WIDGETS ====================
-
-class _ErrorBanner extends StatelessWidget {
-  final String message;
-  const _ErrorBanner({required this.message});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppTheme.error.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppTheme.error.withValues(alpha: 0.3)),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.error_outline, color: AppTheme.error, size: 18),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              message,
-              style: const TextStyle(color: AppTheme.error, fontSize: 13),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}

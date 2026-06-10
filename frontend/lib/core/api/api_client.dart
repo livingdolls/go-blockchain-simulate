@@ -13,7 +13,13 @@ import '../config/app_config.dart';
 class ApiClient {
   late final Dio _dio;
 
-  ApiClient() {
+  // Singleton pattern: semua screen share satu instance Dio
+  // dengan connection pool yang sama. Tanpa ini, setiap screen
+  // buat instance baru → defeat connection pooling, multiply logging.
+  static final ApiClient _instance = ApiClient._();
+  factory ApiClient() => _instance;
+
+  ApiClient._() {
     _dio = Dio(BaseOptions(
       baseUrl: AppConfig.apiBaseUrl,
       connectTimeout: AppConfig.connectTimeout,

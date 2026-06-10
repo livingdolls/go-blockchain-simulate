@@ -4,8 +4,8 @@ import 'package:go_router/go_router.dart';
 import 'package:uuid/uuid.dart';
 import '../../core/api/api_client.dart';
 import '../../core/theme/app_theme.dart';
-import '../../shared/utils/formatters.dart';
 import '../../shared/widgets/app_widgets.dart';
+import '../../shared/widgets/fee_estimation_card.dart';
 import 'transaction_helper.dart';
 
 /// Screen untuk menjual YTE ke sistem (SELL).
@@ -150,60 +150,7 @@ class _SellScreenState extends State<SellScreen> {
 
   Widget _buildFeeCard() {
     if (_feeEstimate == null) return const SizedBox.shrink();
-
-    final baseFee = _feeEstimate!['base_fee'] as double;
-    final estimatedFee = _feeEstimate!['estimated_fee'] as double;
-    final congestionLevel = _feeEstimate!['congestion_level'] as String;
-    final pendingCount = _feeEstimate!['pending_count'] as int;
-    final congestionMult = _feeEstimate!['congestion_multiplier'] as double;
-
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppTheme.darkSurface,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppTheme.darkBorder),
-      ),
-      child: Column(
-        children: [
-          _feeRow('Base Fee', formatYTE(baseFee)),
-          _feeRow('Congestion', '$congestionMult x ($pendingCount pending)'),
-          _feeRow('Prioritas', _priority),
-          const Divider(height: 16),
-          _feeRow('Estimasi Fee', formatYTE(estimatedFee), isBold: true),
-          const SizedBox(height: 8),
-          Text(
-            'Jaringan: $congestionLevel',
-            style: TextStyle(
-              color: congestionLevel == 'low'
-                  ? AppTheme.success
-                  : AppTheme.warning,
-              fontSize: 11,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _feeRow(String label, String value, {bool isBold = false}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label,
-              style: TextStyle(
-                  color: AppTheme.darkTextSecondary,
-                  fontSize: 12,
-                  fontWeight: isBold ? FontWeight.bold : FontWeight.normal)),
-          Text(value,
-              style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: isBold ? FontWeight.bold : FontWeight.w600)),
-        ],
-      ),
-    );
+    return FeeEstimationCard(feeData: _feeEstimate!, priority: _priority);
   }
 
   @override
@@ -398,7 +345,7 @@ class _SellScreenState extends State<SellScreen> {
 
                   if (_error != null) ...[
                     const SizedBox(height: 16),
-                    _ErrorBanner(message: _error!),
+                    ErrorBanner(message: _error!),
                   ],
 
                   if (_success != null) ...[
@@ -440,29 +387,3 @@ class _SellScreenState extends State<SellScreen> {
   }
 }
 
-class _ErrorBanner extends StatelessWidget {
-  final String message;
-  const _ErrorBanner({required this.message});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppTheme.error.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppTheme.error.withValues(alpha: 0.3)),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.error_outline, color: AppTheme.error, size: 18),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(message,
-                style: const TextStyle(color: AppTheme.error, fontSize: 13)),
-          ),
-        ],
-      ),
-    );
-  }
-}

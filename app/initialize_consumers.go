@@ -47,7 +47,7 @@ func (a *AppConfig) InitializeConsumers() {
 	// NotificationWebSocketConsumer membaca dari queue 'notification.realtime'
 	// (yang di-declare di topology) dan push ke WebSocket Hub. Sebelumnya
 	// queue ini declared tapi TIDAK ada consumer, menyebabkan dead letter grows.
-	a.NotificationWSConsumer = worker.NewNotificationWebSocketConsumer(a.RMQClient, a.PublisherWS, 3)
+	a.NotificationWSConsumer = worker.NewNotificationWebSocketConsumer(a.RMQClient, a.PublisherWS, a.NotificationRepo, 3)
 
 	logger.LogInfo("All message consumers initialized successfully")
 }

@@ -7,8 +7,10 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/livingdolls/go-blockchain-simulate/app/dto"
 	"github.com/livingdolls/go-blockchain-simulate/app/entity"
 	"github.com/livingdolls/go-blockchain-simulate/app/models"
+	"github.com/livingdolls/go-blockchain-simulate/app/publisher"
 	"github.com/livingdolls/go-blockchain-simulate/app/repository"
 	"github.com/livingdolls/go-blockchain-simulate/redis"
 	"github.com/livingdolls/go-blockchain-simulate/utils"
@@ -23,13 +25,14 @@ type TransactionService interface {
 }
 
 type transactionService struct {
-	users    repository.UserRepository
-	wallets  repository.UserWalletRepository
-	balances repository.UserBalanceRepository
-	txs      repository.TransactionRepository
-	ledgers  repository.LedgerRepository
-	memory   redis.MemoryAdapter
-	txVerify VerifyTxService
+	users                 repository.UserRepository
+	wallets               repository.UserWalletRepository
+	balances              repository.UserBalanceRepository
+	txs                   repository.TransactionRepository
+	ledgers               repository.LedgerRepository
+	memory                redis.MemoryAdapter
+	txVerify              VerifyTxService
+	notificationPublisher publisher.NotificationPublisher
 }
 
 func NewTransactionService(
@@ -40,15 +43,17 @@ func NewTransactionService(
 	ledgers repository.LedgerRepository,
 	memory redis.MemoryAdapter,
 	txVerify VerifyTxService,
+	notificationPublisher publisher.NotificationPublisher,
 ) TransactionService {
 	return &transactionService{
-		users:    users,
-		wallets:  wallets,
-		balances: balances,
-		txs:      txs,
-		ledgers:  ledgers,
-		memory:   memory,
-		txVerify: txVerify,
+		users:                 users,
+		wallets:               wallets,
+		balances:              balances,
+		txs:                   txs,
+		ledgers:               ledgers,
+		memory:                memory,
+		txVerify:              txVerify,
+		notificationPublisher: notificationPublisher,
 	}
 }
 
@@ -144,6 +149,28 @@ func (s *transactionService) SendWithSignature(ctx context.Context, fromAddress,
 	}
 
 	tx.ID = txID
+
+	// Publish TRANSACTION_SUBMITTED notification
+	if s.notificationPublisher != nil {
+		notif := dto.NewNotificationEvent(
+			dto.TypeTransactionSubmitted,
+			dto.PriorityLow,
+			fromAddress,
+			"Transaksi Terkirim",
+			fmt.Sprintf("Transaksi %.8f YTE ke %s sedang diproses", amount, toAddress),
+			[]dto.NotificationChannel{dto.ChannelWebSocket},
+		)
+		notif.RelatedTxID = &txID
+		notif.Data = map[string]interface{}{
+			"tx_id":        txID,
+			"from_address": fromAddress,
+			"to_address":   toAddress,
+			"amount":       amount,
+			"fee":          fee,
+			"type":         "TRANSFER",
+		}
+		_ = s.notificationPublisher.Publish(ctx, *notif)
+	}
 
 	return tx, nil
 }

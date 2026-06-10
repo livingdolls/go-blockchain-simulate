@@ -31,33 +31,43 @@ type BlockService interface {
 	SearchBlocksByMinerAddress(ctx context.Context, address string, limit, offset int) ([]models.Block, error)
 }
 
-type blockService struct {
-	blockRepo        repository.BlockRepository
-	walletRepo       repository.UserWalletRepository
-	balanceRepo      repository.UserBalanceRepository
-	txRepo           repository.TransactionRepository
-	userRepo         repository.UserRepository
-	candle           CandleService
-	market           MarketEngineService
-	publisherWS      *publisher.PublisherWS
-	pricingPublisher MarketPricingPublisher
-	ledgerPublisher  LedgerPublisher
-	rewardPublisher  RewardPublisher
+// shortAddr memotong address untuk display di notifikasi.
+func shortAddr(addr string) string {
+	if len(addr) <= 10 {
+		return addr
+	}
+	return addr[:6] + "..." + addr[len(addr)-4:]
 }
 
-func NewBlockService(blockRepo repository.BlockRepository, walletRepo repository.UserWalletRepository, balanceRepo repository.UserBalanceRepository, txRepo repository.TransactionRepository, userRepo repository.UserRepository, candle CandleService, market MarketEngineService, publisherWS *publisher.PublisherWS, pricingPublisher MarketPricingPublisher, ledgerPublisher LedgerPublisher, rewardPublisher RewardPublisher) BlockService {
+type blockService struct {
+	blockRepo              repository.BlockRepository
+	walletRepo             repository.UserWalletRepository
+	balanceRepo            repository.UserBalanceRepository
+	txRepo                 repository.TransactionRepository
+	userRepo               repository.UserRepository
+	candle                 CandleService
+	market                 MarketEngineService
+	publisherWS            *publisher.PublisherWS
+	pricingPublisher       MarketPricingPublisher
+	ledgerPublisher        LedgerPublisher
+	rewardPublisher        RewardPublisher
+	notificationPublisher  publisher.NotificationPublisher
+}
+
+func NewBlockService(blockRepo repository.BlockRepository, walletRepo repository.UserWalletRepository, balanceRepo repository.UserBalanceRepository, txRepo repository.TransactionRepository, userRepo repository.UserRepository, candle CandleService, market MarketEngineService, publisherWS *publisher.PublisherWS, pricingPublisher MarketPricingPublisher, ledgerPublisher LedgerPublisher, rewardPublisher RewardPublisher, notificationPublisher publisher.NotificationPublisher) BlockService {
 	return &blockService{
-		blockRepo:        blockRepo,
-		walletRepo:       walletRepo,
-		balanceRepo:      balanceRepo,
-		txRepo:           txRepo,
-		userRepo:         userRepo,
-		candle:           candle,
-		market:           market,
-		publisherWS:      publisherWS,
-		pricingPublisher: pricingPublisher,
-		ledgerPublisher:  ledgerPublisher,
-		rewardPublisher:  rewardPublisher,
+		blockRepo:              blockRepo,
+		walletRepo:             walletRepo,
+		balanceRepo:            balanceRepo,
+		txRepo:                 txRepo,
+		userRepo:               userRepo,
+		candle:                 candle,
+		market:                 market,
+		publisherWS:            publisherWS,
+		pricingPublisher:       pricingPublisher,
+		ledgerPublisher:        ledgerPublisher,
+		rewardPublisher:        rewardPublisher,
+		notificationPublisher:  notificationPublisher,
 	}
 }
 
@@ -553,6 +563,27 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 		s.publisherWS.Publish(entity.EventTypeBlockMined, newBlock)
 	}
 
+	// Publish notification: BLOCK_CONFIRMED untuk semua subscriber
+	if s.notificationPublisher != nil {
+		blockNotif := dto.NewNotificationEvent(
+			dto.TypeBlockConfirmed,
+			dto.PriorityMedium,
+			entity.MinerAccountAddress,
+			fmt.Sprintf("Block #%d Berhasil Ditambang", newBlock.BlockNumber),
+			fmt.Sprintf("Block %d ditambang dengan %d transaksi, total fee %.8f YTE",
+				newBlock.BlockNumber, len(pendingTxs), newBlock.TotalFees),
+			[]dto.NotificationChannel{dto.ChannelWebSocket},
+		)
+		blockNotif.RelatedBlockID = &blockID
+		blockNotif.Data = map[string]interface{}{
+			"block_number": newBlock.BlockNumber,
+			"tx_count":     len(pendingTxs),
+			"total_fees":   newBlock.TotalFees,
+			"block_hash":   newBlock.CurrentHash,
+		}
+		_ = s.notificationPublisher.Publish(ctx, *blockNotif)
+	}
+
 	// publish reward calculation event
 	if s.rewardPublisher != nil {
 		rewardCalcEvent := dto.RewardCalculationEvent{
@@ -589,6 +620,32 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 
 			if tx.ToAddress != entity.MinerAccountAddress {
 				s.publisherWS.PublishToAddress(strings.ToLower(tx.ToAddress), entity.EventTransactionUpdate, payload)
+			}
+
+			// Publish TRANSACTION_CONFIRMED notification ke pengirim
+			if s.notificationPublisher != nil && tx.FromAddress != entity.MinerAccountAddress {
+				txNotif := dto.NewNotificationEvent(
+					dto.TypeTransactionConfirmed,
+					dto.PriorityHigh,
+					strings.ToLower(tx.FromAddress),
+					"Transaksi Terkonfirmasi",
+					fmt.Sprintf("Transaksi %.8f YTE ke %s telah dikonfirmasi di block #%d",
+						tx.Amount, shortAddr(tx.ToAddress), newBlock.BlockNumber),
+					[]dto.NotificationChannel{dto.ChannelWebSocket},
+				)
+				txNotif.RelatedTxID = &tx.ID
+				txNotif.RelatedBlockID = &blockID
+				txNotif.Data = map[string]interface{}{
+					"tx_id":         tx.ID,
+					"from_address":  tx.FromAddress,
+					"to_address":    tx.ToAddress,
+					"amount":        tx.Amount,
+					"fee":           tx.Fee,
+					"type":          tx.Type,
+					"block_number":  newBlock.BlockNumber,
+					"block_hash":    newBlock.CurrentHash,
+				}
+				_ = s.notificationPublisher.Publish(ctx, *txNotif)
 			}
 		}
 	}

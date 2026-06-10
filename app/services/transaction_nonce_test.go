@@ -10,7 +10,7 @@ import (
 
 func newNonceTestService() (TransactionService, *mockMemoryAdapter) {
 	mem := newMockMemoryAdapter()
-	svc := NewTransactionService(nil, nil, nil, nil, nil, mem, nil)
+	svc := NewTransactionService(nil, nil, nil, nil, nil, mem, nil, nil)
 	return svc, mem
 }
 

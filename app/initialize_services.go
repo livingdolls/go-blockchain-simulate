@@ -13,10 +13,10 @@ func (a *AppConfig) InitializeServices() {
 
 	// Transaction
 	txVerify := services.NewVerifyTxService(a.RedisServices)
-	a.TransactionService = services.NewTransactionService(a.UserRepo, a.WalletRepo, a.BalanceRepo, a.TxRepo, a.LedgerRepo, a.RedisServices, txVerify)
+	a.TransactionService = services.NewTransactionService(a.UserRepo, a.WalletRepo, a.BalanceRepo, a.TxRepo, a.LedgerRepo, a.RedisServices, txVerify, a.NotificationPublisher)
 
 	// Balance
-	a.BalanceService = services.NewBalanceService(a.UserRepo, a.TxRepo, a.BalanceRepo, a.PublisherWS)
+	a.BalanceService = services.NewBalanceService(a.UserRepo, a.TxRepo, a.BalanceRepo, a.PublisherWS, a.NotificationPublisher)
 
 	// Market
 	a.MarketService = services.NewMarketEngineService(a.MarketRepo)
@@ -28,7 +28,7 @@ func (a *AppConfig) InitializeServices() {
 	// Block (butuh banyak dependency)
 	a.BlockService = services.NewBlockService(
 		a.BlockRepo, a.WalletRepo, a.BalanceRepo, a.TxRepo, a.UserRepo,
-		a.CandleService, a.MarketService, a.PublisherWS, a.PricingPublisher, a.LedgerPublisher, a.RewardPublisher,
+		a.CandleService, a.MarketService, a.PublisherWS, a.PricingPublisher, a.LedgerPublisher, a.RewardPublisher, a.NotificationPublisher,
 	)
 
 	// Reward

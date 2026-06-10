@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
@@ -21,18 +22,20 @@ type BalanceService interface {
 }
 
 type balanceService struct {
-	users        repository.UserRepository
-	tx           repository.TransactionRepository
-	userBalances repository.UserBalanceRepository
-	publisherWs  *publisher.PublisherWS
+	users                 repository.UserRepository
+	tx                    repository.TransactionRepository
+	userBalances          repository.UserBalanceRepository
+	publisherWs           *publisher.PublisherWS
+	notificationPublisher publisher.NotificationPublisher
 }
 
-func NewBalanceService(users repository.UserRepository, tx repository.TransactionRepository, userBalances repository.UserBalanceRepository, publisherWs *publisher.PublisherWS) BalanceService {
+func NewBalanceService(users repository.UserRepository, tx repository.TransactionRepository, userBalances repository.UserBalanceRepository, publisherWs *publisher.PublisherWS, notificationPublisher publisher.NotificationPublisher) BalanceService {
 	return &balanceService{
-		users:        users,
-		tx:           tx,
-		userBalances: userBalances,
-		publisherWs:  publisherWs,
+		users:                 users,
+		tx:                    tx,
+		userBalances:          userBalances,
+		publisherWs:           publisherWs,
+		notificationPublisher: notificationPublisher,
 	}
 }
 
@@ -158,6 +161,25 @@ func (s *balanceService) TopUpUSDBalance(address string, amount float64, referen
 		}
 
 		s.publisherWs.PublishToAddress(address, entity.EventBalanceUpdate, dtoResult)
+
+		// Publish BALANCE_UPDATED notification
+		if s.notificationPublisher != nil {
+			notif := dto.NewNotificationEvent(
+				dto.TypeBalanceUpdated,
+				dto.PriorityMedium,
+				address,
+				"Saldo Diperbarui",
+				fmt.Sprintf("Saldo USD Anda bertambah $%.2f. Saldo sekarang: $%.2f", amount, data.USDBalance),
+				[]dto.NotificationChannel{dto.ChannelWebSocket},
+			)
+			notif.Data = map[string]interface{}{
+				"new_yte_balance": data.YTEBalance,
+				"new_usd_balance": data.USDBalance,
+				"change_type":     "DEPOSIT",
+				"amount":          amount,
+			}
+			_ = s.notificationPublisher.Publish(context.Background(), *notif)
+		}
 	}
 
 	return result, nil

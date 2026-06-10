@@ -40,21 +40,23 @@ type AppConfig struct {
 	PublisherWS *publisher.PublisherWS
 
 	// Repositories
-	UserRepo        repository.UserRepository
-	WalletRepo      repository.UserWalletRepository
-	BalanceRepo     repository.UserBalanceRepository
-	TxRepo          repository.TransactionRepository
-	LedgerRepo      repository.LedgerRepository
-	MarketRepo      repository.MarketRepository
-	BlockRepo       repository.BlockRepository
-	CandleRepo      repository.CandlesRepository
-	DiscrepancyRepo repository.DiscrepancyRepository
-	AdminRepo       repository.AdminRepository
+	UserRepo         repository.UserRepository
+	WalletRepo       repository.UserWalletRepository
+	BalanceRepo      repository.UserBalanceRepository
+	TxRepo           repository.TransactionRepository
+	LedgerRepo       repository.LedgerRepository
+	MarketRepo       repository.MarketRepository
+	BlockRepo        repository.BlockRepository
+	CandleRepo       repository.CandlesRepository
+	DiscrepancyRepo  repository.DiscrepancyRepository
+	AdminRepo        repository.AdminRepository
+	NotificationRepo repository.NotificationRepository
 
 	// Publishers
-	PricingPublisher services.MarketPricingPublisher
-	LedgerPublisher  services.LedgerPublisher
-	RewardPublisher  services.RewardPublisher
+	PricingPublisher       services.MarketPricingPublisher
+	LedgerPublisher        services.LedgerPublisher
+	RewardPublisher        services.RewardPublisher
+	NotificationPublisher  publisher.NotificationPublisher
 
 	// Services
 	UserService        services.RegisterService

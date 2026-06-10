@@ -10,6 +10,7 @@ import (
 	"github.com/livingdolls/go-blockchain-simulate/app/dto"
 	"github.com/livingdolls/go-blockchain-simulate/app/entity"
 	"github.com/livingdolls/go-blockchain-simulate/app/publisher"
+	"github.com/livingdolls/go-blockchain-simulate/app/repository"
 	"github.com/livingdolls/go-blockchain-simulate/logger"
 	"github.com/livingdolls/go-blockchain-simulate/rabbitmq"
 	"github.com/rabbitmq/amqp091-go"
@@ -26,6 +27,7 @@ type RetryConfig struct {
 type NotificationWSConsumer struct {
 	client            *rabbitmq.Client
 	publisherWS       *publisher.PublisherWS
+	notificationRepo  repository.NotificationRepository
 	mu                sync.Mutex
 	isRunning         bool
 	stopChan          chan struct{}
@@ -63,11 +65,13 @@ type MessageMetadata struct {
 func NewNotificationWebSocketConsumer(
 	client *rabbitmq.Client,
 	publisherWS *publisher.PublisherWS,
+	notificationRepo repository.NotificationRepository,
 	workerCount int,
 ) *NotificationWSConsumer {
 	return &NotificationWSConsumer{
 		client:            client,
 		publisherWS:       publisherWS,
+		notificationRepo:  notificationRepo,
 		stopChan:          make(chan struct{}),
 		workerCount:       workerCount,
 		processingTimeout: 30 * time.Second,
@@ -200,6 +204,17 @@ func (n *NotificationWSConsumer) deliverNotificationWithRetry(ctx context.Contex
 	if !hasWSChannel {
 		logger.LogDebug("[NOTIFICATION_WS_CONSUMER] Notification does not have WebSocket channel, skipping delivery", zap.String("notification_id", notification.ID))
 		return
+	}
+
+	// Simpan notifikasi ke DB untuk history. Ini dilakukan SEBELUM
+	// delivery agar user bisa lihat notifikasi meskipun WS delivery gagal.
+	if n.notificationRepo != nil {
+		if err := n.notificationRepo.Save(ctx, notification); err != nil {
+			logger.LogError("[NOTIFICATION_WS_CONSUMER] Gagal simpan notifikasi ke DB", err,
+				zap.String("notification_id", notification.ID),
+			)
+			// Lanjutkan delivery meskipun DB save gagal (best-effort)
+		}
 	}
 
 	if n.publisherWS == nil {

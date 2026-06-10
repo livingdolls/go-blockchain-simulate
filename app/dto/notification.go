@@ -48,6 +48,7 @@ type NotificationEvent struct {
 	Data    map[string]interface{} `json:"data"`
 
 	Channels  []NotificationChannel `json:"channels"` // ws, email, sms, audit
+	IsRead    bool                  `json:"is_read"`
 	Timestamp int64                 `json:"timestamp"`
 	CreatedAt int64                 `json:"created_at"`
 	ExpiresAt int64                 `json:"expires_at"`

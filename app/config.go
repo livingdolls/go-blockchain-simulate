@@ -83,6 +83,8 @@ type AppConfig struct {
 	AdminHandler        *handler.AdminHandler
 	AdminLoginHandler   *handler.AdminLoginHandler
 	HealthHandler       *handler.HealthHandler
+	SwaggerHandler      *handler.SwaggerHandler
+	NotificationHandler *handler.NotificationHandler
 	// Workers
 	BlockWorker  *worker.GenerateBlockWorker
 	CandleWorker *worker.GenerateCandleWorker

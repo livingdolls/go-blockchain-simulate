@@ -4,20 +4,24 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/livingdolls/go-blockchain-simulate/app/dto"
+	"github.com/livingdolls/go-blockchain-simulate/app/repository"
 	"github.com/livingdolls/go-blockchain-simulate/app/services"
 )
 
 type BlockHandler struct {
 	blockService services.BlockService
+	walletRepo   repository.UserWalletRepository
 }
 
-func NewBlockHandler(blockService services.BlockService) *BlockHandler {
+func NewBlockHandler(blockService services.BlockService, walletRepo repository.UserWalletRepository) *BlockHandler {
 	return &BlockHandler{
 		blockService: blockService,
+		walletRepo:   walletRepo,
 	}
 }
 
@@ -274,4 +278,45 @@ func (h *BlockHandler) SearchBlocksByMinerAddress(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, dto.NewSuccessResponse(blocks))
+}
+
+// GetRichList mengembalikan top holders berdasarkan YTE balance.
+// Endpoint: GET /explorer/richlist?limit=100
+func (h *BlockHandler) GetRichList(c *gin.Context) {
+	limitStr := c.DefaultQuery("limit", "100")
+	limit, err := strconv.Atoi(limitStr)
+	if err != nil || limit <= 0 {
+		limit = 100
+	}
+	if limit > 1000 {
+		limit = 1000
+	}
+
+	wallets, err := h.walletRepo.GetTopBalances(limit)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, dto.NewErrorResponse[string]("failed to get rich list"))
+		return
+	}
+
+	// Format response: address + balance + rank
+	type richEntry struct {
+		Rank       int     `json:"rank"`
+		Address    string  `json:"address"`
+		YTEBalance float64 `json:"yte_balance"`
+	}
+
+	result := make([]richEntry, len(wallets))
+	for i, w := range wallets {
+		result[i] = richEntry{
+			Rank:       i + 1,
+			Address:    w.UserAddress,
+			YTEBalance: w.YTEBalance,
+		}
+	}
+
+	c.JSON(http.StatusOK, dto.NewSuccessResponse(gin.H{
+		"holders": result,
+		"total":   len(result),
+		"limit":   limit,
+	}))
 }

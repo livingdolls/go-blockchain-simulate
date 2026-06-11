@@ -66,6 +66,9 @@ func (s *stubWalletRepo) UpdateWalletWithTx(*sqlx.Tx, string, float64) error { r
 func (s *stubWalletRepo) GetByAddress(string) (models.UserWallet, error) {
 	return models.UserWallet{}, nil
 }
+func (s *stubWalletRepo) GetTopBalances(int) ([]models.UserWallet, error) {
+	return nil, nil
+}
 func (s *stubWalletRepo) BulkUpdateBalancesWithTx(*sqlx.Tx, map[string]float64) error {
 	return nil
 }

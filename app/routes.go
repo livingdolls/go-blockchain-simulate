@@ -16,6 +16,10 @@ func (a *AppConfig) SetupRoutes(r *gin.Engine) {
 	r.GET("/healthz", a.HealthHandler.Liveness)
 	r.GET("/readyz", a.HealthHandler.Readiness)
 
+	// Swagger UI (public)
+	r.GET("/docs", a.SwaggerHandler.ServeSwaggerUI)
+	r.GET("/docs/spec", a.SwaggerHandler.ServeSpec)
+
 	// Rate limiter untuk endpoint sensitif. Redis-backed sehingga terdistribusi
 	// aman di multiple instance. Identifier: client IP (atau X-Forwarded-For).
 	authLimiter := mw.RateLimitMiddleware(a.deps.RedisClient,
@@ -118,6 +122,18 @@ func (a *AppConfig) SetupRoutes(r *gin.Engine) {
 	// /blocks/generate dipisah di luar group agar middleware admin bisa
 	// dipasang spesifik hanya untuk endpoint ini.
 	r.POST("/blocks/generate", handler.AdminMiddleware(a.JWTAdmin, a.AdminRepo, a.RedisServices), a.BlockHandler.GenerateBlock)
+
+	// Explorer routes
+	r.GET("/explorer/richlist", a.BlockHandler.GetRichList)
+
+	// Notification routes (user-facing)
+	notifGroup := r.Group("/notifications")
+	{
+		notifGroup.GET("", a.NotificationHandler.GetNotifications)
+		notifGroup.PUT("/:id/read", a.NotificationHandler.MarkAsRead)
+		notifGroup.PUT("/read-all", a.NotificationHandler.MarkAllAsRead)
+		notifGroup.DELETE("/:id", a.NotificationHandler.DeleteNotification)
+	}
 
 	// Reward routes
 	rewardGroup := r.Group("/reward")

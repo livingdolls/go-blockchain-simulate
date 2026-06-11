@@ -12,6 +12,7 @@ import '../../features/transactions/sell_screen.dart';
 import '../../features/notifications/notification_screen.dart';
 import '../../features/qr/receive_screen.dart';
 import '../../features/market/market_screen.dart';
+import '../../features/explorer/rich_list_screen.dart';
 
 /// Router konfigurasi aplikasi.
 ///
@@ -95,6 +96,10 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/notifications',
       builder: (context, state) => const NotificationScreen(),
+    ),
+    GoRoute(
+      path: '/explorer/richlist',
+      builder: (context, state) => const RichListScreen(),
     ),
   ],
 );

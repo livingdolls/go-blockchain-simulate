@@ -12,7 +12,7 @@ func (a *AppConfig) InitializeHandlers() {
 	a.UserHandler = handler.NewRegisterHandler(a.UserService, a.RedisServices)
 	a.TransactionHandler = handler.NewTransactionHandler(a.TransactionService, a.RMQClient, a.TxRepo)
 	a.BalanceHandler = handler.NewBalanceHandler(a.BalanceService)
-	a.BlockHandler = handler.NewBlockHandler(a.BlockService)
+	a.BlockHandler = handler.NewBlockHandler(a.BlockService, a.WalletRepo)
 	a.RewardHandler = handler.NewRewardHandler(a.RewardService, a.BlockService)
 	a.ProfileHandler = handler.NewUserHandler(a.ProfileService, a.JWT)
 	a.MarketHandler = handler.NewMarketHandler(a.MarketService)
@@ -22,5 +22,7 @@ func (a *AppConfig) InitializeHandlers() {
 	a.AdminLoginHandler = handler.NewAdminLoginHandler(a.AdminAuthService, a.JWTAdmin, a.RedisServices)
 	a.AdminHandler = handler.NewAdminHandler(a.AdminService)
 	a.HealthHandler = handler.NewHealthHandler(a.DBConn, a.deps.RedisClient, a.deps.Config.App.Name, a.deps.Config.App.Version)
+	a.SwaggerHandler = handler.NewSwaggerHandler("docs/openapi.yaml")
+	a.NotificationHandler = handler.NewNotificationHandler(a.NotificationRepo)
 	logger.LogInfo("All handlers initialized successfully")
 }

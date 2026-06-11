@@ -386,6 +386,27 @@ class ApiClient {
       'priority': priority,
     });
   }
+
+  Future<Response> getRichList({int limit = 100}) {
+    return _dio.get('/explorer/richlist', queryParameters: {
+      'limit': limit,
+    });
+  }
+
+  Future<Response> getNotifications({int limit = 20, int offset = 0}) {
+    return _dio.get('/notifications', queryParameters: {
+      'limit': limit,
+      'offset': offset,
+    });
+  }
+
+  Future<Response> markNotificationRead(String id) {
+    return _dio.put('/notifications/$id/read');
+  }
+
+  Future<Response> markAllNotificationsRead() {
+    return _dio.put('/notifications/read-all');
+  }
 }
 
 /// Interceptor yang mengkonversi DioException ke [ApiException]

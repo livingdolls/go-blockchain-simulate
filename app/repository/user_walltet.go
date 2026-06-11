@@ -20,6 +20,7 @@ type UserWalletRepository interface {
 	InsertHistoryWithTx(tx *sqlx.Tx, history models.WalletHistory) error
 	LockMultipleWalletsWithTx(tx *sqlx.Tx, addresses []string) error
 	GetByAddress(address string) (models.UserWallet, error)
+	GetTopBalances(limit int) ([]models.UserWallet, error)
 }
 
 type userWalletRepository struct {
@@ -211,4 +212,24 @@ func (u *userWalletRepository) BulkUpdateBalancesWithTx(tx *sqlx.Tx, balances ma
 
 	_, err = tx.Exec(tx.Rebind(finalQuery), finalQueryArgs...)
 	return err
+}
+
+// GetTopBalances mengembalikan wallet dengan YTE balance tertinggi.
+// Dipakai untuk rich list / top holders display.
+// Exclude system accounts (MINER_ACCOUNT, FEE_POOL, dll).
+func (u *userWalletRepository) GetTopBalances(limit int) ([]models.UserWallet, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	if limit > 1000 {
+		limit = 1000
+	}
+
+	var wallets []models.UserWallet
+	err := u.db.Select(&wallets,
+		`SELECT * FROM user_wallets
+		 WHERE user_address NOT IN ('MINER_ACCOUNT', 'FEE_POOL')
+		 ORDER BY yte_balance DESC
+		 LIMIT ?`, limit)
+	return wallets, err
 }

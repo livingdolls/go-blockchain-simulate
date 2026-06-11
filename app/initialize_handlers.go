@@ -20,7 +20,7 @@ func (a *AppConfig) InitializeHandlers() {
 	// Candle stream butuh candle stream service terpisah
 	a.CandleStreamHandler = handler.NewCandleStreamHandler(services.NewCandleStreamService(a.RedisServices), a.CandleService)
 	a.AdminLoginHandler = handler.NewAdminLoginHandler(a.AdminAuthService, a.JWTAdmin, a.RedisServices)
-	a.AdminHandler = handler.NewAdminHandler(a.AdminService)
+	a.AdminHandler = handler.NewAdminHandler(a.AdminService, a.UserRepo)
 	a.HealthHandler = handler.NewHealthHandler(a.DBConn, a.deps.RedisClient, a.deps.Config.App.Name, a.deps.Config.App.Version)
 	a.SwaggerHandler = handler.NewSwaggerHandler("docs/openapi.yaml")
 	a.NotificationHandler = handler.NewNotificationHandler(a.NotificationRepo)

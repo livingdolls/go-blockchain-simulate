@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/livingdolls/go-blockchain-simulate/app/dto"
+	"github.com/livingdolls/go-blockchain-simulate/app/repository"
 	"github.com/livingdolls/go-blockchain-simulate/app/services"
 )
 
@@ -47,11 +48,15 @@ func parseLimitOffset(c *gin.Context, defaultLimit, maxLimit int) (limit, offset
 }
 
 type AdminHandler struct {
-	service services.AdminService
+	service  services.AdminService
+	userRepo repository.UserRepository
 }
 
-func NewAdminHandler(service services.AdminService) *AdminHandler {
-	return &AdminHandler{service: service}
+func NewAdminHandler(service services.AdminService, userRepo repository.UserRepository) *AdminHandler {
+	return &AdminHandler{
+		service:  service,
+		userRepo: userRepo,
+	}
 }
 
 func (h *AdminHandler) Dashboard(c *gin.Context) {
@@ -283,4 +288,65 @@ func (h *AdminHandler) RecentActivityLogs(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, dto.NewSuccessResponse(logs))
+}
+
+// GetUsers mengembalikan daftar semua users untuk admin management.
+// Endpoint: GET /admin/users?limit=50&offset=0
+func (h *AdminHandler) GetUsers(c *gin.Context) {
+	_, err := GetAdminFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, dto.NewErrorResponse[string]("Unauthorized: admin not found"))
+		return
+	}
+
+	limit, offset := parseLimitOffset(c, 50, 200)
+
+	ctx := c.Request.Context()
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	// Get all users via repository
+	users, err := h.userRepo.GetMultipleByAddress([]string{})
+	if err != nil {
+		c.JSON(http.StatusOK, dto.NewSuccessResponse(gin.H{
+			"users":  []interface{}{},
+			"total":  0,
+			"limit":  limit,
+			"offset": offset,
+		}))
+		return
+	}
+
+	// Apply pagination
+	total := len(users)
+	start := offset
+	end := offset + limit
+	if start > total {
+		start = total
+	}
+	if end > total {
+		end = total
+	}
+
+	type userEntry struct {
+		ID      int    `json:"id"`
+		Name    string `json:"name"`
+		Address string `json:"address"`
+	}
+
+	result := make([]userEntry, 0, end-start)
+	for _, u := range users[start:end] {
+		result = append(result, userEntry{
+			ID:      u.ID,
+			Name:    u.Name,
+			Address: u.Address,
+		})
+	}
+
+	c.JSON(http.StatusOK, dto.NewSuccessResponse(gin.H{
+		"users":  result,
+		"total":  total,
+		"limit":  limit,
+		"offset": offset,
+	}))
 }

@@ -14,6 +14,11 @@ import '../../features/qr/receive_screen.dart';
 import '../../features/market/market_screen.dart';
 import '../../features/explorer/rich_list_screen.dart';
 import '../../features/explorer/mempool_screen.dart';
+import '../../features/admin/admin_login_screen.dart';
+import '../../features/admin/admin_dashboard_screen.dart';
+import '../../features/admin/admin_management_screen.dart';
+import '../../features/admin/user_management_screen.dart';
+import '../../features/admin/activity_logs_screen.dart';
 
 /// Router konfigurasi aplikasi.
 ///
@@ -105,6 +110,27 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/explorer/mempool',
       builder: (context, state) => const MempoolScreen(),
+    ),
+    // Admin routes
+    GoRoute(
+      path: '/admin/login',
+      builder: (context, state) => const AdminLoginScreen(),
+    ),
+    GoRoute(
+      path: '/admin/dashboard',
+      builder: (context, state) => const AdminDashboardScreen(),
+    ),
+    GoRoute(
+      path: '/admin/admins',
+      builder: (context, state) => const AdminManagementScreen(),
+    ),
+    GoRoute(
+      path: '/admin/users',
+      builder: (context, state) => const UserManagementScreen(),
+    ),
+    GoRoute(
+      path: '/admin/activity-logs',
+      builder: (context, state) => const ActivityLogsScreen(),
     ),
   ],
 );

@@ -11,17 +11,20 @@ import (
 	"github.com/livingdolls/go-blockchain-simulate/app/dto"
 	"github.com/livingdolls/go-blockchain-simulate/app/repository"
 	"github.com/livingdolls/go-blockchain-simulate/app/services"
+	"github.com/livingdolls/go-blockchain-simulate/utils"
 )
 
 type BlockHandler struct {
 	blockService services.BlockService
 	walletRepo   repository.UserWalletRepository
+	txRepo       repository.TransactionRepository
 }
 
-func NewBlockHandler(blockService services.BlockService, walletRepo repository.UserWalletRepository) *BlockHandler {
+func NewBlockHandler(blockService services.BlockService, walletRepo repository.UserWalletRepository, txRepo repository.TransactionRepository) *BlockHandler {
 	return &BlockHandler{
 		blockService: blockService,
 		walletRepo:   walletRepo,
+		txRepo:       txRepo,
 	}
 }
 
@@ -233,6 +236,40 @@ func (h *BlockHandler) GetBlockStats(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, dto.NewSuccessResponse(stats))
+}
+
+// GetNetworkStats mengembalikan statistik jaringan yang lebih detail
+// untuk dashboard monitoring. Termasuk:
+// - Total blocks, transactions, fees
+// - Pending transactions (mempool size)
+// - Average block time, difficulty
+// - Congestion level
+// Endpoint: GET /network/stats
+func (h *BlockHandler) GetNetworkStats(c *gin.Context) {
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+
+	blockStats, err := h.blockService.GetBlockStats(ctx)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, dto.NewErrorResponse[string]("failed to get block stats"))
+		return
+	}
+
+	// Pending transactions count
+	pendingTxs, _ := h.txRepo.GetPendingTransactions(1000)
+	pendingCount := len(pendingTxs)
+
+	c.JSON(http.StatusOK, dto.NewSuccessResponse(gin.H{
+		"total_blocks":       blockStats.TotalBlocks,
+		"total_transactions": blockStats.TotalTransactions,
+		"total_fees":         blockStats.TotalFees,
+		"average_difficulty": blockStats.AverageDifficulty,
+		"avg_tx_per_block":   blockStats.AvgTxPerBlock,
+		"latest_block":       blockStats.LatestBlock.BlockNumber,
+		"pending_count":      pendingCount,
+		"congestion_level":   utils.CongestionLevel(pendingCount),
+		"congestion_percent": utils.CongestionPercentage(pendingCount),
+	}))
 }
 
 func (h *BlockHandler) SearchBlocksByMinerAddress(c *gin.Context) {

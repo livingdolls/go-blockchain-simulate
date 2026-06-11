@@ -393,6 +393,12 @@ class ApiClient {
     });
   }
 
+  Future<Response> getPendingTransactions({int limit = 50}) {
+    return _dio.get('/transactions/pending', queryParameters: {
+      'limit': limit,
+    });
+  }
+
   Future<Response> getNotifications({int limit = 20, int offset = 0}) {
     return _dio.get('/notifications', queryParameters: {
       'limit': limit,

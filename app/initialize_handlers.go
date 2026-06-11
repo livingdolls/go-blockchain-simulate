@@ -12,7 +12,7 @@ func (a *AppConfig) InitializeHandlers() {
 	a.UserHandler = handler.NewRegisterHandler(a.UserService, a.RedisServices)
 	a.TransactionHandler = handler.NewTransactionHandler(a.TransactionService, a.RMQClient, a.TxRepo)
 	a.BalanceHandler = handler.NewBalanceHandler(a.BalanceService)
-	a.BlockHandler = handler.NewBlockHandler(a.BlockService, a.WalletRepo)
+	a.BlockHandler = handler.NewBlockHandler(a.BlockService, a.WalletRepo, a.TxRepo)
 	a.RewardHandler = handler.NewRewardHandler(a.RewardService, a.BlockService)
 	a.ProfileHandler = handler.NewUserHandler(a.ProfileService, a.JWT)
 	a.MarketHandler = handler.NewMarketHandler(a.MarketService)

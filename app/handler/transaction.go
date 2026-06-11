@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/livingdolls/go-blockchain-simulate/app/dto"
@@ -225,5 +226,32 @@ func (h *TransactionHandler) EstimateFee(c *gin.Context) {
 		"pending_count":        pendingCount,
 		"congestion_level":     congestionLevel,
 		"congestion_percent":   congestionPct,
+	}))
+}
+
+// GetPendingTransactions mengembalikan daftar transaksi pending (mempool).
+// Endpoint: GET /transactions/pending?limit=50
+//
+// Data ini menunjukkan transaksi yang sudah dikirim oleh user tapi belum
+// dikonfirmasi di block. Berguna untuk:
+// - Monitoring congestion (berapa banyak tx menunggu)
+// - Fee estimation (tx dengan fee tinggi diproses duluan)
+// - Debugging (tx stuck karena nonce salah, dll)
+func (h *TransactionHandler) GetPendingTransactions(c *gin.Context) {
+	limit := 50
+	if l, err := strconv.Atoi(c.Query("limit")); err == nil && l > 0 && l <= 200 {
+		limit = l
+	}
+
+	txs, err := h.txRepo.GetPendingTransactions(limit)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, dto.NewErrorResponse[string]("failed to get pending transactions"))
+		return
+	}
+
+	c.JSON(http.StatusOK, dto.NewSuccessResponse(gin.H{
+		"transactions": txs,
+		"count":        len(txs),
+		"limit":        limit,
 	}))
 }

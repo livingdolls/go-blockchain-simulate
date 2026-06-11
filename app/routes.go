@@ -66,6 +66,9 @@ func (a *AppConfig) SetupRoutes(r *gin.Engine) {
 		txGroup.GET("/fee/estimate", a.TransactionHandler.EstimateFee)
 	}
 
+	// Pending transactions (mempool) - read-only, no rate limit needed
+	r.GET("/transactions/pending", a.TransactionHandler.GetPendingTransactions)
+
 	// Admin Auth routes. Rate limit untuk mencegah brute force.
 	// Sebelumnya TIDAK ada rate limiter → seribu attempts/menit.
 	adminAuthGroup := r.Group("/admin/auth")
@@ -125,6 +128,7 @@ func (a *AppConfig) SetupRoutes(r *gin.Engine) {
 
 	// Explorer routes
 	r.GET("/explorer/richlist", a.BlockHandler.GetRichList)
+	r.GET("/network/stats", a.BlockHandler.GetNetworkStats)
 
 	// Notification routes (user-facing)
 	notifGroup := r.Group("/notifications")

@@ -1,4 +1,4 @@
-.PHONY: help run build clean test test-race vet docker-build docker-up docker-down docker-logs docker-restart docker-clean
+.PHONY: help run build clean test test-race vet docker-build docker-up docker-down docker-logs docker-restart docker-clean seed
 
 # Default target: tampilkan help.
 help:
@@ -8,6 +8,7 @@ help:
 	@echo "  make test             - Jalankan semua unit test"
 	@echo "  make test-race        - Jalankan test dengan race detector"
 	@echo "  make vet              - Jalankan go vet"
+	@echo "  make seed             - Seed data demo ke database"
 	@echo "  make clean            - Hapus artifact build (bin/, tmp/)"
 	@echo ""
 	@echo "Docker:"
@@ -35,6 +36,12 @@ vet:
 
 clean:
 	rm -rf bin/ tmp/
+
+# Seed data demo ke database (10 users, wallets, balances, 50 transactions).
+# Berguna untuk demo/development tanpa harus manual input.
+# Pastikan database sudah di-migrate sebelum menjalankan.
+seed:
+	go run cmd/seed/main.go
 
 # Build image app saja (untuk verify Dockerfile tanpa start service lain).
 docker-build:

@@ -13,6 +13,7 @@ import '../../features/notifications/notification_screen.dart';
 import '../../features/qr/receive_screen.dart';
 import '../../features/market/market_screen.dart';
 import '../../features/explorer/rich_list_screen.dart';
+import '../../features/explorer/mempool_screen.dart';
 
 /// Router konfigurasi aplikasi.
 ///
@@ -100,6 +101,10 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/explorer/richlist',
       builder: (context, state) => const RichListScreen(),
+    ),
+    GoRoute(
+      path: '/explorer/mempool',
+      builder: (context, state) => const MempoolScreen(),
     ),
   ],
 );

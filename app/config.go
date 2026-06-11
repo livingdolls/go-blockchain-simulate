@@ -88,6 +88,7 @@ type AppConfig struct {
 	SwaggerHandler      *handler.SwaggerHandler
 	NotificationHandler *handler.NotificationHandler
 	StakingHandler      *handler.StakingHandler
+	PortfolioHandler    *handler.PortfolioHandler
 	// Workers
 	BlockWorker  *worker.GenerateBlockWorker
 	CandleWorker *worker.GenerateCandleWorker

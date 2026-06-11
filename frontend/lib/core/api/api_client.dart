@@ -445,6 +445,10 @@ class ApiClient {
   Future<Response> getStakingInfo() {
     return _dio.get('/staking/info');
   }
+
+  Future<Response> getPortfolio(String address) {
+    return _dio.get('/portfolio/$address');
+  }
 }
 
 /// Interceptor yang mengkonversi DioException ke [ApiException]

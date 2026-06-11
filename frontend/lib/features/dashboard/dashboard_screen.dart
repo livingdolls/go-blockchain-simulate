@@ -299,14 +299,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         ),
         const SizedBox(width: 8),
-        Expanded(
-          child: _ActionButton(
-            icon: Icons.lock,
-            label: 'Stake',
-            color: AppTheme.accent,
-            onTap: () => context.go('/staking'),
+          Expanded(
+            child: _ActionButton(
+              icon: Icons.lock,
+              label: 'Stake',
+              color: AppTheme.accent,
+              onTap: () => context.go('/staking'),
+            ),
           ),
-        ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: _ActionButton(
+              icon: Icons.bar_chart,
+              label: 'Portfolio',
+              color: AppTheme.darkTextSecondary,
+              onTap: () => context.go('/portfolio/all'),
+            ),
+          ),
       ],
     );
   }

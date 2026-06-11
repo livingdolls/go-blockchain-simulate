@@ -25,5 +25,6 @@ func (a *AppConfig) InitializeHandlers() {
 	a.SwaggerHandler = handler.NewSwaggerHandler("docs/openapi.yaml")
 	a.NotificationHandler = handler.NewNotificationHandler(a.NotificationRepo)
 	a.StakingHandler = handler.NewStakingHandler(a.StakingService)
+	a.PortfolioHandler = handler.NewPortfolioHandler(a.UserRepo, a.WalletRepo, a.BalanceRepo, a.MarketService)
 	logger.LogInfo("All handlers initialized successfully")
 }

@@ -149,6 +149,9 @@ func (a *AppConfig) SetupRoutes(r *gin.Engine) {
 		stakingGroup.GET("/info", a.StakingHandler.GetInfo)
 	}
 
+	// Portfolio routes
+	r.GET("/portfolio/:address", a.PortfolioHandler.GetPortfolio)
+
 	// Reward routes
 	rewardGroup := r.Group("/reward")
 	{

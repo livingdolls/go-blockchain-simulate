@@ -20,6 +20,7 @@ import '../../features/admin/admin_management_screen.dart';
 import '../../features/admin/user_management_screen.dart';
 import '../../features/admin/activity_logs_screen.dart';
 import '../../features/staking/staking_screen.dart';
+import '../../features/portfolio/portfolio_screen.dart';
 
 /// Router konfigurasi aplikasi.
 ///
@@ -138,6 +139,13 @@ final appRouter = GoRouter(
       builder: (context, state) {
         final address = state.uri.queryParameters['address'] ?? '';
         return StakingScreen(userAddress: address);
+      },
+    ),
+    GoRoute(
+      path: '/portfolio/:address',
+      builder: (context, state) {
+        final address = state.pathParameters['address']!;
+        return PortfolioScreen(address: address);
       },
     ),
   ],

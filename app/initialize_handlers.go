@@ -24,5 +24,6 @@ func (a *AppConfig) InitializeHandlers() {
 	a.HealthHandler = handler.NewHealthHandler(a.DBConn, a.deps.RedisClient, a.deps.Config.App.Name, a.deps.Config.App.Version)
 	a.SwaggerHandler = handler.NewSwaggerHandler("docs/openapi.yaml")
 	a.NotificationHandler = handler.NewNotificationHandler(a.NotificationRepo)
+	a.StakingHandler = handler.NewStakingHandler(a.StakingService)
 	logger.LogInfo("All handlers initialized successfully")
 }

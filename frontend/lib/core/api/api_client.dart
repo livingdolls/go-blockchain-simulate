@@ -413,6 +413,38 @@ class ApiClient {
   Future<Response> markAllNotificationsRead() {
     return _dio.put('/notifications/read-all');
   }
+
+  Future<Response> stake({
+    required String address,
+    required double amount,
+    required int lockDays,
+  }) {
+    return _dio.post('/staking/stake', data: {
+      'address': address,
+      'amount': amount,
+      'lock_days': lockDays,
+    });
+  }
+
+  Future<Response> unstake({
+    required String address,
+    required int stakeId,
+  }) {
+    return _dio.post('/staking/unstake', data: {
+      'address': address,
+      'stake_id': stakeId,
+    });
+  }
+
+  Future<Response> getStakingStatus(String address) {
+    return _dio.get('/staking/status', queryParameters: {
+      'address': address,
+    });
+  }
+
+  Future<Response> getStakingInfo() {
+    return _dio.get('/staking/info');
+  }
 }
 
 /// Interceptor yang mengkonversi DioException ke [ApiException]

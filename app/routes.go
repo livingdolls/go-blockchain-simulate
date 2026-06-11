@@ -140,6 +140,15 @@ func (a *AppConfig) SetupRoutes(r *gin.Engine) {
 		notifGroup.DELETE("/:id", a.NotificationHandler.DeleteNotification)
 	}
 
+	// Staking routes
+	stakingGroup := r.Group("/staking")
+	{
+		stakingGroup.POST("/stake", a.StakingHandler.Stake)
+		stakingGroup.POST("/unstake", a.StakingHandler.Unstake)
+		stakingGroup.GET("/status", a.StakingHandler.GetStatus)
+		stakingGroup.GET("/info", a.StakingHandler.GetInfo)
+	}
+
 	// Reward routes
 	rewardGroup := r.Group("/reward")
 	{

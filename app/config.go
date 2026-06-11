@@ -51,6 +51,7 @@ type AppConfig struct {
 	DiscrepancyRepo  repository.DiscrepancyRepository
 	AdminRepo        repository.AdminRepository
 	NotificationRepo repository.NotificationRepository
+	StakingRepo      repository.StakingRepository
 
 	// Publishers
 	PricingPublisher       services.MarketPricingPublisher
@@ -69,6 +70,7 @@ type AppConfig struct {
 	ProfileService     services.ProfileService
 	AdminService       services.AdminService
 	AdminAuthService   services.AdminAuthService
+	StakingService     services.StakingService
 
 	// Handlers
 	UserHandler         *handler.RegisterHandler
@@ -85,6 +87,7 @@ type AppConfig struct {
 	HealthHandler       *handler.HealthHandler
 	SwaggerHandler      *handler.SwaggerHandler
 	NotificationHandler *handler.NotificationHandler
+	StakingHandler      *handler.StakingHandler
 	// Workers
 	BlockWorker  *worker.GenerateBlockWorker
 	CandleWorker *worker.GenerateCandleWorker

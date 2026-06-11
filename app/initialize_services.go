@@ -41,5 +41,8 @@ func (a *AppConfig) InitializeServices() {
 	a.AdminService = services.NewAdminService(a.AdminRepo)
 	a.AdminAuthService = services.NewAdminAuthService(a.UserRepo, a.AdminRepo)
 
+	// Staking
+	a.StakingService = services.NewStakingService(a.StakingRepo, a.WalletRepo, a.BlockRepo, a.NotificationPublisher)
+
 	logger.LogInfo("All services initialized successfully")
 }

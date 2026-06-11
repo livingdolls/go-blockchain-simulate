@@ -19,5 +19,6 @@ func (a *AppConfig) InitializeRepositories() {
 	a.DiscrepancyRepo = repository.NewDiscrepancyRepository(a.DB)
 	a.AdminRepo = repository.NewAdminRepository(a.DB)
 	a.NotificationRepo = repository.NewNotificationRepository(a.DB)
+	a.StakingRepo = repository.NewStakingRepository(a.DB)
 	logger.LogInfo("All repositories initialized successfully")
 }

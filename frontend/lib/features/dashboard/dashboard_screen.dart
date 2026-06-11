@@ -280,7 +280,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             onTap: () => context.go('/transactions/send'),
           ),
         ),
-        const SizedBox(width: 12),
+        const SizedBox(width: 8),
         Expanded(
           child: _ActionButton(
             icon: Icons.shopping_cart,
@@ -289,13 +289,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
             onTap: () => context.go('/transactions/buy'),
           ),
         ),
-        const SizedBox(width: 12),
+        const SizedBox(width: 8),
         Expanded(
           child: _ActionButton(
             icon: Icons.sell,
             label: 'Jual',
             color: AppTheme.warning,
             onTap: () => context.go('/transactions/sell'),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: _ActionButton(
+            icon: Icons.lock,
+            label: 'Stake',
+            color: AppTheme.accent,
+            onTap: () => context.go('/staking'),
           ),
         ),
       ],

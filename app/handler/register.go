@@ -1,7 +1,7 @@
 package handler
 
 import (
-	"fmt"
+	"log"
 	"net/http"
 	"strings"
 
@@ -69,14 +69,13 @@ func (h *RegisterHandler) Register(c *gin.Context) {
 		return
 	}
 
-	fmt.Errorf("error disini")
-
 	user, err := h.service.Register(req)
 	if err != nil {
 		// RespondAppError otomatis extract *dto.AppError dari error chain,
 		// set HTTP status code yang sesuai (400/409/500), dan return
 		// response terstruktur dengan error_code + field. Kalau err
 		// bukan AppError, fallback ke 500 generic (tidak bocor detail).
+		log.Printf("DEBUG ERROR %v", err)
 		dto.RespondAppError(c, err)
 		return
 	}

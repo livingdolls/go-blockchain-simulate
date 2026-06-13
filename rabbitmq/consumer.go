@@ -2,18 +2,18 @@ package rabbitmq
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"log"
 
 	"github.com/livingdolls/go-blockchain-simulate/logger"
-	"github.com/rabbitmq/amqp091-go"
+	amqp "github.com/rabbitmq/amqp091-go"
 	"go.uber.org/zap"
 )
 
-type HandlerFunc func(amqp091.Delivery)
+type HandlerFunc func(amqp.Delivery)
 
 // Deprecated: use ConsumeWithContext instead
-func (c *RabbitMQConn) Consume(queue string, workers int, handler func(amqp091.Delivery)) error {
+func (c *RabbitMQConn) Consume(queue string, workers int, handler func(amqp.Delivery)) error {
 	for i := 0; i < workers; i++ {
 		ch, err := c.pool.Get()
 
@@ -35,13 +35,14 @@ func (c *RabbitMQConn) Consume(queue string, workers int, handler func(amqp091.D
 			return err
 		}
 
-		go func(ch *amqp091.Channel) {
+		go func(ch *amqp.Channel) {
 			defer c.pool.Put(ch)
 			for msg := range msgs {
 				handler(msg)
 			}
-
-			log.Printf("[RABBITMQ] Stopped consuming from queue: %s", queue)
+			// Tidak log "stopped" - ini terjadi setiap shutdown (termasuk
+			// hot reload Air) dan penuh noise. Caller bisa detect via
+			// channel close event kalau butuh.
 		}(ch)
 	}
 
@@ -74,29 +75,36 @@ func (c *RabbitMQConn) ConsumeWithContext(ctx context.Context, queueName string,
 		}
 
 		go func(
-			ch *amqp091.Channel,
+			ch *amqp.Channel,
 			tag string,
-			msgs <-chan amqp091.Delivery,
+			msgs <-chan amqp.Delivery,
 		) {
 			defer func() {
-				err := ch.Cancel(tag, false)
-				if err != nil {
-					logger.LogError("Failed to cancel consumer", err, zap.String("consumerTag", tag))
+				// Cancel consumer. Error "channel/connection is not open"
+				// adalah NORMAL saat graceful shutdown (channel di-close
+				// duluan oleh Close()). Jangan log sebagai error - ini
+				// misleading operator seolah ada masalah.
+				if err := ch.Cancel(tag, false); err != nil {
+					var amqpErr *amqp.Error
+					if errors.As(err, &amqpErr) && amqpErr.Code == amqp.ChannelError {
+						// Channel sudah closed - expected saat shutdown.
+						// Log sebagai debug, bukan error.
+						logger.LogInfo("Consumer channel already closed",
+							zap.String("consumerTag", tag))
+					} else {
+						logger.LogError("Failed to cancel consumer", err, zap.String("consumerTag", tag))
+					}
 				}
 
 				c.pool.Put(ch)
-
-				logger.LogInfo("Stopped consuming from queue", zap.String("queue", queueName), zap.String("consumerTag", tag))
 			}()
 
 			for {
 				select {
 				case <-ctx.Done():
-					logger.LogInfo("Context cancelled, stopping consumer", zap.String("consumerTag", tag))
 					return
 				case msg, ok := <-msgs:
 					if !ok {
-						logger.LogInfo("Message channel closed, stopping consumer", zap.String("consumerTag", tag))
 						return
 					}
 

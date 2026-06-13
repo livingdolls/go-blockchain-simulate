@@ -84,6 +84,17 @@ func main() {
 		}
 	}()
 
+	// Startup banner ke stdout (bypass LOG_LEVEL) supaya hot reload
+	// dari Air kelihatan di terminal. fmt.Println lebih reliable
+	// dibanding logger.L.Info() yang di-filter saat LOG_LEVEL=warn.
+	// Single line - kalau hot reload aktif, user lihat baris ini
+	// setiap kali app di-restart.
+	fmt.Printf("[%s] %s v%s starting on %s\n",
+		env,
+		cfg.App.Name,
+		cfg.App.Version,
+		cfg.Server.Addr(),
+	)
 	logger.L.Info("Aplikasi mulai")
 
 	// Bangun seluruh dependensi infrastruktur dari konfigurasi.
@@ -183,3 +194,7 @@ func parseLogLevel(s string) zapcore.Level {
 	}
 	return -1
 }
+// test
+
+// Unused import test - hot reload should still work
+var _ = "test reload trigger"

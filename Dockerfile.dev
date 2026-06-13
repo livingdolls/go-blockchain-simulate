@@ -1,0 +1,75 @@
+# syntax=docker/dockerfile:1.7
+#
+# Dockerfile DEV: hot reload pakai Air (https://github.com/cosmtrek/air).
+# Jangan pakai image ini untuk production - image dev membawa Go toolchain
+# dan binary di-recompile on-the-fly setiap file .go berubah.
+#
+# Cara pakai (via docker-compose.dev.yml):
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+#
+# Flow:
+#   1. Container start
+#   2. `air` jalanin -> build awal -> jalanin binary
+#   3. Edit file .go di host -> bind mount propagate ke container
+#   4. Air detect perubahan -> kill binary lama -> build ulang -> start lagi
+#
+# Trade-off:
+#   - Build lebih lambat dari production (no static binary, pakai -trimpath=false,
+#     debug symbols tetap ada)
+#   - Image lebih besar (~800MB vs ~20MB) karena bawa Go toolchain
+#   - Wajib mount source sebagai volume; kalau di-COPY, hot reload tidak jalan
+
+FROM golang:1.24-alpine AS dev
+
+# git untuk go mod download VCS deps.
+# ca-certificates untuk HTTPS ke module proxy / VCS.
+RUN apk add --no-cache git ca-certificates
+
+# Install Air: hot reload tool untuk Go. Pin ke versi stabil agar
+# behaviour konsisten antar developer. Update manual jika butuh fitur baru.
+# Versi diambil dari https://github.com/cosmtrek/air/releases (pakai go install
+# pattern yang direkomendasikan official).
+ARG AIR_VERSION=v1.52.0
+# Deklarasi ARG ini hanya untuk suppress warning "build arg not consumed"
+# ketika docker-compose.dev.yml dipakai sebagai override. Version/commit
+# tidak relevan untuk dev image (lihat Dockerfile production).
+ARG VERSION=dev
+ARG COMMIT=local
+RUN go install github.com/cosmtrek/air@${AIR_VERSION}
+
+# Path default GOPATH/bin agar binary `air` bisa dipanggil langsung.
+ENV PATH="/go/bin:${PATH}"
+
+WORKDIR /app
+
+# Copy go.mod/go.sum dulu dan download deps. Layer ini di-cache Docker
+# selama go.mod/go.sum tidak berubah -> tidak perlu download ulang
+# setiap kali source code berubah (yang justru kasus paling sering saat dev).
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Source code TIDAK di-COPY di sini. docker-compose.dev.yml mount seluruh
+# working directory sebagai volume, jadi edit di host langsung propagate
+# ke container dan Air akan detect perubahan via filesystem watcher.
+#
+# Baris `COPY . .` di-comment sengaja:
+#   # COPY . .
+# Kalau di-uncomment, file di dalam container akan ke-overwrite saat build
+# dan hot reload tidak akan sync perubahan dari host.
+
+# Config default di-copy agar app selalu punya config baseline, tapi
+# config.local.yaml (kalau ada) bisa di-mount override.
+COPY config/config.yaml /app/config/config.yaml
+
+# Expose port app (lihat config.yaml: server.port=3010).
+EXPOSE 3010
+
+# Default ENV: development + CONFIG_PATH指向 ke config di container.
+# APP_ENV=development agar logger pakai development mode (color output).
+ENV APP_ENV=development \
+    CONFIG_PATH=/app/config/config.yaml \
+    GOFLAGS="-mod=mod"
+
+# Entrypoint: Air. Dia akan baca .air.toml di WORKDIR dan start watcher.
+# Untuk production, Dockerfile (non-dev) yang dipakai.
+ENTRYPOINT ["air"]

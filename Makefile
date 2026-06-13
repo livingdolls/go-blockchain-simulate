@@ -1,4 +1,4 @@
-.PHONY: help run build clean test test-race vet docker-build docker-up docker-down docker-logs docker-restart docker-clean seed
+.PHONY: help run build clean test test-race vet docker-build docker-up docker-down docker-logs docker-restart docker-clean seed dev-up dev-down dev-logs dev-build dev-restart dev-shell
 
 # Default target: tampilkan help.
 help:
@@ -11,13 +11,21 @@ help:
 	@echo "  make seed             - Seed data demo ke database"
 	@echo "  make clean            - Hapus artifact build (bin/, tmp/)"
 	@echo ""
-	@echo "Docker:"
+	@echo "Docker (production image):"
 	@echo "  make docker-build     - Build image app saja"
 	@echo "  make docker-up        - Start stack lengkap (app + mysql + redis + rabbitmq)"
 	@echo "  make docker-down      - Stop semua service"
 	@echo "  make docker-logs      - Tail log semua service"
 	@echo "  make docker-restart   - Rebuild + restart service app saja"
 	@echo "  make docker-clean     - Stop + hapus volume (HATI-HATI: data hilang)"
+	@echo ""
+	@echo "Docker (dev dengan hot reload - pakai Dockerfile.dev + Air):"
+	@echo "  make dev-up           - Start stack dev (source di-mount, hot reload aktif)"
+	@echo "  make dev-down         - Stop stack dev"
+	@echo "  make dev-logs         - Tail log service app (di container dev)"
+	@echo "  make dev-build        - Rebuild image dev saja (mis. setelah ubah Dockerfile.dev)"
+	@echo "  make dev-restart      - Kill & restart container app dev saja (volume cache tetap)"
+	@echo "  make dev-shell        - Buka shell di dalam container app dev"
 
 run:
 	go run main.go
@@ -72,3 +80,44 @@ docker-restart:
 docker-clean:
 	docker compose down -v
 	@echo "Volume dihapus. Data MySQL/Redis/RabbitMQ sudah hilang."
+
+# ===== Dev dengan hot reload (Air) =====
+#
+# Pakai -f docker-compose.yml -f docker-compose.dev.yml agar:
+#   - Service mysql/redis/rabbitmq tetap dari base compose
+#   - Service app di-override dengan Dockerfile.dev + bind mount
+#
+# Hot reload:
+#   Edit file .go di host -> otomatis ke-rebuild & restart di container
+#   dalam ~1-3 detik (incremental build) atau ~30-60 detik (cold start).
+
+dev-up:
+	docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
+	@echo ""
+	@echo "Dev stack berjalan. Hot reload aktif."
+	@echo "  App         : http://localhost:3010/healthz"
+	@echo "  RabbitMQ UI : http://localhost:15672 (guest/guest)"
+	@echo "  Tail log    : make dev-logs"
+
+dev-down:
+	docker compose -f docker-compose.yml -f docker-compose.dev.yml down
+
+dev-logs:
+	docker compose -f docker-compose.yml -f docker-compose.dev.yml logs -f app
+
+# Rebuild image dev. Hanya perlu kalau Dockerfile.dev atau .air.toml berubah.
+# Untuk perubahan source code biasa, TIDAK perlu rebuild - Air handle.
+dev-build:
+	docker compose -f docker-compose.yml -f docker-compose.dev.yml build app
+
+# Kill & restart container app dev. Cache (go build, go mod) tetap
+# tersimpan di named volume, jadi start berikutnya cepat.
+dev-restart:
+	docker compose -f docker-compose.yml -f docker-compose.dev.yml restart app
+
+# Shell ke dalam container app dev. Useful untuk:
+#   - Manual `go build` untuk debug error
+#   - Inspect tmp/ folder (hasil build Air)
+#   - Cek go.mod / installed tools
+dev-shell:
+	docker compose -f docker-compose.yml -f docker-compose.dev.yml exec app sh

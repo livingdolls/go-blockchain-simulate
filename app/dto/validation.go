@@ -20,17 +20,27 @@ func IsEthereumAddress(addr string) bool {
 	return ethAddressRegex.MatchString(strings.TrimSpace(addr))
 }
 
+// hexStringRegex memvalidasi string berisi karakter hex valid.
+// Komplemen dengan tag bawaan validator/v10 `hexadecimal`; tag ini
+// didaftarkan manual karena nama `hex` bukan alias bawaan di v10.
+var hexStringRegex = regexp.MustCompile(`^[0-9a-fA-F]+$`)
+
 // RegisterCustomValidators mendaftarkan custom validator tags ke validator/v10.
 // Panggil SEKALI di main setelah validator/v10 init (biasanya otomatis
 // oleh Gin's ShouldBindJSON, tapi tag custom harus di-register eksplisit).
 //
 // Tag yang tersedia:
 //   - eth_addr: validasi Ethereum address (0x + 40 hex char)
+//   - hex:      validasi string hex (0-9, a-f, A-F). Bawaan v10 hanya
+//     punya `hexadecimal`; `hex` didaftarkan manual sebagai tag pendek.
 //
 // Pakai di struct: `binding:"required,eth_addr"`.
 func RegisterCustomValidators(v *validator.Validate) {
 	_ = v.RegisterValidation("eth_addr", func(fl validator.FieldLevel) bool {
 		return IsEthereumAddress(fl.Field().String())
+	})
+	_ = v.RegisterValidation("hex", func(fl validator.FieldLevel) bool {
+		return hexStringRegex.MatchString(fl.Field().String())
 	})
 }
 
@@ -126,18 +136,22 @@ func validationMessage(fe validator.FieldError) string {
 // return 400 dengan FieldError list jika gagal. Handler cukup panggil
 // helper ini tanpa boilerplate error handling.
 //
+// Response format (lihat NewValidationErrorResponse):
+//
+//	{
+//	  "success": false,
+//	  "code": 400,
+//	  "error": "validation failed",
+//	  "error_code": "VALIDATION_FAILED",
+//	  "details": [{"field": "...", "message": "..."}]
+//	}
+//
 // Returns:
 //   - true: binding sukses, struct terisi.
 //   - false: binding gagal, response 400 sudah di-write. Handler harus return.
 func BindJSON(c *gin.Context, obj interface{}) bool {
 	if err := c.ShouldBindJSON(obj); err != nil {
-		fieldErrs := AsFieldErrors(err)
-		c.AbortWithStatusJSON(400, gin.H{
-			"success": false,
-			"code":    400,
-			"error":   "validation failed",
-			"fields":  fieldErrs,
-		})
+		c.AbortWithStatusJSON(400, NewValidationErrorResponse(AsFieldErrors(err)))
 		return false
 	}
 	return true

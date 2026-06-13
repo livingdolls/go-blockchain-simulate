@@ -1,6 +1,7 @@
 package logger
 
 import (
+	"io"
 	"os"
 	"sync"
 	"time"
@@ -9,6 +10,26 @@ import (
 	"go.uber.org/zap/zapcore"
 	"gopkg.in/natefinch/lumberjack.v2"
 )
+
+// noSyncWriter membungkus io.Writer dengan Sync() yang no-op.
+//
+// Kenapa perlu: saat Shutdown(), zap.L.Sync() flush semua core termasuk
+// stdout. Untuk stdout (yang di Linux adalah pipe/terminal, bukan
+// regular file), fsync() return EINVAL "invalid argument" dan
+// LoggerShutdown gagal print error message.
+//
+// Solusi: bungkus stdout dengan writer ini. Write() tetap delegate ke
+// stdout asli, tapi Sync() return nil sehingga Shutdown() bersih.
+//
+// Trade-off: kalau stdout di-redirect ke regular file (mis. `app > log.txt`),
+// fsync tidak akan di-call. Tapi ini acceptable - untuk durability
+// pakai file logger (lumberjack) yang sudah ada Sync() proper.
+type noSyncWriter struct {
+	w io.Writer
+}
+
+func (n noSyncWriter) Write(p []byte) (int, error) { return n.w.Write(p) }
+func (noSyncWriter) Sync() error                   { return nil }
 
 var (
 	L     *zap.Logger
@@ -41,10 +62,12 @@ func initLogger(cfg Config) error {
 
 	var cores []zapcore.Core
 
-	// 1. Stdout for all levels
+	// 1. Stdout for all levels.
+	// Pakai noSyncWriter: stdout di container biasanya pipe/terminal,
+	// fsync() di pipe return EINVAL - lihat noSyncWriter doc untuk detail.
 	stdoutCore := zapcore.NewCore(
 		zapcore.NewJSONEncoder(encoderCfg),
-		zapcore.AddSync(os.Stdout),
+		zapcore.AddSync(noSyncWriter{w: os.Stdout}),
 		cfg.Level,
 	)
 	cores = append(cores, stdoutCore)

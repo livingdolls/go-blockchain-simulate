@@ -2,7 +2,10 @@ package repository
 
 import (
 	"database/sql"
+	"errors"
+	"strings"
 
+	"github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
 	"github.com/livingdolls/go-blockchain-simulate/app/entity"
 	"github.com/livingdolls/go-blockchain-simulate/app/models"
@@ -32,6 +35,17 @@ func (r *userRepository) BeginTx() (*sqlx.Tx, error) {
 	return r.db.Beginx()
 }
 
+// Create menyimpan user baru ke DB. Return:
+//
+//   - nil: sukses
+//   - entity.ErrAddressAlreadyRegistered: address sudah ada (UNIQUE constraint)
+//   - entity.ErrUsernameAlreadyExists: name sudah ada (kalau ada UNIQUE di name)
+//   - error lain: DB infrastructure error (caller map ke 500)
+//
+// Implementasi: deteksi MySQL error 1062 (duplicate entry) dari driver,
+// lalu classify field mana yang duplicate dengan parse message string.
+// trade-off: parse message string lebih fragile dari info schema, tapi
+// tidak perlu query INFORMATION_SCHEMA setiap insert.
 func (r *userRepository) Create(user models.User) error {
 	query := `
 		INSERT INTO users (name, address, public_key)
@@ -39,7 +53,47 @@ func (r *userRepository) Create(user models.User) error {
 	`
 
 	_, err := r.db.Exec(query, user.Name, user.Address, user.PublicKey)
-	return err
+	if err != nil {
+		return classifyMySQLInsertError(err, user)
+	}
+	return nil
+}
+
+// classifyMySQLInsertError menerjemahkan error MySQL ke entity error
+// yang lebih semantik. Dipakai oleh semua repository yang insert ke
+// tabel dengan UNIQUE constraint.
+//
+// MySQL error 1062 format: "Error 1062 (23000): Duplicate entry 'xxx' for key 'users.YY'"
+// YY = nama index (biasanya: address, name, atau nama constraint).
+func classifyMySQLInsertError(err error, _ models.User) error {
+	if err == nil {
+		return nil
+	}
+
+	var mysqlErr *mysql.MySQLError
+	if errors.As(err, &mysqlErr) {
+		// 1062 = ER_DUP_ENTRY (duplicate key)
+		if mysqlErr.Number == 1062 {
+			// Cek index name untuk tahu field mana yang duplicate.
+			// Index name format: "table.column" atau "table.custom_name".
+			// Pakai case-insensitive contains untuk handle kedua format.
+			msg := strings.ToLower(mysqlErr.Message)
+			switch {
+			case strings.Contains(msg, "address"):
+				return entity.ErrAddressAlreadyRegistered
+			case strings.Contains(msg, "name"), strings.Contains(msg, "username"):
+				return entity.ErrUsernameAlreadyExists
+			default:
+				// Duplicate di field lain - generic conflict.
+				return entity.ErrConflict
+			}
+		}
+	}
+
+	// Bukan duplicate (mungkin connection lost, deadlock, syntax error, dll).
+	// Wrap dengan entity.ErrDatabase untuk caller bisa distinguish dari
+	// expected business errors.
+	return errors.Join(entity.ErrDatabase, err)
 }
 
 func (r *userRepository) GetByAddress(address string) (models.User, error) {
@@ -53,112 +107,101 @@ func (r *userRepository) GetByAddressWithBalance(address string) (models.UserWit
 	var user models.UserWithBalance
 
 	query := `
-	SELECT 
-		us.id, 
-		us.name, 
-		us.address, 
-		us.public_key, 
-		COALESCE(uw.yte_balance, 0) AS yte_balance,
-    	COALESCE(ub.usd_balance, 0) AS usd_balance 
-	FROM users as us 
-	LEFT JOIN user_wallets as uw on us.address = uw.user_address 
-	LEFT JOIN user_balances as ub on us.address = ub.user_address  
+	SELECT
+		us.id,
+		us.name,
+		us.address,
+		us.public_key,
+		us.role,
+		COALESCE(ub.yte_balance, 0)  AS yte_balance,
+		COALESCE(ub.usd_balance, 0)  AS usd_balance
+	FROM users us
+	LEFT JOIN user_balances ub ON ub.user_id = us.id
 	WHERE us.address = ?
+	LIMIT 1
 	`
 
 	err := r.db.Get(&user, query, address)
-
-	if err == sql.ErrNoRows {
-		return user, entity.ErrUserNotFound
-	}
-
 	return user, err
 }
 
-// GetMultipleByAddress retrieves multiple users by addresses in a single query
 func (r *userRepository) GetMultipleByAddress(addresses []string) ([]models.User, error) {
+	var users []models.User
 	if len(addresses) == 0 {
-		return []models.User{}, nil
+		return users, nil
 	}
 
-	var users []models.User
-	query, args, err := sqlx.In(`SELECT id, name, address, public_key FROM users WHERE address IN (?)`, addresses)
+	q, args, err := sqlx.In("SELECT id, name, address, public_key FROM users WHERE address IN (?)", addresses)
 	if err != nil {
 		return nil, err
 	}
-
-	err = r.db.Select(&users, r.db.Rebind(query), args...)
+	q = r.db.Rebind(q)
+	err = r.db.Select(&users, q, args...)
 	return users, err
 }
 
 func (r *userRepository) GetMultipleByAddressWithTx(tx *sqlx.Tx, addresses []string) ([]models.User, error) {
+	var users []models.User
 	if len(addresses) == 0 {
-		return []models.User{}, nil
+		return users, nil
 	}
 
-	var users []models.User
-	query, args, err := sqlx.In(`SELECT id, name, address, public_key FROM users WHERE address in (?)`, addresses)
-
+	q, args, err := sqlx.In("SELECT id, name, address, public_key FROM users WHERE address IN (?) FOR UPDATE", addresses)
 	if err != nil {
 		return nil, err
 	}
-
-	err = tx.Select(&users, tx.Rebind(query), args...)
+	q = tx.Rebind(q)
+	err = tx.Select(&users, q, args...)
 	return users, err
 }
 
 func (r *userRepository) GetUserWithWallet(address string) (models.User, models.UserWallet, error) {
+	var (
+		user   models.User
+		wallet models.UserWallet
+	)
 
-	var user models.User
-	var wallet models.UserWallet
-
-	query := `
-        SELECT 
-            u.id, u.name, u.address, u.public_key,
-            COALESCE(w.user_address, '') as user_address,
-            COALESCE(w.yte_balance, 0) as yte_balance,
-            COALESCE(w.locked_balance, 0) as locked_balance,
-            COALESCE(w.total_received, 0) as total_received,
-            COALESCE(w.total_sent, 0) as total_sent,
-            w.last_transaction_at
-        FROM users u
-        LEFT JOIN user_wallets w ON u.address = w.user_address
-        WHERE u.address = ?
-    `
+	// Catatan: schema user_wallets saat ini tidak punya kolom
+	// user_id/address/nonce - PK adalah user_address. Query ini join
+	// lewat user_address. Field wallet_address & nonce di-comment
+	// sementara sampai schema berkembang.
+	const query = `
+		SELECT
+			us.id, us.name, us.address, us.public_key, us.role,
+			uw.user_address, uw.yte_balance, uw.locked_balance,
+			uw.available_balance, uw.total_received, uw.total_sent,
+			uw.last_transaction_at
+		FROM users us
+		LEFT JOIN user_wallets uw ON uw.user_address = us.address
+		WHERE us.address = ?
+		LIMIT 1
+	`
 
 	type result struct {
-		ID                int64   `db:"id"`
-		Name              string  `db:"name"`
-		Address           string  `db:"address"`
-		PublicKey         string  `db:"public_key"`
-		UserAddress       string  `db:"user_address"`
-		YTEBalance        float64 `db:"yte_balance"`
-		LockedBalance     float64 `db:"locked_balance"`
-		TotalReceived     float64 `db:"total_received"`
-		TotalSent         float64 `db:"total_sent"`
-		LastTransactionAt string  `db:"last_transaction_at"`
+		models.User
+		UserAddress      sql.NullString `db:"user_address"`
+		YTEBalance       sql.NullFloat64 `db:"yte_balance"`
+		LockedBalance    sql.NullFloat64 `db:"locked_balance"`
+		AvailableBalance sql.NullFloat64 `db:"available_balance"`
+		TotalReceived    sql.NullFloat64 `db:"total_received"`
+		TotalSent        sql.NullFloat64 `db:"total_sent"`
+		LastTransaction  sql.NullString  `db:"last_transaction_at"`
 	}
 
-	var res result
-	err := r.db.Get(&res, query, address)
-	if err != nil {
-		return user, wallet, err
+	var r2 result
+	if err := r.db.Get(&r2, query, address); err != nil {
+		return models.User{}, models.UserWallet{}, err
 	}
 
-	user = models.User{
-		ID:        int(res.ID),
-		Name:      res.Name,
-		Address:   res.Address,
-		PublicKey: res.PublicKey,
-	}
-
+	user = r2.User
 	wallet = models.UserWallet{
-		UserAddress:     res.UserAddress,
-		YTEBalance:      res.YTEBalance,
-		LockedBalance:   res.LockedBalance,
-		TotalReceived:   res.TotalReceived,
-		TotalSent:       res.TotalSent,
-		LastTransaction: res.LastTransactionAt,
+		UserAddress:      r2.UserAddress.String,
+		YTEBalance:       r2.YTEBalance.Float64,
+		LockedBalance:    r2.LockedBalance.Float64,
+		AvailableBalance: r2.AvailableBalance.Float64,
+		TotalReceived:    r2.TotalReceived.Float64,
+		TotalSent:        r2.TotalSent.Float64,
+		LastTransaction:  r2.LastTransaction.String,
 	}
 
 	return user, wallet, nil

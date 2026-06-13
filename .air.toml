@@ -1,17 +1,72 @@
+# Air config untuk hot reload di development.
+# Dipakai oleh Dockerfile.dev via `air` binary di container.
+#
+# Dokumentasi lengkap: https://github.com/cosmtrek/air/blob/master/air.example.toml
+
+# root = working directory Air. Disarankan project root.
 root = "."
+
+# tmp_dir = tempat Air taruh binary hasil build + intermediate files.
+# Folder ini di-mount sebagai named volume di docker-compose.dev.yml
+# agar persistent antar restart (lihat docker-compose.dev.yml).
 tmp_dir = "tmp"
 
 [build]
-  cmd = "go build -o ./tmp/main ."
+  # Perintah build. Equivalent `go build` tapi output ke tmp_dir.
+  # -gcflags=-trimpath=false: path di binary sesuai container path,
+  #   jadi log/race detector output tidak campur host path.
+  # -buildvcs=false: skip git stamping. Penting di Docker karena
+  #   .git/ mungkin tidak di-mount ke container, dan `git status` akan
+  #   exit 128 di dalam container - menyebabkan build fail.
+  cmd = "go build -buildvcs=false -gcflags='-trimpath=false' -o ./tmp/main ."
+  # Binary yang di-run setelah build sukses.
   bin = "tmp/main"
-  include_ext = ["go", "yaml", "env", "json"]
-  exclude_dir = ["tmp", "vendor"]
+  # Delay (ms) antara build sukses dan start binary. Beri waktu filesystem
+  # sync settle (terutama di Docker Desktop Mac/Windows dengan bind mount).
+  delay = 1000
+  # File yang di-watch untuk trigger rebuild. Hanya .go + config files;
+  # .md/.gitignore/etc tidak trigger build (menghemat CPU + false positive).
+  include_ext = ["go", "yaml", "yml", "env", "json", "toml"]
+  # Folder yang di-exclude dari watcher. Tanpa ini, setiap perubahan di
+  # .git, tmp/, vendor/, node_modules/ akan trigger rebuild sia-sia.
+  # Tambahkan `view/` (Next.js frontend di monorepo ini) karena berisi
+  # node_modules yang akan trigger ribuan event watcher sia-sia.
+  exclude_dir = [
+    "tmp",
+    "vendor",
+    ".git",
+    "bin",
+    "docs",
+    "YuteCoin",  # sub-project lain di monorepo ini
+    "view",      # Next.js frontend (bukan bagian Go app)
+    ".idea",
+    ".vscode",
+  ]
+  # File spesifik yang di-exclude. Contoh: file hasil generate atau
+  # schema yang di-trigger oleh code change lain.
+  exclude_file = []
+  # Tampilkan log build (stdout/stderr) di terminal Air.
+  log = "build-errors"
+  # Stop binary lama dengan SIGTERM dulu (graceful), lalu SIGKILL setelah
+  # 5 detik. Penting agar app bisa cleanup (close DB conn, flush log, dll).
+  # Lihat main.go shutdown() yang handle SIGTERM.
+  send_interrupt = true
+  kill_delay = 5000
 
 [log]
+  # Timestamp di prefix log. Bagus untuk correlating dengan docker logs.
   time = true
 
+[misc]
+  # Cleanup tmp_dir saat Air exit. Set false di dev agar saat restart
+  # binary lama masih bisa di-inspect kalau ada error aneh.
+  clean_on_exit = false
+
 [serve]
+  # Command untuk run binary. Default cukup pakai path dari `bin` di atas.
   cmd = "./tmp/main"
+  # Delay (ms) antara start binary dan consider "running". Sama dengan
+  # delay di build section; bisa di-override kalau app start lambat.
   delay = 1000
 
 [color]

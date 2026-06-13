@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -68,9 +69,15 @@ func (h *RegisterHandler) Register(c *gin.Context) {
 		return
 	}
 
+	fmt.Errorf("error disini")
+
 	user, err := h.service.Register(req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, dto.NewErrorResponse[string](err.Error()))
+		// RespondAppError otomatis extract *dto.AppError dari error chain,
+		// set HTTP status code yang sesuai (400/409/500), dan return
+		// response terstruktur dengan error_code + field. Kalau err
+		// bukan AppError, fallback ke 500 generic (tidak bocor detail).
+		dto.RespondAppError(c, err)
 		return
 	}
 
@@ -91,17 +98,18 @@ func (h *RegisterHandler) Challenge(c *gin.Context) {
 	// attacker bisa isi Redis dengan non-address keys (setiap key punya
 	// TTL 10 menit → Redis memory exhaustion vector).
 	if !dto.IsEthereumAddress(address) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid Ethereum address format"})
+		dto.RespondAppError(c, dto.NewBadRequestField(dto.CodeInvalidInput,
+			"invalid Ethereum address format (expected 0x + 40 hex)", "address"))
 		return
 	}
 
 	challenge, err := h.service.Challenge(c.Request.Context(), address)
 	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
+		dto.RespondAppError(c, err)
 		return
 	}
 
-	c.JSON(200, gin.H{"challenge": challenge})
+	c.JSON(200, dto.NewSuccessResponse(gin.H{"challenge": challenge}))
 }
 
 func (h *RegisterHandler) Verify(c *gin.Context) {
@@ -118,13 +126,13 @@ func (h *RegisterHandler) Verify(c *gin.Context) {
 
 	valid, err := h.service.Verify(c.Request.Context(), req.Address, req.Nonce, req.Signature, req.Username)
 	if err != nil {
-		c.JSON(500, gin.H{"error": err.Error()})
+		dto.RespondAppError(c, err)
 		return
 	}
 
 	setAuthCookie(c, "auth_token", valid, 24*3600)
 
-	c.JSON(200, gin.H{"valid": true})
+	c.JSON(200, dto.NewSuccessResponse(gin.H{"valid": true}))
 }
 
 // Logout menghapus cookie auth_token dan menambahkan token ke Redis

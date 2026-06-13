@@ -3,11 +3,14 @@ package services
 import (
 	"context"
 	"encoding/hex"
+	"errors"
 	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/jmoiron/sqlx"
+	"github.com/livingdolls/go-blockchain-simulate/app/dto"
+	"github.com/livingdolls/go-blockchain-simulate/app/entity"
 	"github.com/livingdolls/go-blockchain-simulate/app/models"
 	"github.com/livingdolls/go-blockchain-simulate/app/repository"
 	"github.com/livingdolls/go-blockchain-simulate/security"
@@ -17,10 +20,18 @@ import (
 
 // fakeUserRepo minimal untuk Verify: hanya GetByAddress.
 type fakeUserRepo struct {
-	users map[string]models.User
+	users       map[string]models.User
+	createErr   error // inject error untuk test duplicate path
+	createdUser models.User
 }
 
-func (f *fakeUserRepo) Create(models.User) error { return nil }
+func (f *fakeUserRepo) Create(u models.User) error {
+	if f.createErr != nil {
+		return f.createErr
+	}
+	f.createdUser = u
+	return nil
+}
 func (f *fakeUserRepo) GetByAddress(address string) (models.User, error) {
 	if u, ok := f.users[strings.ToLower(address)]; ok {
 		return u, nil
@@ -114,10 +125,17 @@ func (f *fakeJWT) GenerateToken(address string) (string, error) {
 func (f *fakeJWT) ValidateToken(string) (*security.JWTClaims, error) { return nil, nil }
 
 func newRegisterTestService(users map[string]models.User) (RegisterService, *mockMemoryAdapter) {
+	svc, _, mem := newRegisterTestServiceWithRepo(users)
+	return svc, mem
+}
+
+// newRegisterTestServiceWithRepo returns svc + repo + memory adapter.
+// Dipakai oleh test Register() yang perlu inject createErr di repo.
+func newRegisterTestServiceWithRepo(users map[string]models.User) (RegisterService, *fakeUserRepo, *mockMemoryAdapter) {
 	mem := newMockMemoryAdapter()
 	repo := &fakeUserRepo{users: users}
 	svc := NewRegisterService(repo, &stubWalletRepo{}, &stubBalanceRepo{}, &fakeJWT{}, mem)
-	return svc, mem
+	return svc, repo, mem
 }
 
 func TestRegister_Challenge_StoresNonce(t *testing.T) {
@@ -208,7 +226,12 @@ func TestRegister_Verify_AddressMismatch(t *testing.T) {
 
 	_, err := svc.Verify(context.Background(), bAddr, nonce, signature, "bob")
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "address mismatch")
+	// Cek error code (typed) - lebih robust dari string match.
+	appErr, ok := dto.AsAppError(err)
+	require.True(t, ok, "expected *dto.AppError")
+	assert.Equal(t, dto.CodeAddressMismatch, appErr.Code)
+	assert.Equal(t, 400, appErr.Status)
+	assert.Equal(t, "address", appErr.Field)
 }
 
 func TestRegister_Verify_UserNotFound(t *testing.T) {
@@ -225,7 +248,10 @@ func TestRegister_Verify_UserNotFound(t *testing.T) {
 
 	_, err := svc.Verify(context.Background(), addr, nonce, signature, "alice")
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "user not found")
+	appErr, ok := dto.AsAppError(err)
+	require.True(t, ok, "expected *dto.AppError")
+	assert.Equal(t, dto.CodeUserNotFound, appErr.Code)
+	assert.Equal(t, 404, appErr.Status)
 }
 
 func TestRegister_Verify_UsernameMismatch(t *testing.T) {
@@ -267,5 +293,75 @@ func TestRegister_Verify_AddressNormalization(t *testing.T) {
 
 // Hapus unused import warning untuk sql.NullInt64 (dipakai repository)
 var _ = context.Background
+
+// --- Test Register() error mapping ---
+
+func TestRegister_Register_DuplicateAddress_Returns409(t *testing.T) {
+	// Setup: fake repo mensimulasikan MySQL error 1062 duplicate address.
+	// Service harus map ke AppError 409 dengan code ADDRESS_ALREADY_REGISTERED,
+	// BUKAN return raw error 500.
+	svc, repo, _ := newRegisterTestServiceWithRepo(map[string]models.User{})
+	repo.createErr = entity.ErrAddressAlreadyRegistered
+
+	_, err := svc.Register(models.UserRegister{
+		Username:  "alice",
+		Address:   "0x1234567890abcdef1234567890abcdef12345678",
+		PublicKey: "abcdef",
+	})
+
+	require.Error(t, err)
+	appErr, ok := dto.AsAppError(err)
+	require.True(t, ok, "expected *dto.AppError, got %T", err)
+
+	assert.Equal(t, 409, appErr.Status, "duplicate should be 409 Conflict, not 500")
+	assert.Equal(t, dto.CodeAddressExists, appErr.Code)
+	assert.Equal(t, "address", appErr.Field, "field name helps frontend highlight the offending field")
+	assert.Equal(t, "address already registered", appErr.Message)
+	assert.NotContains(t, appErr.Message, "SQL", "must not leak SQL details")
+}
+
+func TestRegister_Register_DuplicateUsername_Returns409(t *testing.T) {
+	svc, repo, _ := newRegisterTestServiceWithRepo(map[string]models.User{})
+	repo.createErr = entity.ErrUsernameAlreadyExists
+
+	_, err := svc.Register(models.UserRegister{
+		Username:  "alice",
+		Address:   "0x1234567890abcdef1234567890abcdef12345678",
+		PublicKey: "abcdef",
+	})
+
+	require.Error(t, err)
+	appErr, ok := dto.AsAppError(err)
+	require.True(t, ok)
+
+	assert.Equal(t, 409, appErr.Status)
+	assert.Equal(t, dto.CodeUsernameExists, appErr.Code)
+	assert.Equal(t, "username", appErr.Field)
+}
+
+func TestRegister_Register_UnknownDBError_Returns500(t *testing.T) {
+	// Unknown error (e.g., connection lost) harus jadi 500 generic.
+	// Message TIDAK boleh bocor detail ke user, tapi cause harus di-log.
+	svc, repo, _ := newRegisterTestServiceWithRepo(map[string]models.User{})
+	repo.createErr = errors.New("connection refused to internal-db:3306")
+
+	_, err := svc.Register(models.UserRegister{
+		Username:  "alice",
+		Address:   "0x1234567890abcdef1234567890abcdef12345678",
+		PublicKey: "abcdef",
+	})
+
+	require.Error(t, err)
+	appErr, ok := dto.AsAppError(err)
+	require.True(t, ok)
+
+	assert.Equal(t, 500, appErr.Status)
+	assert.Equal(t, dto.CodeDatabaseError, appErr.Code)
+	assert.Equal(t, "database error", appErr.Message, "must be generic, no leak")
+	assert.NotContains(t, appErr.Message, "internal-db", "must not leak internal hostnames")
+	assert.NotContains(t, appErr.Message, "3306", "must not leak internal ports")
+	// Cause tetap ada untuk logging
+	assert.NotNil(t, appErr.Cause)
+}
 
 

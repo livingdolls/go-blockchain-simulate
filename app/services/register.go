@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"math/big"
 	"strings"
@@ -10,6 +11,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/google/uuid"
+	"github.com/livingdolls/go-blockchain-simulate/app/dto"
+	"github.com/livingdolls/go-blockchain-simulate/app/entity"
 	"github.com/livingdolls/go-blockchain-simulate/app/models"
 	"github.com/livingdolls/go-blockchain-simulate/app/repository"
 	"github.com/livingdolls/go-blockchain-simulate/logger"
@@ -36,7 +39,16 @@ func NewRegisterService(repo repository.UserRepository, walletRepo repository.Us
 	return &registerService{repo: repo, walletRepo: walletRepo, balanceRepo: balanceRepo, jwt: jwt, redis: redis}
 }
 
-// Registr implements RegisterService.
+// Register implements RegisterService. Return:
+//
+//   - Success: UserRegisterResponse + nil error
+//   - dto.AppError 409: address/username sudah terdaftar (duplicate)
+//   - dto.AppError 500: DB/JWT infrastructure error
+//   - dto.AppError 500 dengan entity.ErrDatabase: unexpected DB error
+//
+// Service TIDAK return 4xx generic string - semua error kategori 4xx
+// dikirim sebagai *dto.AppError agar handler bisa map ke status code
+// + error_code yang tepat (lihat dto/apperror.go).
 func (r *registerService) Register(req models.UserRegister) (models.UserRegisterResponse, error) {
 	// save to db
 	user := models.User{
@@ -47,24 +59,31 @@ func (r *registerService) Register(req models.UserRegister) (models.UserRegister
 
 	err := r.repo.Create(user)
 	if err != nil {
-		return models.UserRegisterResponse{}, fmt.Errorf("failed to create user: %w", err)
+		return models.UserRegisterResponse{}, mapRegisterRepoError(err, req)
 	}
 
 	// create empty wallet
 	err = r.walletRepo.UpsertEmptyIfNotExists(user.Address)
 	if err != nil {
-		return models.UserRegisterResponse{}, fmt.Errorf("failed to create user wallet: %w", err)
+		// Wallet/balance error = infra error (500), bukan user error.
+		// Log cause untuk debug tapi jangan expose ke user.
+		logger.LogError(fmt.Sprintf("failed to create wallet for %s", user.Address), err)
+		return models.UserRegisterResponse{}, dto.NewInternalError(err)
 	}
 
 	// create empty balance
 	err = r.balanceRepo.UpsertEmptyIfNotExists(user.Address)
 	if err != nil {
-		return models.UserRegisterResponse{}, fmt.Errorf("failed to create user balance: %w", err)
+		logger.LogError(fmt.Sprintf("failed to create balance for %s", user.Address), err)
+		return models.UserRegisterResponse{}, dto.NewInternalError(err)
 	}
 
 	token, err := r.jwt.GenerateToken(user.Address)
 	if err != nil {
-		return models.UserRegisterResponse{}, err
+		// JWT generation error = infra (signing key missing, etc).
+		// Bukan user error, jadi 500.
+		logger.LogError(fmt.Sprintf("failed to generate JWT for %s", user.Address), err)
+		return models.UserRegisterResponse{}, dto.NewInternalError(err)
 	}
 
 	userResponse := models.UserRegisterResponse{
@@ -76,6 +95,30 @@ func (r *registerService) Register(req models.UserRegister) (models.UserRegister
 	}
 
 	return userResponse, nil
+}
+
+// mapRegisterRepoError menerjemahkan entity error dari repository ke
+// AppError dengan HTTP status yang sesuai. Dipakai agar handler tidak
+// perlu switch/case by error string (yang fragile).
+func mapRegisterRepoError(err error, req models.UserRegister) *dto.AppError {
+	switch {
+	case errors.Is(err, entity.ErrAddressAlreadyRegistered):
+		return dto.NewConflict(dto.CodeAddressExists,
+			"address already registered", "address")
+	case errors.Is(err, entity.ErrUsernameAlreadyExists):
+		return dto.NewConflict(dto.CodeUsernameExists,
+			"username already taken", "username")
+	case errors.Is(err, entity.ErrConflict):
+		// Generic conflict (duplicate field lain).
+		return dto.NewConflict(dto.CodeConflict,
+			"resource already exists", "")
+	default:
+		// Unexpected DB error. Log + return 500 generic (jangan bocor
+		// SQL error ke user).
+		logger.LogError(fmt.Sprintf("register: unexpected error for address=%s name=%s",
+			req.Address, req.Username), err)
+		return dto.NewDatabaseError(err)
+	}
 }
 
 func (r *registerService) Challenge(contex context.Context, address string) (string, error) {
@@ -93,10 +136,15 @@ func (r *registerService) Verify(ctx context.Context, address, nonce, signature,
 
 	stored, ok := r.redis.Get(ctx, addr)
 	if !ok || len(stored) == 0 {
-		return "", fmt.Errorf("missing or expired challenge")
+		// 400: user belum request challenge atau sudah expire (10 min TTL).
+		return "", dto.NewBadRequest(dto.CodeMissingChallenge,
+			"missing or expired challenge - request a new nonce first")
 	}
 	if nonce != string(stored) {
-		return "", fmt.Errorf("stale challenge: request a new nonce")
+		// 400: nonce yang di-sign tidak match dengan yang di Redis.
+		// Berarti user pakai nonce lama atau salah paste.
+		return "", dto.NewBadRequest(dto.CodeStaleChallenge,
+			"stale challenge: request a new nonce")
 	}
 
 	msg := fmt.Sprintf("Login to YuteBlockchain nonce:%s", nonce)
@@ -105,10 +153,12 @@ func (r *registerService) Verify(ctx context.Context, address, nonce, signature,
 	sigHex := strings.TrimPrefix(strings.TrimSpace(signature), "0x")
 	raw, err := hex.DecodeString(sigHex)
 	if err != nil {
-		return "", fmt.Errorf("invalid signature hex: %w", err)
+		return "", dto.NewBadRequestField(dto.CodeInvalidSignature,
+			"invalid signature hex format", "signature")
 	}
 	if len(raw) != 65 {
-		return "", fmt.Errorf("invalid signature length: %d", len(raw))
+		return "", dto.NewBadRequestField(dto.CodeInvalidSignature,
+			fmt.Sprintf("invalid signature length: %d (expected 65)", len(raw)), "signature")
 	}
 
 	// r,s,v
@@ -122,14 +172,16 @@ func (r *registerService) Verify(ctx context.Context, address, nonce, signature,
 		v = byte(((int(v) - 35) % 2) + 27)
 	}
 	if v != 27 && v != 28 {
-		return "", fmt.Errorf("invalid signature recovery id: %d", v)
+		return "", dto.NewBadRequestField(dto.CodeInvalidSignature,
+			fmt.Sprintf("invalid signature recovery id: %d", v), "signature")
 	}
 	raw[64] = v
 
 	// low-s check (EIP-2)
 	halfN := new(big.Int).Rsh(crypto.S256().Params().N, 1)
 	if sPart.Cmp(halfN) == 1 {
-		return "", fmt.Errorf("signature s too high (non-canonical)")
+		return "", dto.NewBadRequestField(dto.CodeInvalidSignature,
+			"signature s too high (non-canonical)", "signature")
 	}
 
 	// hash
@@ -147,32 +199,48 @@ func (r *registerService) Verify(ctx context.Context, address, nonce, signature,
 		}
 	}
 	if pubBytes == nil {
-		return "", fmt.Errorf("failed to recover public key")
+		return "", dto.NewBadRequest(dto.CodeSignatureRecoveryFail,
+			"failed to recover public key from signature")
 	}
 
 	pubKey, err := crypto.UnmarshalPubkey(pubBytes)
 	if err != nil {
-		return "", fmt.Errorf("failed to unmarshal public key: %w", err)
+		// Wrap internal - unmarshalPK failure biasanya = bug/corrupt sig.
+		logger.LogError("Verify: failed to unmarshal public key", err)
+		return "", dto.NewInternalError(err)
 	}
 	recovered := strings.ToLower(crypto.PubkeyToAddress(*pubKey).Hex())
 	if recovered != addr {
-		return "", fmt.Errorf("address mismatch recovered=%s expected=%s", recovered, addr)
+		// 400: signature valid tapi address yg di-sign != address di body.
+		// Bisa jadi user salah sign dengan key lain.
+		return "", dto.NewBadRequestField(dto.CodeAddressMismatch,
+			"signature does not match the provided address", "address")
 	}
 
 	// check username uniqueness
 	existingUser, err := r.repo.GetByAddress(addr)
 	if err != nil {
-		return "", fmt.Errorf("failed to get user by address: %w", err)
+		// 500: DB error (bukan user not found - kita handle di bawah).
+		logger.LogError(fmt.Sprintf("Verify: failed to get user by address %s", addr), err)
+		return "", dto.NewDatabaseError(err)
 	}
 	if existingUser.ID == 0 {
-		return "", fmt.Errorf("user not found for address: %s", addr)
+		// 404: address ada di challenge Redis tapi belum register.
+		return "", dto.NewNotFound(dto.CodeUserNotFound,
+			"user not registered - call /auth/register first")
 	}
 	if existingUser.Name != username {
-		return "", fmt.Errorf("username does not match the registered username")
+		// 400: username di body != username saat register. Attacker
+		// mungkin coba ambil alih akun dengan address yg sudah register.
+		return "", dto.NewBadRequestField(dto.CodeUsernameMismatch,
+			"username does not match the registered username", "username")
 	}
 
 	if addr != strings.ToLower(existingUser.Address) {
-		return "", fmt.Errorf("address does not match the registered address")
+		// Seharusnya tidak mungkin (address di DB selalu lowercased).
+		// Tapi guard untuk paranoid case.
+		return "", dto.NewBadRequestField(dto.CodeAddressMismatch,
+			"address does not match the registered address", "address")
 	}
 
 	// success: delete nonce
@@ -180,7 +248,8 @@ func (r *registerService) Verify(ctx context.Context, address, nonce, signature,
 
 	token, err := r.jwt.GenerateToken(addr)
 	if err != nil {
-		return "", fmt.Errorf("failed to generate jwt: %w", err)
+		logger.LogError(fmt.Sprintf("Verify: failed to generate JWT for %s", addr), err)
+		return "", dto.NewInternalError(err)
 	}
 	return token, nil
 }

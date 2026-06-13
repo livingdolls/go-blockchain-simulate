@@ -135,6 +135,8 @@ class RegisterViewModel(
 
             _state.value = _state.value.copy(isLoading = false)
 
+            Log.d("yute", "DEBUG RESULT $result")
+
             when (result) {
                 is NetworkResult.Success -> {
                     sessionManager.saveWallet(

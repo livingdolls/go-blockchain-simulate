@@ -28,9 +28,14 @@ LICENSE
 Thumbs.db
 
 # Docker (jika ada nested docker, hindari recursion)
+# Production Dockerfile tetap di-ignore karena di-copy manual via image name.
 Dockerfile
+# TAPI Dockerfile.dev dan docker-compose*.yml HARUS ikut konteks build
+# karena di-reference oleh docker-compose.dev.yml.
+!Dockerfile.dev
+!docker-compose.yml
+!docker-compose.dev.yml
 .dockerignore
-docker-compose*.yml
 
 # Test artifacts dan coverage
 *.test
@@ -39,3 +44,8 @@ coverage.html
 
 # Log
 *.log
+
+# Project subdir yang bukan bagian Go app (jangan trigger rebuild saat
+# file di subdir ini berubah - lihat juga .air.toml exclude_dir).
+YuteCoin/
+view/

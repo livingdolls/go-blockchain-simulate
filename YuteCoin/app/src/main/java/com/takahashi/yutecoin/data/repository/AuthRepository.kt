@@ -1,5 +1,6 @@
 package com.takahashi.yutecoin.data.repository
 
+import android.util.Log
 import com.takahashi.yutecoin.crypto.WalletGenerator
 import com.takahashi.yutecoin.crypto.WalletSigner
 import com.takahashi.yutecoin.data.api.RetrofitClient
@@ -13,6 +14,7 @@ class AuthRepository {
     suspend fun register(username: String, address: String, publicKey: String): NetworkResult<String> {
         return try {
             val response = api.register(RegisterRequest(username, address, publicKey))
+            Log.d("yute", "DEBUG API RESPONSE $response")
             if (response.isSuccessful && response.body()?.success == true) {
                 NetworkResult.Success("Registration successful")
             } else {

@@ -1,0 +1,101 @@
+# Docker Compose override untuk development dengan hot reload.
+#
+# Cara pakai (gabung dengan docker-compose.yml):
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+#
+# Atau pakai Makefile target:
+#   make dev-up
+#
+# File ini override service `app` dari docker-compose.yml:
+#   - Dockerfile: dev (pakai Dockerfile.dev, bawa Air)
+#   - Source code di-mount sebagai volume (host -> container)
+#   - Container di-restart=unless-stopped, tapi rebuild dilakukan oleh
+#     Air di dalam container (bukan oleh Docker) saat file berubah.
+#
+# Hot reload flow:
+#   1. Edit file .go di host
+#   2. Docker propagates change via bind mount ke /app di container
+#   3. Air (running di dalam container) detect perubahan
+#   4. Air kill proses app lama, recompile, start yang baru
+#   5. Perubahan terlihat dalam ~1-3 detik (tergantung ukuran binary)
+#
+# Catatan performance:
+#   - go build di dalam container lambat pertama kali (~30-60s).
+#     Setelah itu incremental build jauh lebih cepat (~1-3s) karena
+#     Go cache + Docker layer cache untuk go.mod/go.sum.
+#   - Untuk Windows/Mac dengan Docker Desktop, bind mount bisa
+#     sangat lambat. Solusi: pakai sync cached/delegate (lihat
+#     docker-compose.dev.yml di bagian volumes) atau Dev Containers.
+#
+# Perbedaan dengan production (docker-compose.yml):
+#   - Tidak ada `build: context` -> pakai `target` atau `dockerfile` override
+#   - Volume bind mount source code
+#   - Tidak ada healthcheck (Air akan exit kalau build gagal)
+#   - Tidak ada restart policy (biarkan mati kalau ada error fatal)
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: blockchain-app-dev
+    # TIDAK pakai restart policy: kalau Air crash karena build error,
+    # kita mau lihat log-nya, bukan auto-restart loop.
+    restart: "no"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    # Port sama dengan production agar tidak ada perbedaan URL saat testing.
+    ports:
+      - "3010:3010"
+    environment:
+      APP_ENV: development
+      LOG_LEVEL: debug
+      DATABASE_DSN: "yurina:hirate@tcp(mysql:3306)/blockchain?parseTime=true&loc=Local"
+      REDIS_ADDR: "redis:6379"
+      REDIS_PASSWORD: ""
+      RABBITMQ_URL: "amqp://guest:guest@rabbitmq:5672/"
+      JWT_USER_SECRET: "dev-secret-user-min-32-chars-aaaaaa"
+      JWT_ADMIN_SECRET: "dev-secret-admin-min-32-chars-bbbbbb"
+      SERVER_ALLOWED_ORIGINS: "http://localhost:3000,http://localhost:3001,http://localhost:3002"
+    # Bind mount: source code di host -> /app di container.
+    # EXCLUDE folder yang tidak perlu di-sync untuk mempercepat
+    # filesystem watcher Air (lihat .air.toml exclude_dir).
+    #
+    # Untuk Windows/Mac dengan Docker Desktop, tambahkan opsi berikut
+    # untuk menghindari masalah permission dan improve performance:
+    #   volumes:
+    #     - .:/app:delegated    # delegated: container writes di-defer
+    #                           # sampai idle, lebih cepat untuk read-heavy
+    volumes:
+      - .:/app
+      # Tmp folder untuk Air's build artifacts.
+      # Named volume (bukan bind mount) agar Go build cache persistent
+      # antar container restart - mempercepat incremental build drastis.
+      - air-tmp:/app/tmp
+      # Go module cache: agar `go build` tidak download ulang deps
+      # setiap container restart. Juga mempercepat `go mod download`.
+      - go-mod-cache:/go/pkg/mod
+      - go-build-cache:/root/.cache/go-build
+    # TTY + stdin terbuka agar Air bisa menerima SIGINT (Ctrl+C) untuk
+    # graceful shutdown. Tanpa ini, `docker compose stop` langsung SIGKILL.
+    tty: true
+    stdin_open: true
+    networks:
+      - blockchain-net
+
+# Named volumes untuk cache. Tidak hilang saat container restart
+# (bandingkan dengan anonymous volumes yang auto-cleanup).
+#
+# Untuk reset cache (mis. setelah upgrade Go version):
+#   docker volume rm go-blockchain-simulate_air-tmp
+#   docker volume rm go-blockchain-simulate_go-mod-cache
+#   docker volume rm go-blockchain-simulate_go-build-cache
+volumes:
+  air-tmp:
+  go-mod-cache:
+  go-build-cache:

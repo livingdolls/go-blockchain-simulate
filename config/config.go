@@ -89,26 +89,22 @@ func Load(configPath string) (*Config, error) {
 		v.AddConfigPath(".")
 	}
 
-	// Baca config.local.yaml jika ada (untuk override lokal, biasanya berisi secret).
+	// Baca config.yaml dulu sebagai base.
+	if err := v.ReadInConfig(); err != nil {
+		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
+			return nil, fmt.Errorf("gagal membaca config.yaml: %w", err)
+		}
+	}
+
+	// Merge config.local.yaml di atas config.yaml (untuk override lokal,
+	// biasanya berisi secret). File ini tidak wajib ada.
 	v.SetConfigName("config.local")
 	v.SetConfigType("yaml")
 	v.AddConfigPath("./config")
 	v.AddConfigPath(".")
 	if err := v.MergeInConfig(); err != nil {
-		// File local tidak wajib ada, abaikan error file-not-found.
 		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
-			// Untuk path eksplisit, error harus dikembalikan.
-			if configPath != "" {
-				return nil, fmt.Errorf("gagal membaca konfigurasi: %w", err)
-			}
-		}
-	}
-	v.SetConfigName("config")
-	if err := v.ReadInConfig(); err != nil {
-		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
-			// File config utama tidak ditemukan, lanjut dengan env + default.
-		} else {
-			return nil, fmt.Errorf("gagal membaca config.yaml: %w", err)
+			return nil, fmt.Errorf("gagal membaca config.local.yaml: %w", err)
 		}
 	}
 
@@ -150,9 +146,12 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("rabbitmq.url", "")
 	v.SetDefault("rabbitmq.pool_size", 10)
 
-	// JWT secret TIDAK punya default di repo. Harus di-set via env var
-	// atau config.local.yaml. Validasi panjang (min 32 byte) dilakukan
-	// di validate() untuk mencegah deploy dengan secret lemah.
+	// JWT secret TIDAK punya default yang usable (< 32 byte).
+	// Kosongkan; validate() akan menolak jika tidak diisi via env
+	// atau config.local.yaml. Harus di-register di sini agar viper
+	// AllKeys() mengenali kunci dan AutomaticEnv bisa bekerja.
+	v.SetDefault("jwt.user_secret", "")
+	v.SetDefault("jwt.admin_secret", "")
 	v.SetDefault("jwt.user_ttl", "24h")
 	v.SetDefault("jwt.admin_ttl", "24h")
 	v.SetDefault("jwt.cookie_max_age", "24h")

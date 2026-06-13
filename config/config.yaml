@@ -25,6 +25,10 @@ jwt:
   # user_secret dan admin_secret TIDAK boleh di-commit.
   # Set via env var (JWT_USER_SECRET, JWT_ADMIN_SECRET) atau
   # config.local.yaml. Validasi di config.go menolak nilai < 32 byte.
+  # Kunci ada di sini dengan nilai kosong agar viper AllKeys()
+  # mengenali kunci ini dan AutomaticEnv bisa bekerja.
+  user_secret: ""  # set via JWT_USER_SECRET env var atau config.local.yaml
+  admin_secret: ""  # set via JWT_ADMIN_SECRET env var atau config.local.yaml
   user_ttl: "24h"
   admin_ttl: "24h"
   cookie_max_age: "24h"

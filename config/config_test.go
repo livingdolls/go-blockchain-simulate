@@ -148,13 +148,14 @@ func TestValidate_InvalidShutdownTimeout(t *testing.T) {
 }
 
 func TestSetDefaults_NoWeakJWTSecret(t *testing.T) {
-	// Regression: setDefaults() TIDAK boleh menambahkan default secret
-	// yang lolos validasi (≥ 32 byte). Harus kosong agar wajib di-set
-	// via env/config.local.yaml.
+	// Regression: setDefaults() menambahkan default JWT secret kosong ("")
+	// agar viper AllKeys() mengenali kunci dan AutomaticEnv bisa bekerja.
+	// Nilai "" TIDAK lolos validasi 32-byte, jadi deploy tanpa secret
+	// akan gagal di validate().
 	v := viper.New()
 	setDefaults(v)
 	assert.Equal(t, "", v.GetString("jwt.user_secret"),
-		"jwt.user_secret tidak boleh punya default (validation akan trigger)")
+		"jwt.user_secret harus kosong (validation akan trigger)")
 	assert.Equal(t, "", v.GetString("jwt.admin_secret"),
-		"jwt.admin_secret tidak boleh punya default")
+		"jwt.admin_secret harus kosong (validation akan trigger)")
 }

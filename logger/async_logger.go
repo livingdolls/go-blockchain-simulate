@@ -32,10 +32,11 @@ func (n noSyncWriter) Write(p []byte) (int, error) { return n.w.Write(p) }
 func (noSyncWriter) Sync() error                   { return nil }
 
 var (
-	L     *zap.Logger
-	queue *asyncQueue
-	done  chan struct{}
-	once  sync.Once
+	L                *zap.Logger
+	queue            *asyncQueue
+	shutdownComplete chan struct{} // closed saat Shutdown selesai
+	shutdownOnce     sync.Once     // guarantee Shutdown() body hanya run sekali
+	once             sync.Once     // guarantee Init() body hanya run sekali
 )
 
 func Init(cfg Config) error {
@@ -115,7 +116,7 @@ func initLogger(cfg Config) error {
 
 	// Setup async queue
 	queue = newAsyncQueue(cfg.QueueSize)
-	done = make(chan struct{})
+	shutdownComplete = make(chan struct{})
 
 	// Start worker pool
 	for i := 0; i < cfg.Workers; i++ {
@@ -167,23 +168,55 @@ func (q *queueCore) Sync() error {
 	return q.Core.Sync()
 }
 
+// asyncWorker memproses event dari queue sampai shutdown signal.
+//
+// Shutdown sequence:
+//  1. Shutdown() panggil markClosed() + closeCh() - close(done) sekali.
+//  2. Worker yang sedang range loop akan exit (done case di select).
+//  3. Setelah done, worker DRAIN sisa event dari ch (race-free: tidak
+//     ada sender baru karena isClosed()=true di push()).
+//  4. Worker return.
+//
+// Pattern ini aman dengan concurrent senders - senders tidak akan
+// race dengan close() karena kita TIDAK close(ch), hanya close(done).
+// Lihat type comment di queue.go untuk detail.
 func asyncWorker(id int, queue *asyncQueue) {
-	for ev := range queue.ch {
-		if ev.fn != nil {
-			ev.fn()
+	for {
+		select {
+		case ev, ok := <-queue.ch:
+			if !ok {
+				// ch closed (defensive - normally kita exit via done)
+				return
+			}
+			if ev.fn != nil {
+				ev.fn()
+			}
+		case <-queue.done:
+			// Shutdown signaled. Drain sisa event tanpa blocking
+			// (tidak ada sender baru setelah done closed).
+			for ev := range queue.ch {
+				if ev.fn != nil {
+					ev.fn()
+				}
+			}
+			return
 		}
 	}
 }
 
 // Shutdown gracefully closes the logger. Urutan:
-//  1. Set closed flag di queue agar push() berikutnya drop silent
-//     (mencegah panic "send on closed channel" dari goroutine user
-//     yang log di detik-detik terakhir).
-//  2. Tutup channel (worker akan exit saat range loop selesai).
-//  3. Tunggu worker selesai (via done channel) atau timeout.
+//  1. Set closed flag di queue (fast-path skip di push) + signal done
+//     channel (race-free shutdown coordination dengan senders).
+//  2. Worker detect done, drain sisa event dari ch, lalu return.
+//  3. Tunggu shutdown complete (signal dari goroutine di bawah) atau
+//     timeout - return L.Sync() di kedua case (logger core flush).
 //
 // Setelah Shutdown return, panggilan LogInfo/LogError berikutnya
 // akan menjadi no-op (lihat guard `if L == nil` atau isClosed di push).
+//
+// Idempotent: panggilan kedua/ketiga langsung return tanpa efek.
+// sync.Once melindungi close(shutdownComplete) dari double-close panic
+// (penting untuk test yang manggil Init+Shutdown berkali-kali).
 func Shutdown(timeout time.Duration) error {
 	if queue == nil {
 		return nil
@@ -192,15 +225,19 @@ func Shutdown(timeout time.Duration) error {
 	ticker := time.NewTicker(timeout)
 	defer ticker.Stop()
 
-	go func() {
-		// Set flag dulu agar push berikutnya drop early tanpa blocking.
-		queue.markClosed()
-		queue.closeCh()
-		done <- struct{}{}
-	}()
+	shutdownOnce.Do(func() {
+		go func() {
+			// Set flag dulu agar push berikutnya drop early tanpa blocking.
+			queue.markClosed()
+			queue.closeCh()
+			// Signal completion. Hanya close sekali via shutdownOnce di atas
+			// untuk mencegah double-close panic.
+			close(shutdownComplete)
+		}()
+	})
 
 	select {
-	case <-done:
+	case <-shutdownComplete:
 		return L.Sync()
 	case <-ticker.C:
 		return L.Sync()

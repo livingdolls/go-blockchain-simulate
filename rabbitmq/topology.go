@@ -1,8 +1,6 @@
 package rabbitmq
 
 import (
-	"log"
-
 	"github.com/livingdolls/go-blockchain-simulate/app/models"
 )
 
@@ -17,7 +15,9 @@ func (c *RabbitMQConn) DeclareQueue(q models.QueueDef) error {
 	_, err = ch.QueueDeclare(q.Name, q.Durable, q.AutoDelete, false, false, nil)
 
 	if err == nil {
-		log.Printf("[RABBITMQ] Declared queue: %s", q.Name)
+		// Setup success tidak di-log - ini terjadi sekali saat startup,
+		// bukan operasional. Error sudah di-return via err untuk caller.
+		// Kalau perlu debug, pakai AMQP server log atau inspect connection.
 		c.queues = append(c.queues, q)
 	}
 
@@ -34,7 +34,6 @@ func (c *RabbitMQConn) DeclareExchange(e models.ExchangeDef) error {
 	err = ch.ExchangeDeclare(e.Name, e.Kind, e.Durable, false, false, false, nil)
 
 	if err == nil {
-		log.Printf("[RABBITMQ] Declared exchange: %s", e.Name)
 		c.exchanges = append(c.exchanges, e)
 	}
 	return err
@@ -51,7 +50,6 @@ func (c *RabbitMQConn) Bind(b models.BindDef) error {
 	err = ch.QueueBind(b.Queue, b.RoutingKey, b.Exchange, false, nil)
 
 	if err == nil {
-		log.Printf("[RABBITMQ] Bound queue %s to exchange %s with routing key %s", b.Queue, b.Exchange, b.RoutingKey)
 		c.binds = append(c.binds, b)
 	}
 

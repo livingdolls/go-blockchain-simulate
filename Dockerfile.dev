@@ -71,5 +71,7 @@ ENV APP_ENV=development \
     GOFLAGS="-mod=mod"
 
 # Entrypoint: Air. Dia akan baca .air.toml di WORKDIR dan start watcher.
+# Verbosity dikontrol via .air.toml [log] main_only = true agar terminal
+# tidak penuh dengan "watching X" untuk setiap file yang di-scan.
 # Untuk production, Dockerfile (non-dev) yang dipakai.
 ENTRYPOINT ["air"]

@@ -54,7 +54,15 @@ services:
       - "3010:3010"
     environment:
       APP_ENV: development
-      LOG_LEVEL: debug
+      # LOG_LEVEL=warn: hanya tampilkan warning + error di terminal.
+      # Default "info" terlalu noisy (ratusan baris "Worker X started",
+      # "Consumer started", dll) yang tidak berguna untuk monitoring real-time.
+      #
+      # Cara cek log info saat butuh:
+      #   1. Override per-request: LOG_LEVEL=debug make dev-up
+      #   2. Atau lihat log file di named volume
+      #   3. Atau attach ke container: docker attach blockchain-app-dev
+      LOG_LEVEL: warn
       DATABASE_DSN: "yurina:hirate@tcp(mysql:3306)/blockchain?parseTime=true&loc=Local"
       REDIS_ADDR: "redis:6379"
       REDIS_PASSWORD: ""

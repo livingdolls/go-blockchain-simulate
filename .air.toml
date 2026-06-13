@@ -56,6 +56,21 @@ tmp_dir = "tmp"
 [log]
   # Timestamp di prefix log. Bagus untuk correlating dengan docker logs.
   time = true
+  # main_only = true: hanya print log dari kategori "main" (build summary,
+  # startup, error). Watcher verbose ("watching X" untuk setiap file yang
+  # di-scan) di-suppress. Tanpa ini, terminal penuh dengan ratusan baris
+  # "watching X" setiap kali Air start.
+  #
+  # Yang TETAP di-print dengan main_only=true:
+  #   - "building..." (kapan build mulai)
+  #   - Build success / failure summary
+  #   - "running..." (binary start)
+  #   - "cleaning..." / "see you again~" (shutdown)
+  #   - Error / panic recovered
+  #
+  # Untuk debug watcher (mis. file berubah tapi tidak ke-rebuild), set
+  # ke false dan lihat event apa yang di-trigger.
+  main_only = true
 
 [misc]
   # Cleanup tmp_dir saat Air exit. Set false di dev agar saat restart
@@ -70,7 +85,9 @@ tmp_dir = "tmp"
   delay = 1000
 
 [color]
-  main = "yellow"
-  watcher = "cyan"
-  build = "green"
-  runner = "magenta"
+  # Kosongkan semua warna agar output Air bersih tanpa ANSI escape codes
+  # ([0m[33m dll). Output app sendiri (JSON via zap) tetap utuh.
+  main = ""
+  watcher = ""
+  build = ""
+  runner = ""

@@ -4,6 +4,7 @@ import android.app.Application
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.takahashi.yutecoin.crypto.KeystoreUtil
 import com.takahashi.yutecoin.crypto.WalletGenerator
 import com.takahashi.yutecoin.data.dto.NetworkResult
 import com.takahashi.yutecoin.data.local.SessionManager
@@ -14,7 +15,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
-import kotlin.math.log
 
 data class RegisterUiState(
     val currentStep: Int = 0,        // 0=Password, 1=Mnemonic, 2=Username
@@ -25,7 +25,7 @@ data class RegisterUiState(
     val publicKeyHex: String = "",
     val address: String = "",
     val username: String = "",
-    val hasBackedUp: Boolean = false,
+    val backupDownloaded: Boolean = false,
     val isGenerating: Boolean = false,
     val isLoading: Boolean = false,
     val error: String? = null,
@@ -90,7 +90,7 @@ class RegisterViewModel(
                     publicKeyHex = wallet.publicKeyHex,
                     address = wallet.address,
                     isGenerating = false,
-                    hasBackedUp = false
+                    backupDownloaded = false
                 )
             } catch (e: Exception) {
                 Log.d("yute", "debug error $e")
@@ -102,12 +102,16 @@ class RegisterViewModel(
         }
     }
 
-    fun onBackupConfirmed() {
-        _state.value = _state.value.copy(hasBackedUp = true)
+    fun generateKeystoreJson(): String {
+        return KeystoreUtil.createKeystoreJson(_state.value.privateKeyHex, _state.value.password)
+    }
+
+    fun onBackupDownloaded() {
+        _state.value = _state.value.copy(backupDownloaded = true)
     }
 
     fun goToUsernameStep() {
-        if (!_state.value.hasBackedUp) return
+        if (!_state.value.backupDownloaded) return
         _state.value = _state.value.copy(currentStep = 2)
     }
 

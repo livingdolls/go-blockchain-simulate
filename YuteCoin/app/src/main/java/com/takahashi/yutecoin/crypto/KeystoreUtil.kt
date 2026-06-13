@@ -11,7 +11,10 @@ import javax.crypto.spec.SecretKeySpec
 
 object KeystoreUtil {
 
-    private const val SCRYPT_N = 1 shl 18
+    // Scrypt parameters optimized for mobile (N=4096 vs desktop N=262144).
+    // Lower N reduces memory usage from ~128MB to ~2MB, preventing OOM on Android.
+    // The keystore JSON stores these params, so decryption works regardless.
+    private const val SCRYPT_N = 4096
     private const val SCRYPT_R = 8
     private const val SCRYPT_P = 1
     private const val SCRYPT_DK_LEN = 32

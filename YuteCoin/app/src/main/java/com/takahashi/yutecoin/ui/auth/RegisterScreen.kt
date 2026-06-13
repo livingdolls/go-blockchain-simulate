@@ -1,5 +1,9 @@
 package com.takahashi.yutecoin.ui.auth
 
+import android.net.Uri
+import android.util.Log
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -16,7 +20,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -27,13 +30,13 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.takahashi.yutecoin.ui.auth.components.BackupWarning
 import com.takahashi.yutecoin.ui.auth.components.MnemonicDisplay
 import com.takahashi.yutecoin.ui.auth.components.StepIndicator
 import kotlinx.coroutines.flow.collectLatest
@@ -95,7 +98,8 @@ fun RegisterScreen(
                 1 -> MnemonicStep(
                     state = state,
                     onGenerate = viewModel::generateWallet,
-                    onBackupConfirmed = viewModel::onBackupConfirmed,
+                    downloadKeystore = viewModel::generateKeystoreJson,
+                    onDownloadComplete = viewModel::onBackupDownloaded,
                     onNext = viewModel::goToUsernameStep
                 )
 
@@ -185,9 +189,27 @@ private fun PasswordStep(
 private fun MnemonicStep(
     state: RegisterUiState,
     onGenerate: () -> Unit,
-    onBackupConfirmed: () -> Unit,
+    downloadKeystore: () -> String,
+    onDownloadComplete: () -> Unit,
     onNext: () -> Unit
 ) {
+    val context = LocalContext.current
+    val launcher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/json")
+    ) { uri: Uri? ->
+        if (uri != null) {
+            try {
+                val json = downloadKeystore()
+                context.contentResolver.openOutputStream(uri)?.use { stream ->
+                    stream.write(json.toByteArray(Charsets.UTF_8))
+                }
+                onDownloadComplete()
+            } catch (e: Exception) {
+                Log.e("RegisterScreen", "Failed to write keystore", e)
+            }
+        }
+    }
+
     Text(
         text = "Your Wallet",
         style = MaterialTheme.typography.headlineSmall,
@@ -235,18 +257,32 @@ private fun MnemonicStep(
         MnemonicDisplay(mnemonic = state.mnemonic)
         Spacer(modifier = Modifier.height(16.dp))
 
-        OutlinedButton(
-            onClick = { /* TODO: keystore JSON download */ },
-            modifier = Modifier.fillMaxWidth(),
+        Button(
+            onClick = { launcher.launch("yutecoin-wallet.json") },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(52.dp),
             shape = RoundedCornerShape(12.dp)
         ) {
-            Text("Download Backup JSON")
+            Text(
+                if (state.backupDownloaded) "Backup Downloaded \u2713"
+                else "Download Backup JSON"
+            )
         }
         Spacer(modifier = Modifier.height(8.dp))
 
-        BackupWarning(
-            onBackupConfirmed = state.hasBackedUp,
-            onCheckedChange = { onBackupConfirmed() }
+        Text(
+            text = if (state.backupDownloaded)
+                "Wallet backup saved. You can now continue."
+            else
+                "You must download the backup JSON before continuing.",
+            style = MaterialTheme.typography.bodySmall,
+            color = if (state.backupDownloaded)
+                MaterialTheme.colorScheme.primary
+            else
+                MaterialTheme.colorScheme.error,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth()
         )
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -256,7 +292,7 @@ private fun MnemonicStep(
                 .fillMaxWidth()
                 .height(52.dp),
             shape = RoundedCornerShape(12.dp),
-            enabled = state.hasBackedUp
+            enabled = state.backupDownloaded
         ) {
             Text("Continue", style = MaterialTheme.typography.titleMedium)
         }

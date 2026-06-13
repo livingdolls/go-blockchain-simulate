@@ -142,6 +142,56 @@ func TestRegisterCustomValidators_EthAddr(t *testing.T) {
 	assert.NoError(t, err, "eth_addr harus accept address valid")
 }
 
+func TestRegisterCustomValidators_Hex(t *testing.T) {
+	// Verifikasi tag 'hex' yang didaftarkan manual. Penting karena:
+	//   - Tag ini dipakai untuk public_key (uncompressed ECDSA = 130 hex char)
+	//   - Ethereum convention: public key dikirim dengan prefix '0x'
+	//   - Bug awal: regex tidak allow '0x' prefix, jadi semua key dengan
+	//     prefix di-reject sebagai "harus hex string valid"
+	v := validator.New()
+	RegisterCustomValidators(v)
+
+	type testStruct struct {
+		Key string `validate:"hex"`
+	}
+
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+	}{
+		// Valid cases
+		{"plain hex lowercase", "abc123def456", false},
+		{"plain hex uppercase", "ABC123DEF456", false},
+		{"plain hex mixed", "AbC123dEf456", false},
+		{"with 0x prefix", "0xabc123def456", false},
+		{"with 0X prefix uppercase", "0XABC123DEF456", false},
+		{"with 0x prefix mixed", "0xAbC123dEf456", false},
+		{"public key size (65 bytes)", "0x0408bcface31732a0d1218cf2bdd8f39113d04ed4984f3338036cdb385daf822bc5b658508a31ffe54d50cbf9dbed62ac7bcef5c595f96af4b3ab56e4475e31124", false},
+
+		// Invalid cases
+		{"empty", "", true},
+		{"non-hex char", "xyz", true},
+		{"0x prefix only (no content)", "0x", true},
+		{"0X prefix only (no content)", "0X", true},
+		{"non-hex with 0x prefix", "0xZZZ", true},
+		{"only 0x + non-hex", "0xGHIJKL", true},
+		{"contains space", "abc 123", true},
+		{"contains newline", "abc\n123", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := v.Struct(testStruct{Key: tt.input})
+			if tt.wantErr {
+				assert.Error(t, err, "input %q harus di-reject", tt.input)
+			} else {
+				assert.NoError(t, err, "input %q harus di-accept", tt.input)
+			}
+		})
+	}
+}
+
 // helpers untuk test BindJSON
 func newReq(method, target string, body *strings.Reader) *http.Request {
 	req, _ := http.NewRequest(method, target, body)

@@ -66,10 +66,12 @@ func NewRegisterHandler(service services.RegisterService, memory redis.MemoryAda
 func (h *RegisterHandler) Register(c *gin.Context) {
 	var req models.UserRegister
 	if !dto.BindJSON(c, &req) {
+		log.Printf("REQUEST PUBLIC KEY %v", req.PublicKey)
 		return
 	}
 
 	user, err := h.service.Register(req)
+	log.Printf("DEBUG ERROR %v", err)
 	if err != nil {
 		// RespondAppError otomatis extract *dto.AppError dari error chain,
 		// set HTTP status code yang sesuai (400/409/500), dan return

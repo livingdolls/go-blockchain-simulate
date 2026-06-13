@@ -3,6 +3,7 @@ package dto
 import (
 	"errors"
 	"fmt"
+	"log"
 	"regexp"
 	"strings"
 
@@ -20,10 +21,26 @@ func IsEthereumAddress(addr string) bool {
 	return ethAddressRegex.MatchString(strings.TrimSpace(addr))
 }
 
-// hexStringRegex memvalidasi string berisi karakter hex valid.
-// Komplemen dengan tag bawaan validator/v10 `hexadecimal`; tag ini
-// didaftarkan manual karena nama `hex` bukan alias bawaan di v10.
-var hexStringRegex = regexp.MustCompile(`^[0-9a-fA-F]+$`)
+// hexStringRegex memvalidasi string hex, dengan atau tanpa prefix `0x`/`0X`.
+//
+// Pakai regex ini bukan `encoding/hex` Validate karena:
+//   - Lebih murah (regex O(n) vs hex.DecodeString yang alokasi []byte)
+//   - Error message jelas untuk user (vs error generic dari hex package)
+//   - Support `0x` prefix standar Ethereum (alamat, public key, signature)
+//
+// Format yang diterima:
+//   - `abc123`         (plain hex)
+//   - `0xabc123`       (dengan 0x prefix)
+//   - `0Xabc123`       (uppercase X juga oke)
+//
+// Yang DITOLAK:
+//   - `0x`             (prefix tanpa content - tidak valid hex)
+//   - `0xZZ`           (karakter non-hex)
+//   - `xyz`            (non-hex tanpa prefix)
+//
+// Tag ini didaftarkan manual untuk `hex` karena validator/v10 tidak
+// punya alias bawaan untuk `hex` (cuma `hexadecimal`).
+var hexStringRegex = regexp.MustCompile(`^(0[xX])?[0-9a-fA-F]+$`)
 
 // RegisterCustomValidators mendaftarkan custom validator tags ke validator/v10.
 // Panggil SEKALI di main setelah validator/v10 init (biasanya otomatis
@@ -151,6 +168,7 @@ func validationMessage(fe validator.FieldError) string {
 //   - false: binding gagal, response 400 sudah di-write. Handler harus return.
 func BindJSON(c *gin.Context, obj interface{}) bool {
 	if err := c.ShouldBindJSON(obj); err != nil {
+		log.Printf("DEBUG %v", NewValidationErrorResponse(AsFieldErrors(err)))
 		c.AbortWithStatusJSON(400, NewValidationErrorResponse(AsFieldErrors(err)))
 		return false
 	}

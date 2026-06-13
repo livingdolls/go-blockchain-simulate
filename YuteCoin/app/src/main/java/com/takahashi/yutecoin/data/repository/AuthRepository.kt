@@ -4,6 +4,7 @@ import android.util.Log
 import com.takahashi.yutecoin.crypto.WalletGenerator
 import com.takahashi.yutecoin.crypto.WalletSigner
 import com.takahashi.yutecoin.data.api.RetrofitClient
+import com.takahashi.yutecoin.data.dto.ApiResponse
 import com.takahashi.yutecoin.data.dto.NetworkResult
 import com.takahashi.yutecoin.data.dto.RegisterRequest
 
@@ -14,14 +15,14 @@ class AuthRepository {
     suspend fun register(username: String, address: String, publicKey: String): NetworkResult<String> {
         return try {
             val response = api.register(RegisterRequest(username, address, publicKey))
-            Log.d("yute", "DEBUG API RESPONSE $response")
+            Log.d("AuthRepo", "register response: code=${response.code()}, success=${response.body()?.success}")
             if (response.isSuccessful && response.body()?.success == true) {
                 NetworkResult.Success("Registration successful")
             } else {
-                val msg = response.body()?.message ?: "Registration failed"
-                NetworkResult.Error(response.code(), msg)
+                NetworkResult.Error(response.code(), extractError(response.body()))
             }
         } catch (e: Exception) {
+            Log.e("AuthRepo", "register exception", e)
             NetworkResult.Error(0, e.message ?: "Network error")
         }
     }
@@ -31,6 +32,7 @@ class AuthRepository {
             val wallet = WalletGenerator.walletFromMnemonic(mnemonic)
             loginWithWallet(wallet.address, wallet.privateKeyHex, username)
         } catch (e: Exception) {
+            Log.e("AuthRepo", "loginWithMnemonic exception", e)
             NetworkResult.Error(0, "Invalid mnemonic: ${e.message}")
         }
     }
@@ -59,14 +61,16 @@ class AuthRepository {
         if (!challengeResponse.isSuccessful || challengeResponse.body()?.success != true) {
             return NetworkResult.Error(
                 challengeResponse.code(),
-                challengeResponse.body()?.message ?: "Challenge request failed"
+                extractError(challengeResponse.body())
             )
         }
 
         val nonce = challengeResponse.body()!!.data!!.challenge
+        Log.d("AuthRepo", "Got challenge nonce: $nonce")
 
         // Step 2: Sign the challenge
         val signature = WalletSigner.signChallengeMessage(nonce, privateKeyHex)
+        Log.d("AuthRepo", "Signed challenge, signature length: ${signature.length}")
 
         // Step 3: Verify
         val verifyResponse = try {
@@ -82,12 +86,14 @@ class AuthRepository {
             return NetworkResult.Error(0, "Verification failed: ${e.message}")
         }
 
+        Log.d("AuthRepo", "verify response: code=${verifyResponse.code()}, success=${verifyResponse.body()?.success}")
+
         return if (verifyResponse.isSuccessful && verifyResponse.body()?.success == true) {
             NetworkResult.Success(address)
         } else {
             NetworkResult.Error(
                 verifyResponse.code(),
-                verifyResponse.body()?.message ?: "Login failed"
+                extractError(verifyResponse.body())
             )
         }
     }
@@ -99,11 +105,27 @@ class AuthRepository {
                 val user = response.body()!!.data!!
                 NetworkResult.Success(user.address)
             } else {
-                NetworkResult.Error(response.code(), response.body()?.message ?: "Not authenticated")
+                NetworkResult.Error(response.code(), extractError(response.body()))
             }
         } catch (e: Exception) {
             NetworkResult.Error(0, e.message ?: "Network error")
         }
+    }
+
+    private fun extractError(body: ApiResponse<*>?): String {
+        if (body == null) return "Unknown error"
+        val parts = mutableListOf<String>()
+        body.error?.let { parts.add(it) }
+        body.field?.let { f ->
+            // Find field-specific errors in details
+            body.details
+                ?.filter { it.field == f }
+                ?.forEach { parts.add("${it.field}: ${it.message}") }
+        }
+        body.details
+            ?.filter { body.field == null || it.field != body.field }
+            ?.forEach { parts.add("${it.field}: ${it.message}") }
+        return parts.joinToString("; ").ifEmpty { "Request failed (code ${body.code ?: "?"})" }
     }
 
     fun isLoggedIn(): Boolean {

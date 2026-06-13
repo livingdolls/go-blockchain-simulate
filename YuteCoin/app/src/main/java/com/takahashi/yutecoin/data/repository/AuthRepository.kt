@@ -1,6 +1,7 @@
 package com.takahashi.yutecoin.data.repository
 
 import android.util.Log
+import com.takahashi.yutecoin.crypto.KeystoreUtil
 import com.takahashi.yutecoin.crypto.WalletGenerator
 import com.takahashi.yutecoin.crypto.WalletSigner
 import com.takahashi.yutecoin.data.api.RetrofitClient
@@ -46,6 +47,21 @@ class AuthRepository {
         }
     }
 
+    suspend fun loginWithKeystoreContent(content: String, password: String, username: String): NetworkResult<String> {
+        return try {
+            val wallet = KeystoreUtil.decryptKeystore(content, password)
+            val address = wallet.address
+            val privateKeyHex = wallet.privateKeyHex
+            Log.d("AuthRepo", "Keystore decrypted, address=$address")
+            loginWithWallet(address, privateKeyHex, username)
+        } catch (e: SecurityException) {
+            NetworkResult.Error(400, "Invalid password")
+        } catch (e: Exception) {
+            Log.e("AuthRepo", "Keystore decrypt error", e)
+            NetworkResult.Error(0, "Invalid keystore file: ${e.message}")
+        }
+    }
+
     private suspend fun loginWithWallet(
         address: String,
         privateKeyHex: String,
@@ -67,10 +83,12 @@ class AuthRepository {
 
         val nonce = challengeResponse.body()!!.data!!.challenge
         Log.d("AuthRepo", "Got challenge nonce: $nonce")
+        Log.d("AuthRepo", "LOGIN address=$address")
 
         // Step 2: Sign the challenge
         val signature = WalletSigner.signChallengeMessage(nonce, privateKeyHex)
         Log.d("AuthRepo", "Signed challenge, signature length: ${signature.length}")
+        Log.d("AuthRepo", "LOGIN signature=$signature")
 
         // Step 3: Verify
         val verifyResponse = try {

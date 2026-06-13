@@ -40,9 +40,10 @@ sealed class RegisterEvent {
 }
 
 class RegisterViewModel(
+    application: Application,
     private val authRepository: AuthRepository,
     private val sessionManager: SessionManager
-) : AndroidViewModel(Application()) {
+) : AndroidViewModel(application) {
 
     private val _state = MutableStateFlow(RegisterUiState())
     val state: StateFlow<RegisterUiState> = _state.asStateFlow()

@@ -1,9 +1,10 @@
 package com.takahashi.yutecoin.crypto
 
+import android.util.Log
 import com.google.gson.Gson
 import com.google.gson.JsonParser
+import org.bouncycastle.crypto.digests.KeccakDigest
 import org.bouncycastle.crypto.generators.SCrypt
-import org.bouncycastle.jcajce.provider.digest.Keccak
 import java.security.SecureRandom
 import javax.crypto.Cipher
 import javax.crypto.spec.IvParameterSpec
@@ -107,6 +108,9 @@ object KeystoreUtil {
         val privateKeyHex = EthCrypto.toHexNoPrefix(privateKeyBytes)
         val address = WalletGenerator.addressFromPrivateKey(privateKeyHex)
 
+        Log.d("authrepo", "DEBUG ADDRESS $address");
+        Log.d("auhtrepo", "DEBUG PRIVATE $privateKeyHex");
+
         return WalletGenerator.WalletData(
             mnemonic = emptyList(),
             privateKeyHex = "0x$privateKeyHex",
@@ -116,6 +120,10 @@ object KeystoreUtil {
     }
 
     private fun keccak256(input: ByteArray): ByteArray {
-        return Keccak.Digest256().digest(input)
+        val digest = KeccakDigest(256)
+        val result = ByteArray(32)
+        digest.update(input, 0, input.size)
+        digest.doFinal(result, 0)
+        return result
     }
 }

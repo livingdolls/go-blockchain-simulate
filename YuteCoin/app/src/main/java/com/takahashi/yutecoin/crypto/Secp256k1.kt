@@ -49,11 +49,13 @@ object Secp256k1 {
 
         // Determine recovery id v
         var recId = -1
+        val expectedX = publicKeyX(privateKey)
+        val expectedY = publicKeyY(privateKey)
         for (i in 0..3) {
             try {
                 val recovered = recoverFromSignature(i, r, s, hash)
-                val expectedX = publicKeyX(privateKey)
-                if (recovered.affineXCoord.toBigInteger() == expectedX) {
+                if (recovered.affineXCoord.toBigInteger() == expectedX &&
+                    recovered.affineYCoord.toBigInteger() == expectedY) {
                     recId = i
                     break
                 }
@@ -87,14 +89,13 @@ object Secp256k1 {
 
         // Reconstruct R point
         val R = curve.createPoint(x, y)
-        val nInv = s.modInverse(n)
+        val rInv = r.modInverse(n)
         val z = BigInteger(1, hash)
 
-        // Q = r^-1 * (s*R - z*G) = s*R*nInv - z*G*nInv
-        val sR = R.multiply(s)
-        val negZ = n.subtract(z).mod(n)
-        val zG = DOMAIN.g.multiply(negZ)
-        val Q = sR.add(zG).multiply(nInv.multiply(r.modInverse(n)).mod(n)).normalize()
+        // Q = r^-1 * (s*R - z*G)
+        val u1 = s.multiply(rInv).mod(n)       // s * r^(-1)
+        val u2 = n.subtract(z).multiply(rInv).mod(n)  // (n - z) * r^(-1)
+        val Q = R.multiply(u1).add(DOMAIN.g.multiply(u2)).normalize()
         return Q
     }
 

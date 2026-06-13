@@ -127,6 +127,9 @@ func (h *RegisterHandler) Verify(c *gin.Context) {
 
 	valid, err := h.service.Verify(c.Request.Context(), req.Address, req.Nonce, req.Signature, req.Username)
 	if err != nil {
+		log.Printf("DEBUG ERROR SERVICE %v", err)
+		log.Printf("LOG %v", req.Signature)
+		log.Printf("LOG %v", req.Address)
 		dto.RespondAppError(c, err)
 		return
 	}

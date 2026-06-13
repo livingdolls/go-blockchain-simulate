@@ -70,7 +70,8 @@ func signMessage(t *testing.T, privKeyHex string, message []byte) string {
 	hash := utils.PrefixedHash(message)
 	sig, err := crypto.Sign(hash, privKey)
 	require.NoError(t, err)
-	// crypto.Sign menghasilkan v=0/1 (recovery id), backend mengharapkan 27/28
+	// crypto.Sign menghasilkan v=0/1 (recovery id). Untuk EIP-191 format
+	// yang dipakai service: v = recId + 27 = 27 atau 28.
 	sig[64] += 27
 	return "0x" + hex.EncodeToString(sig)
 }

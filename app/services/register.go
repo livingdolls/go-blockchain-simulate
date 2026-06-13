@@ -18,6 +18,7 @@ import (
 	"github.com/livingdolls/go-blockchain-simulate/logger"
 	"github.com/livingdolls/go-blockchain-simulate/redis"
 	"github.com/livingdolls/go-blockchain-simulate/security"
+	"go.uber.org/zap"
 	"github.com/livingdolls/go-blockchain-simulate/utils"
 )
 
@@ -135,12 +136,19 @@ func (r *registerService) Verify(ctx context.Context, address, nonce, signature,
 	addr := strings.ToLower(strings.TrimSpace(address))
 
 	stored, ok := r.redis.Get(ctx, addr)
+	storedStr := string(stored)
+	logger.LogWarn("Verify: pre-check",
+		zap.String("nonce_sent", nonce),
+		zap.String("nonce_stored", storedStr),
+		zap.Bool("match", nonce == storedStr),
+		zap.Bool("has_stored", ok && len(stored) > 0),
+	)
 	if !ok || len(stored) == 0 {
 		// 400: user belum request challenge atau sudah expire (10 min TTL).
 		return "", dto.NewBadRequest(dto.CodeMissingChallenge,
 			"missing or expired challenge - request a new nonce first")
 	}
-	if nonce != string(stored) {
+	if nonce != storedStr {
 		// 400: nonce yang di-sign tidak match dengan yang di Redis.
 		// Berarti user pakai nonce lama atau salah paste.
 		return "", dto.NewBadRequest(dto.CodeStaleChallenge,
@@ -148,6 +156,15 @@ func (r *registerService) Verify(ctx context.Context, address, nonce, signature,
 	}
 
 	msg := fmt.Sprintf("Login to YuteBlockchain nonce:%s", nonce)
+
+	// DEBUG: log nonce and hash untuk diagnose ADDRESS_MISMATCH
+	msgHash := utils.PrefixedHash([]byte(msg))
+	logger.LogWarn("Verify: hash diagnostic",
+		zap.String("nonce", nonce),
+		zap.String("addr_input", addr),
+		zap.String("msg", msg),
+		zap.String("msgHash", fmt.Sprintf("%x", msgHash)),
+	)
 
 	// parse signature
 	sigHex := strings.TrimPrefix(strings.TrimSpace(signature), "0x")
@@ -163,17 +180,10 @@ func (r *registerService) Verify(ctx context.Context, address, nonce, signature,
 
 	// r,s,v
 	sPart := new(big.Int).SetBytes(raw[32:64])
-	v := raw[64]
-
-	// normalize v to 27/28
-	if v == 0 || v == 1 {
-		v += 27
-	} else if v >= 35 {
-		v = byte(((int(v) - 35) % 2) + 27)
-	}
-	if v != 27 && v != 28 {
+	v, err := normalizeSignatureV(raw[64])
+	if err != nil {
 		return "", dto.NewBadRequestField(dto.CodeInvalidSignature,
-			fmt.Sprintf("invalid signature recovery id: %d", v), "signature")
+			err.Error(), "signature")
 	}
 	raw[64] = v
 
@@ -212,7 +222,14 @@ func (r *registerService) Verify(ctx context.Context, address, nonce, signature,
 	recovered := strings.ToLower(crypto.PubkeyToAddress(*pubKey).Hex())
 	if recovered != addr {
 		// 400: signature valid tapi address yg di-sign != address di body.
-		// Bisa jadi user salah sign dengan key lain.
+		// Bisa jadi user salah sign dengan key lain. Log di level Warn
+		// (bukan Info) agar visible di dev dengan LOG_LEVEL=warn. Address
+		// dan recovered address keduanya public info (sudah ada di chain),
+		// jadi tidak ada privacy issue.
+		logger.LogWarn("Verify: address mismatch",
+			zap.String("expected", addr),
+			zap.String("recovered", recovered),
+		)
 		return "", dto.NewBadRequestField(dto.CodeAddressMismatch,
 			"signature does not match the provided address", "address")
 	}
@@ -252,4 +269,32 @@ func (r *registerService) Verify(ctx context.Context, address, nonce, signature,
 		return "", dto.NewInternalError(err)
 	}
 	return token, nil
+}
+
+// normalizeSignatureV menormalkan signature recovery id v ke bentuk
+// EIP-191 (27-30) atau EIP-155 (35+). Return error kalau v di luar
+// range yang dikenal.
+//
+// Format yang diterima:
+//   - v ∈ {0, 1}        → go-ethereum native recovery id
+//   - v ∈ {27, 28, 29, 30}  → EIP-191 personal_sign
+//   - v >= 35           → EIP-155 (chain ID encoded)
+//
+// v=29/30 (recId 2/3) artinya r (signature's r value) >= N, sehingga
+// recovery perlu pakai X = r + N. Normal untuk ~50% signature yang
+// di-produce oleh BouncyCastle / library lain yang tidak menormalisasi r.
+// go-ethereum's crypto.Sign selalu normalize r ke < N, jadi v dari
+// go-ethereum Selalu 27/28. Test ini memastikan kompatibilitas dengan
+// library lain.
+func normalizeSignatureV(v byte) (byte, error) {
+	switch {
+	case v == 0 || v == 1:
+		return v + 27, nil
+	case v >= 27 && v <= 30:
+		return v, nil
+	case v >= 35:
+		return byte(((int(v) - 35) % 2) + 27), nil
+	default:
+		return 0, fmt.Errorf("invalid signature recovery id: %d", v)
+	}
 }

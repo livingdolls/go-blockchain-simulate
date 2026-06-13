@@ -1,14 +1,17 @@
 package com.takahashi.yutecoin.crypto
 
-import org.bouncycastle.jcajce.provider.digest.Keccak
+import org.bouncycastle.crypto.digests.KeccakDigest
 import org.bouncycastle.math.ec.ECPoint
 import java.math.BigInteger
 
 object EthCrypto {
-    private val keccak256 = Keccak.Digest256()
 
     fun keccak256Hash(data: ByteArray): ByteArray {
-        return keccak256.digest(data)
+        val digest = KeccakDigest(256)
+        val result = ByteArray(32)
+        digest.update(data, 0, data.size)
+        digest.doFinal(result, 0)
+        return result
     }
 
     fun addressFromPoint(point: ECPoint): String {
@@ -20,7 +23,9 @@ object EthCrypto {
         val yPadded = Bip32.ser256(y)
         System.arraycopy(xPadded, 0, pubKeyBytes, 1, 32)
         System.arraycopy(yPadded, 0, pubKeyBytes, 33, 32)
-        val hash = keccak256Hash(pubKeyBytes)
+        // Ethereum address is derived from Keccak256 of the 64-byte public key
+        // (x || y), NOT the 65-byte uncompressed format (0x04 || x || y).
+        val hash = keccak256Hash(pubKeyBytes.copyOfRange(1, 65))
         val addressBytes = hash.copyOfRange(12, 32)
         return toChecksumAddress(addressBytes)
     }
@@ -37,7 +42,8 @@ object EthCrypto {
         System.arraycopy(xPadded, 0, pubKeyBytes, 1, 32)
         System.arraycopy(yPadded, 0, pubKeyBytes, 33, 32)
 
-        val hash = keccak256Hash(pubKeyBytes)
+        // Ethereum address uses Keccak256 of the 64-byte public key (x || y).
+        val hash = keccak256Hash(pubKeyBytes.copyOfRange(1, 65))
         val addressBytes = hash.copyOfRange(12, 32)
         return toChecksumAddress(addressBytes)
     }
@@ -64,24 +70,28 @@ object EthCrypto {
     }
 
     fun toChecksumAddress(addressBytes: ByteArray): String {
-        val addr = "0x" + toHex(addressBytes)
-        val hash = keccak256Hash(addr.substring(2).toByteArray(Charsets.US_ASCII))
+        val addr = toHex(addressBytes)
+        val hash = keccak256Hash(addr.toByteArray(Charsets.US_ASCII))
         val sb = StringBuilder("0x")
-        for (i in addressBytes.indices) {
-            val c = addressBytes[i].toInt() and 0xFF
-            val h = hash[i].toInt() and 0xFF
-            if (h >= 8) {
-                sb.append(String.format("%02X", c))
+        for (i in addr.indices) {
+            val ch = addr[i]
+            val hashByte = hash[i / 2].toInt() and 0xFF
+            val nibble = if (i % 2 == 0) hashByte shr 4 else hashByte and 0x0F
+            if (nibble >= 8) {
+                sb.append(ch.uppercaseChar())
             } else {
-                sb.append(String.format("%02x", c))
+                sb.append(ch.lowercaseChar())
             }
         }
         return sb.toString()
     }
 
     fun eip191Hash(message: String): ByteArray {
-        val prefix = "\u0019Ethereum Signed Message:\n${message.length}$message"
-        return keccak256Hash(prefix.toByteArray(Charsets.UTF_8))
+        val messageBytes = message.toByteArray(Charsets.UTF_8)
+        val prefix = "\u0019Ethereum Signed Message:\n${messageBytes.size}"
+        val prefixBytes = prefix.toByteArray(Charsets.US_ASCII)
+        val full = prefixBytes + messageBytes
+        return keccak256Hash(full)
     }
 
     fun toHex(bytes: ByteArray): String {

@@ -1,8 +1,10 @@
 package com.takahashi.yutecoin.ui.auth
 
 import android.app.Application
+import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.takahashi.yutecoin.crypto.WalletGenerator
 import com.takahashi.yutecoin.data.dto.NetworkResult
 import com.takahashi.yutecoin.data.local.SessionManager
 import com.takahashi.yutecoin.data.repository.AuthRepository
@@ -17,11 +19,14 @@ data class LoginUiState(
     val username: String = "",
     val mnemonicInput: String = "",
     val useKeystore: Boolean = false,
+    val keystoreFileUri: Uri? = null,
+    val keystoreFileName: String? = null,
     val keystorePassword: String = "",
     val isLoading: Boolean = false,
     val error: String? = null,
     val networkResult: String? = null,
-    val isLoggedIn: Boolean = false
+    val isLoggedIn: Boolean = false,
+    val hasSavedWallet: Boolean = false
 )
 
 sealed class LoginEvent {
@@ -30,15 +35,28 @@ sealed class LoginEvent {
 }
 
 class LoginViewModel(
+    application: Application,
     private val authRepository: AuthRepository,
     private val sessionManager: SessionManager
-) : AndroidViewModel(Application()) {
+) : AndroidViewModel(application) {
 
     private val _state = MutableStateFlow(LoginUiState())
     val state: StateFlow<LoginUiState> = _state.asStateFlow()
 
     private val _events = Channel<LoginEvent>(Channel.BUFFERED)
     val events = _events.receiveAsFlow()
+
+    init {
+        checkSavedWallet()
+    }
+
+    private fun checkSavedWallet() {
+        val mnemonic = sessionManager.getMnemonic()
+        val username = sessionManager.getUsername()
+        if (mnemonic != null && username != null) {
+            _state.value = _state.value.copy(hasSavedWallet = true, username = username)
+        }
+    }
 
     fun onUsernameChange(value: String) {
         _state.value = _state.value.copy(username = value, error = null)
@@ -52,6 +70,14 @@ class LoginViewModel(
         _state.value = _state.value.copy(useKeystore = useKeystore, error = null)
     }
 
+    fun onKeystoreFileSelected(uri: Uri, fileName: String) {
+        _state.value = _state.value.copy(
+            keystoreFileUri = uri,
+            keystoreFileName = fileName,
+            error = null
+        )
+    }
+
     fun onKeystorePasswordChange(value: String) {
         _state.value = _state.value.copy(keystorePassword = value, error = null)
     }
@@ -63,26 +89,57 @@ class LoginViewModel(
             return
         }
 
-        _state.value = _state.value.copy(isLoading = true, error = null)
+        if (_state.value.useKeystore) {
+            if (_state.value.keystoreFileUri == null) {
+                _state.value = _state.value.copy(error = "Select a wallet JSON file first")
+                return
+            }
+            if (_state.value.keystorePassword.isEmpty()) {
+                _state.value = _state.value.copy(error = "Enter your keystore password")
+                return
+            }
+        } else {
+            val mnemonicWords = _state.value.mnemonicInput.trim().split("\\s+".toRegex())
+            if (mnemonicWords.size != 12) {
+                _state.value = _state.value.copy(error = "Mnemonic must be exactly 12 words")
+                return
+            }
+            if (!WalletGenerator.isValidMnemonic(mnemonicWords)) {
+                _state.value = _state.value.copy(error = "Invalid mnemonic phrase")
+                return
+            }
+        }
 
-        viewModelScope.launch {
-            val result = if (_state.value.useKeystore) {
-                NetworkResult.Error(400, "Keystore login not yet implemented")
+        _state.value = _state.value.copy(isLoading = true, error = null)
+        val isKeystore = _state.value.useKeystore
+        val password = _state.value.keystorePassword
+        val uri = _state.value.keystoreFileUri
+
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.Default) {
+            val result: NetworkResult<String> = if (isKeystore) {
+                // Read file content first
+                val content = kotlin.runCatching {
+                    val app = getApplication<Application>()
+                    app.contentResolver.openInputStream(uri!!)?.bufferedReader()?.use { it.readText() }
+                        ?: throw IllegalStateException("Cannot read file")
+                }.getOrElse { e ->
+                    _state.value = _state.value.copy(isLoading = false, error = "Cannot read file: ${e.message}")
+                    return@launch
+                }
+                authRepository.loginWithKeystoreContent(content, password, username)
             } else {
                 val mnemonicWords = _state.value.mnemonicInput.trim().split("\\s+".toRegex())
-                if (mnemonicWords.size != 12) {
-                    NetworkResult.Error(400, "Mnemonic must be 12 words")
-                } else {
-                    authRepository.loginWithMnemonic(mnemonicWords, username)
-                }
+                authRepository.loginWithMnemonic(mnemonicWords, username)
             }
 
             _state.value = _state.value.copy(isLoading = false)
 
             when (result) {
-                is NetworkResult.Success -> {
-                    val mnemonicWords = _state.value.mnemonicInput.trim().split("\\s+".toRegex())
-                    sessionManager.saveMnemonic(mnemonicWords, username)
+                is NetworkResult.Success<*> -> {
+                    if (!isKeystore) {
+                        val mnemonicWords = _state.value.mnemonicInput.trim().split("\\s+".toRegex())
+                        sessionManager.saveMnemonic(mnemonicWords, username)
+                    }
                     sessionManager.setLoggedIn(true)
                     _state.value = _state.value.copy(isLoggedIn = true)
                     _events.send(LoginEvent.NavigateHome)
@@ -104,15 +161,11 @@ class LoginViewModel(
             return
         }
 
-        _state.value = _state.value.copy(
-            username = username,
-            mnemonicInput = mnemonic.joinToString(" "),
-            isLoading = true,
-            error = null
-        )
+        _state.value = _state.value.copy(isLoading = true, error = null)
 
-        viewModelScope.launch {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.Default) {
             val result = authRepository.loginWithMnemonic(mnemonic, username)
+
             _state.value = _state.value.copy(isLoading = false)
 
             when (result) {
@@ -122,7 +175,11 @@ class LoginViewModel(
                     _events.send(LoginEvent.NavigateHome)
                 }
                 is NetworkResult.Error -> {
-                    _state.value = _state.value.copy(error = result.message)
+                    _state.value = _state.value.copy(
+                        error = result.message,
+                        username = username,
+                        mnemonicInput = mnemonic.joinToString(" ")
+                    )
                 }
                 is NetworkResult.Loading -> {}
             }

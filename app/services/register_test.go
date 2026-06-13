@@ -234,6 +234,83 @@ func TestRegister_Verify_AddressMismatch(t *testing.T) {
 	assert.Equal(t, "address", appErr.Field)
 }
 
+func TestNormalizeSignatureV(t *testing.T) {
+	// Unit test untuk normalizeSignatureV. Dipisah dari full verify flow
+	// agar bisa test semua format v (termasuk 29/30 yang go-ethereum's
+	// crypto.Sign tidak bisa produce - test ini validasi compatibility
+	// dengan BouncyCastle/library lain).
+	tests := []struct {
+		name    string
+		input   byte
+		want    byte
+		wantErr bool
+	}{
+		// go-ethereum native
+		{"v=0 → 27", 0, 27, false},
+		{"v=1 → 28", 1, 28, false},
+
+		// EIP-191 (recId 0/1, go-ethereum's Sign output)
+		{"v=27 → 27", 27, 27, false},
+		{"v=28 → 28", 28, 28, false},
+
+		// EIP-191 (recId 2/3, BouncyCastle output) - 50% dari real signatures
+		{"v=29 → 29", 29, 29, false},
+		{"v=30 → 30", 30, 30, false},
+
+		// EIP-155 (chain ID encoded)
+		{"v=35 → 27 (chain ID 1, recId 0)", 35, 27, false},
+		{"v=36 → 28 (chain ID 1, recId 1)", 36, 28, false},
+		{"v=37 → 27 (chain ID 2, recId 0)", 37, 27, false},
+		{"v=38 → 28 (chain ID 2, recId 1)", 38, 28, false},
+
+		// Invalid values (gaps antara 0/1, 27-30, dan 35+)
+		{"v=2", 2, 0, true},
+		{"v=5", 5, 0, true},
+		{"v=26 (just below range)", 26, 0, true},
+		{"v=31 (just above range)", 31, 0, true},
+		{"v=34 (just below EIP-155)", 34, 0, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := normalizeSignatureV(tt.input)
+			if tt.wantErr {
+				assert.Error(t, err, "input %d harus error", tt.input)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tt.want, got, "input %d → want %d, got %d", tt.input, tt.want, got)
+			}
+		})
+	}
+}
+
+func TestRegister_Verify_RejectsInvalidV(t *testing.T) {
+	// v di luar range EIP-191 (27-30) dan EIP-155 (35+) harus di-reject.
+	// Kita fabricate signature dengan v=5 - tidak valid untuk format apapun.
+	// r/s disalin dari signature valid (tidak penting untuk test ini
+	// karena validation v terjadi SEBELUM recovery).
+	privKey, _ := crypto.GenerateKey()
+	addr := strings.ToLower(crypto.PubkeyToAddress(privKey.PublicKey).Hex())
+	privKeyHex := hex.EncodeToString(crypto.FromECDSA(privKey))
+
+	svc, _ := newRegisterTestService(map[string]models.User{
+		addr: {ID: 1, Name: "alice", Address: addr},
+	})
+	nonce, _ := svc.Challenge(context.Background(), addr)
+	msg := []byte("Login to YuteBlockchain nonce:" + nonce)
+
+	// Ambil r,s dari signature valid, lalu set v=5 (invalid)
+	validSig, _ := hex.DecodeString(strings.TrimPrefix(signMessage(t, privKeyHex, msg), "0x"))
+	validSig[64] = 5 // v invalid: bukan 0/1, 27-30, atau 35+
+	sigInvalid := "0x" + hex.EncodeToString(validSig)
+
+	_, err := svc.Verify(context.Background(), addr, nonce, sigInvalid, "alice")
+	require.Error(t, err)
+	appErr, ok := dto.AsAppError(err)
+	require.True(t, ok)
+	assert.Equal(t, dto.CodeInvalidSignature, appErr.Code)
+}
+
 func TestRegister_Verify_UserNotFound(t *testing.T) {
 	// Verifikasi signature sukses tapi user belum registered.
 	privKey, _ := crypto.GenerateKey()

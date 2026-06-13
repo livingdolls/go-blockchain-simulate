@@ -50,13 +50,31 @@ object WalletGenerator {
 
     fun signMessageToHex(message: String, privateKeyHex: String): String {
         val pk = BigInteger(1, EthCrypto.hexToBytes(privateKeyHex))
+        val addressFromKey = addressFromPrivateKey(privateKeyHex)
+        val publicKeyHex = EthCrypto.publicKeyToUncompressedHex(pk)
         val hash = EthCrypto.eip191Hash(message)
         val sig = Secp256k1.sign(hash, pk)
         val r = Bip32.ser256(sig.r)
         val s = Bip32.ser256(sig.s)
         val v = sig.v + 27 // EIP-191: v = recId + 27
         val rs = r + s + byteArrayOf(v.toByte())
-        return "0x" + EthCrypto.toHex(rs)
+        val result = "0x" + EthCrypto.toHex(rs)
+
+        // Self-verify: recover address from signature and compare
+        val recovered = WalletSigner.recoverAddress(message, result)
+        Log.d("Wallet", "SIGN message='$message'")
+        Log.d("Wallet", "SIGN hash=${EthCrypto.toHex(hash)}")
+        Log.d("Wallet", "SIGN addressFromKey=$addressFromKey")
+        Log.d("Wallet", "SIGN publicKey=$publicKeyHex")
+        Log.d("Wallet", "SIGN r=${sig.r.toString(16)} s=${sig.s.toString(16)} recId=${sig.v} v=$v")
+        Log.d("Wallet", "SIGN signature=$result")
+        Log.d("Wallet", "SIGN selfRecovered=$recovered match=${recovered.equals(addressFromKey, ignoreCase = true)}")
+
+        if (recovered != null && !recovered.equals(addressFromKey, ignoreCase = true)) {
+            Log.e("Wallet", "SELF-VERIFY FAILED: expected=$addressFromKey recovered=$recovered")
+        }
+
+        return result
     }
 
     private fun deriveBip44(masterKey: Bip32.ExtendedKey): Bip32.ExtendedKey {

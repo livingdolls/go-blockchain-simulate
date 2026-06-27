@@ -368,9 +368,13 @@ private fun CandleChart(
                 val chartW = canvasWidth - leftPad - rightPad
                 val chartH = chartAreaH - topPad - bottomPad
 
-                val minPrice = candles.minOf { min(it.lowPrice, it.openPrice) }
-                val maxPrice = candles.maxOf { max(it.highPrice, it.closePrice) }
-                val range = if (maxPrice - minPrice < 0.00001) 1.0 else maxPrice - minPrice
+                val minPrice = candles.minOf { minOf(it.lowPrice, it.openPrice, it.closePrice) }
+                val maxPrice = candles.maxOf { maxOf(it.highPrice, it.openPrice, it.closePrice) }
+                val dataRange = if (maxPrice - minPrice < 0.00001) 0.001 else maxPrice - minPrice
+                val padding = dataRange * 0.15
+                val displayMin = minPrice - padding
+                val displayMax = maxPrice + padding
+                val range = displayMax - displayMin
 
                 val candleCount = candles.size
                 val candleSpacing = 1.5f
@@ -394,10 +398,10 @@ private fun CandleChart(
                 // candles
                 candles.forEachIndexed { index, candle ->
                     val x = leftPad + index * stepX
-                    val openY = topPad + chartH - ((candle.openPrice - minPrice) / range * chartH).toFloat()
-                    val closeY = topPad + chartH - ((candle.closePrice - minPrice) / range * chartH).toFloat()
-                    val highY = topPad + chartH - ((candle.highPrice - minPrice) / range * chartH).toFloat()
-                    val lowY = topPad + chartH - ((candle.lowPrice - minPrice) / range * chartH).toFloat()
+                    val openY = topPad + chartH - ((candle.openPrice - displayMin) / range * chartH).toFloat()
+                    val closeY = topPad + chartH - ((candle.closePrice - displayMin) / range * chartH).toFloat()
+                    val highY = topPad + chartH - ((candle.highPrice - displayMin) / range * chartH).toFloat()
+                    val lowY = topPad + chartH - ((candle.lowPrice - displayMin) / range * chartH).toFloat()
 
                     val isBullish = candle.closePrice >= candle.openPrice
                     val color = if (isBullish) greenColor else redColor
@@ -432,7 +436,7 @@ private fun CandleChart(
                 }
 
                 for (i in 0..gridCount) {
-                    val price = maxPrice - range * i / gridCount
+                    val price = displayMax - range * i / gridCount
                     val y = topPad + chartH * i / gridCount + 4f
                     drawContext.canvas.nativeCanvas.drawText(
                         "$${formatPrice(price)}",

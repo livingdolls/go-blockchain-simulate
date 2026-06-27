@@ -61,9 +61,9 @@ class SseClient {
         }
 
         try {
-            var line: String?
-            while (isActive && reader.readLine().also { line = it } != null) {
-                val l = line ?: break
+            var line = reader.readLine()
+            while (line != null && isActive) {
+                val l = line
 
                 if (l.startsWith("data: ")) {
                     currentData.append(l.removePrefix("data: "))
@@ -84,6 +84,8 @@ class SseClient {
                         }
                     }
                 }
+
+                line = reader.readLine()
             }
             Log.d("SseClient", "SSE stream ended (eof)")
         } catch (e: Exception) {

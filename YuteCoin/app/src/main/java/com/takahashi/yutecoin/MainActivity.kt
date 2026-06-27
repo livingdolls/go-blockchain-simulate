@@ -16,7 +16,7 @@ import com.takahashi.yutecoin.data.local.SessionManager
 import com.takahashi.yutecoin.data.local.ThemeManager
 import com.takahashi.yutecoin.ui.navigation.AppNavHost
 import com.takahashi.yutecoin.ui.theme.RevealController
-import com.takahashi.yutecoin.ui.theme.ThemeRevealOverlay
+import com.takahashi.yutecoin.ui.theme.ThemeRevealBox
 import com.takahashi.yutecoin.ui.theme.YuteCoinTheme
 import com.takahashi.yutecoin.ui.theme.rememberRevealController
 import org.koin.android.ext.android.inject
@@ -33,27 +33,27 @@ class MainActivity : ComponentActivity() {
             var isDarkMode by remember { mutableStateOf(themeManager.isDarkModeInternal()) }
             var rootSize by remember { mutableStateOf(IntSize.Zero) }
 
-            YuteCoinTheme(darkTheme = isDarkMode) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .onSizeChanged { rootSize = it }
-                ) {
-                    AppNavHost(
-                        sessionManager = sessionManager,
-                        themeManager = themeManager,
-                        revealController = revealController,
-                        rootSize = rootSize,
-                        isDarkMode = isDarkMode
-                    )
-
-                    ThemeRevealOverlay(
-                        controller = revealController,
-                        onMidpoint = {
-                            isDarkMode = !isDarkMode
-                            themeManager.setDarkMode(isDarkMode)
-                        }
-                    )
+            ThemeRevealBox(
+                controller = revealController,
+                onMidpoint = {
+                    isDarkMode = !isDarkMode
+                    themeManager.setDarkMode(isDarkMode)
+                }
+            ) {
+                YuteCoinTheme(darkTheme = isDarkMode) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .onSizeChanged { rootSize = it }
+                    ) {
+                        AppNavHost(
+                            sessionManager = sessionManager,
+                            themeManager = themeManager,
+                            revealController = revealController,
+                            rootSize = rootSize,
+                            isDarkMode = isDarkMode
+                        )
+                    }
                 }
             }
         }

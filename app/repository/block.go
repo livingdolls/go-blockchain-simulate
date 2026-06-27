@@ -39,7 +39,15 @@ func NewBlockRepository(db *sqlx.DB) BlockRepository {
 }
 
 func (b *blockRepository) BeginTx() (*sqlx.Tx, error) {
-	return b.db.Beginx()
+	tx, err := b.db.Beginx()
+	if err != nil {
+		return nil, err
+	}
+	if _, err := tx.Exec("SET TRANSACTION ISOLATION LEVEL READ COMMITTED"); err != nil {
+		tx.Rollback()
+		return nil, fmt.Errorf("set isolation level: %w", err)
+	}
+	return tx, nil
 }
 
 // CreateWithTx implements BlockRepository.

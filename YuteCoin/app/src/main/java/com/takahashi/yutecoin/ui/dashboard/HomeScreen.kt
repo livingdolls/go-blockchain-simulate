@@ -34,12 +34,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.takahashi.yutecoin.data.local.ThemeManager
+import com.takahashi.yutecoin.ui.theme.RevealController
 import com.takahashi.yutecoin.ui.theme.ThemeToggle
 import org.koin.androidx.compose.koinViewModel
+import androidx.compose.ui.unit.IntSize
 
 @Composable
 fun HomeScreen(
     themeManager: ThemeManager,
+    revealController: RevealController,
+    rootSize: IntSize,
     onLogout: () -> Unit,
     viewModel: HomeViewModel = koinViewModel()
 ) {
@@ -60,7 +64,9 @@ fun HomeScreen(
                     viewModel.logout()
                     onLogout()
                 },
-                themeManager = themeManager
+                themeManager = themeManager,
+                revealController = revealController,
+                rootSize = rootSize
             )
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -175,7 +181,9 @@ private fun TopBar(
     name: String,
     onRefresh: () -> Unit,
     onLogout: () -> Unit,
-    themeManager: ThemeManager
+    themeManager: ThemeManager,
+    revealController: RevealController,
+    rootSize: IntSize
 ) {
     Row(
         modifier = Modifier
@@ -222,7 +230,11 @@ private fun TopBar(
             )
         }
 
-        ThemeToggle(themeManager = themeManager)
+        ThemeToggle(
+            themeManager = themeManager,
+            revealController = revealController,
+            rootSize = rootSize
+        )
 
         IconButton(onClick = onLogout) {
             Text(

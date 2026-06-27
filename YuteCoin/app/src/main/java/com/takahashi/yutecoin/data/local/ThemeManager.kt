@@ -17,9 +17,14 @@ class ThemeManager(context: Context) {
     private val _isDarkMode = MutableStateFlow(prefs.getBoolean(KEY_DARK_MODE, false))
     val isDarkMode: StateFlow<Boolean> = _isDarkMode.asStateFlow()
 
+    fun isDarkModeInternal(): Boolean = _isDarkMode.value
+
+    fun setDarkMode(enabled: Boolean) {
+        _isDarkMode.value = enabled
+        prefs.edit().putBoolean(KEY_DARK_MODE, enabled).apply()
+    }
+
     fun toggle() {
-        val newValue = !_isDarkMode.value
-        _isDarkMode.value = newValue
-        prefs.edit().putBoolean(KEY_DARK_MODE, newValue).apply()
+        setDarkMode(!_isDarkMode.value)
     }
 }

@@ -1,6 +1,7 @@
 package com.takahashi.yutecoin.ui.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.unit.IntSize
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -10,11 +11,15 @@ import com.takahashi.yutecoin.data.local.ThemeManager
 import com.takahashi.yutecoin.ui.auth.LoginScreen
 import com.takahashi.yutecoin.ui.auth.RegisterScreen
 import com.takahashi.yutecoin.ui.dashboard.DashboardScreen
+import com.takahashi.yutecoin.ui.theme.RevealController
 
 @Composable
 fun AppNavHost(
     sessionManager: SessionManager,
     themeManager: ThemeManager,
+    revealController: RevealController,
+    rootSize: IntSize,
+    isDarkMode: Boolean,
     navController: NavHostController = rememberNavController()
 ) {
     val startDestination = if (sessionManager.isLoggedIn()) {
@@ -56,6 +61,8 @@ fun AppNavHost(
         composable(NavRoutes.Dashboard.route) {
             DashboardScreen(
                 themeManager = themeManager,
+                revealController = revealController,
+                rootSize = rootSize,
                 onLogout = {
                     sessionManager.clearAll()
                     navController.navigate(NavRoutes.Login.route) {

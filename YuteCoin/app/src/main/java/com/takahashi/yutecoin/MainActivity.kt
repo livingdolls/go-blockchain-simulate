@@ -49,7 +49,6 @@ class MainActivity : ComponentActivity() {
 
                     ThemeRevealOverlay(
                         controller = revealController,
-                        isDark = isDarkMode,
                         onMidpoint = {
                             isDarkMode = !isDarkMode
                             themeManager.setDarkMode(isDarkMode)

@@ -23,9 +23,11 @@ class RevealController {
     var center by mutableStateOf(Offset.Zero)
     var triggerCount by mutableIntStateOf(0)
     var maxRadius by mutableFloatStateOf(0f)
+    var targetDark by mutableStateOf(false)
 
-    fun trigger(position: Offset, viewSize: IntSize) {
+    fun trigger(position: Offset, viewSize: IntSize, darkTarget: Boolean) {
         center = position
+        targetDark = darkTarget
         maxRadius = sqrt((viewSize.width * viewSize.width + viewSize.height * viewSize.height).toFloat())
         triggerCount++
     }
@@ -37,30 +39,32 @@ fun rememberRevealController() = remember { RevealController() }
 @Composable
 fun ThemeRevealOverlay(
     controller: RevealController,
-    isDark: Boolean,
     onMidpoint: () -> Unit
 ) {
     var size by remember { mutableStateOf(IntSize.Zero) }
     val animRadius = remember { Animatable(0f) }
+    var isDone by remember { mutableStateOf(true) }
 
     LaunchedEffect(controller.triggerCount) {
         if (controller.triggerCount > 0) {
+            isDone = false
             animRadius.snapTo(0f)
             animRadius.animateTo(controller.maxRadius * 0.5f, tween(200))
             onMidpoint()
             animRadius.animateTo(controller.maxRadius, tween(300))
+            isDone = true
         }
     }
 
     val r = animRadius.value
-    if (r > 1f && controller.triggerCount > 0) {
+    if (!isDone && r > 1f) {
         Canvas(
             modifier = Modifier
                 .fillMaxSize()
                 .onSizeChanged { size = it }
         ) {
             drawCircle(
-                color = if (isDark) Color(0xFF1C1B1F) else Color(0xFFFFFBFE),
+                color = if (controller.targetDark) Color(0xFF1C1B1F) else Color(0xFFFFFBFE),
                 radius = r,
                 center = controller.center
             )

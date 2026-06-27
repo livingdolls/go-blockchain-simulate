@@ -38,7 +38,7 @@ fun ThemeToggle(
                 position = Offset(p.x + coords.size.width / 2f, p.y + coords.size.height / 2f)
             }
             .clickable {
-                revealController.trigger(position, rootSize)
+                revealController.trigger(position, rootSize, !isDark)
             }
     )
 }

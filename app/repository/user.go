@@ -201,7 +201,7 @@ func (r *userRepository) GetUserWithWallet(address string) (models.User, models.
 		AvailableBalance: r2.AvailableBalance.Float64,
 		TotalReceived:    r2.TotalReceived.Float64,
 		TotalSent:        r2.TotalSent.Float64,
-		LastTransaction:  r2.LastTransaction.String,
+		LastTransaction:  r2.LastTransaction,
 	}
 
 	return user, wallet, nil

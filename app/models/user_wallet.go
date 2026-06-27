@@ -1,13 +1,15 @@
 package models
 
+import "database/sql"
+
 type UserWallet struct {
-	UserAddress      string  `db:"user_address"`
-	YTEBalance       float64 `db:"yte_balance"`
-	LockedBalance    float64 `db:"locked_balance"`
-	AvailableBalance float64 `db:"available_balance"`
-	TotalReceived    float64 `db:"total_received"`
-	TotalSent        float64 `db:"total_sent"`
-	LastTransaction  string  `db:"last_transaction_at"`
+	UserAddress      string         `db:"user_address"`
+	YTEBalance       float64        `db:"yte_balance"`
+	LockedBalance    float64        `db:"locked_balance"`
+	AvailableBalance float64        `db:"available_balance"`
+	TotalReceived    float64        `db:"total_received"`
+	TotalSent        float64        `db:"total_sent"`
+	LastTransaction  sql.NullString `db:"last_transaction_at"`
 }
 
 type WalletHistory struct {

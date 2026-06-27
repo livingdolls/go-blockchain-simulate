@@ -1,13 +1,15 @@
 package models
 
+import "database/sql"
+
 type UserBalance struct {
-	UserAddress     string  `db:"user_address"`
-	USDBalance      float64 `db:"usd_balance"`
-	LockedBalance   float64 `db:"locked_balance"`
-	TotalDeposited  float64 `db:"total_deposited"`
-	TotalWithdrawn  float64 `db:"total_withdrawn"`
-	TotalTraded     float64 `db:"total_traded"`
-	LastTransaction string  `db:"last_transaction_at"`
+	UserAddress     string         `db:"user_address"`
+	USDBalance      float64        `db:"usd_balance"`
+	LockedBalance   float64        `db:"locked_balance"`
+	TotalDeposited  float64        `db:"total_deposited"`
+	TotalWithdrawn  float64        `db:"total_withdrawn"`
+	TotalTraded     float64        `db:"total_traded"`
+	LastTransaction sql.NullString `db:"last_transaction_at"`
 }
 
 type BalanceHistory struct {

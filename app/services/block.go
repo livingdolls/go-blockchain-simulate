@@ -135,6 +135,7 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 
 	// Added miner acount
 	addresses = append(addresses, entity.MinerAccountAddress)
+	minerAddr := strings.ToLower(entity.MinerAccountAddress)
 
 	// Get all users at once (read-only)
 	users, err := s.userRepo.GetMultipleByAddress(addresses)
@@ -281,7 +282,7 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 	logger.LogWarn("Block: initial balances", zap.Any("balances", currentBalances))
 
 	// verify miner address
-	if _, exists := currentBalances[entity.MinerAccountAddress]; !exists {
+	if _, exists := currentBalances[minerAddr]; !exists {
 		return models.Block{}, fmt.Errorf("%s not found in locked users", entity.MinerAccountAddress)
 	}
 
@@ -302,7 +303,7 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 		to := strings.ToLower(t.ToAddress)
 		currentBalances[from] -= totalDeduction
 		currentBalances[to] += t.Amount
-		currentBalances[entity.MinerAccountAddress] += t.Fee
+		currentBalances[minerAddr] += t.Fee
 
 		totalFees += t.Fee
 		txIDs = append(txIDs, t.ID)
@@ -355,7 +356,7 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 				TxID:         txIDPtr,
 				Address:      entity.MinerAccountAddress,
 				Amount:       t.Fee,
-				BalanceAfter: currentBalances[entity.MinerAccountAddress],
+				BalanceAfter: currentBalances[minerAddr],
 			},
 		)
 	}
@@ -403,7 +404,7 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 
 	// get all USD with lock
 	allUSDAddresses := append(buyerAddresses, sellerAddresses...)
-	allUSDAddresses = append(allUSDAddresses, entity.MinerAccountAddress) // miner gets fee
+	allUSDAddresses = append(allUSDAddresses, minerAddr) // miner gets fee
 
 	if len(allUSDAddresses) > 0 {
 		lockedUSDBalances, err := s.balanceRepo.GetMultipleByAddressWithTxForUpdate(tx, allUSDAddresses)
@@ -459,9 +460,9 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 			}
 
 			// miner fee receives USD (dalam USD, bukan YTE)
-			minerBalance := usdBalances[entity.MinerAccountAddress]
+			minerBalance := usdBalances[minerAddr]
 			minerBalance.USDBalance += usdFee
-			usdBalances[entity.MinerAccountAddress] = minerBalance
+			usdBalances[minerAddr] = minerBalance
 
 		} else if strings.EqualFold(t.Type, "SELL") {
 			sellerAddr := strings.ToLower(t.FromAddress)
@@ -484,9 +485,9 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 			}
 
 			// miner fee receives USD
-			minerBalance := usdBalances[entity.MinerAccountAddress]
+			minerBalance := usdBalances[minerAddr]
 			minerBalance.USDBalance += usdFee
-			usdBalances[entity.MinerAccountAddress] = minerBalance
+			usdBalances[minerAddr] = minerBalance
 		}
 	}
 

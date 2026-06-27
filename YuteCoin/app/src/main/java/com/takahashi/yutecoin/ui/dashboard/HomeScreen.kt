@@ -1,5 +1,6 @@
 package com.takahashi.yutecoin.ui.dashboard
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -25,25 +26,23 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.patrykandpatrick.vico.compose.cartesian.CartesianChartHost
-import com.patrykandpatrick.vico.compose.cartesian.axis.rememberBottomAxis
-import com.patrykandpatrick.vico.compose.cartesian.axis.rememberStartAxis
-import com.patrykandpatrick.vico.compose.cartesian.layer.rememberCandlestickCartesianLayer
-import com.patrykandpatrick.vico.compose.cartesian.rememberCartesianChart
-import com.patrykandpatrick.vico.core.cartesian.data.CartesianChartModelProducer
-import com.patrykandpatrick.vico.core.cartesian.data.candlestickSeries
 import com.takahashi.yutecoin.data.dto.CandleResponse
 import org.koin.androidx.compose.koinViewModel
+import kotlin.math.max
+import kotlin.math.min
 
 @Composable
 fun HomeScreen(
@@ -309,32 +308,22 @@ private fun CandleChart(
     isLiveConnected: Boolean = false,
     modifier: Modifier = Modifier
 ) {
-    val modelProducer = remember { CartesianChartModelProducer() }
-
-    LaunchedEffect(candles) {
-        modelProducer.runTransaction {
-            candlestickSeries {
-                candles.forEach { candle ->
-                    candle(
-                        x = candle.startTime.toFloat(),
-                        open = candle.openPrice.toFloat(),
-                        low = candle.lowPrice.toFloat(),
-                        high = candle.highPrice.toFloat(),
-                        close = candle.closePrice.toFloat()
-                    )
-                }
-            }
-        }
-    }
+    val greenColor = Color(0xFF26A69A)
+    val redColor = Color(0xFFEF5350)
+    val gridColor = Color(0xFF2A2A2A)
 
     Card(
         modifier = modifier,
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.Transparent)
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+        )
     ) {
         Column(modifier = Modifier.padding(8.dp)) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
@@ -362,15 +351,97 @@ private fun CandleChart(
 
             Spacer(modifier = Modifier.height(4.dp))
 
-            CartesianChartHost(
-                chart = rememberCartesianChart(
-                    rememberCandlestickCartesianLayer(),
-                    startAxis = rememberStartAxis(),
-                    bottomAxis = rememberBottomAxis()
-                ),
-                modelProducer = modelProducer,
-                modifier = Modifier.fillMaxSize()
-            )
+            Canvas(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+            ) {
+                val canvasWidth = size.width
+                val canvasHeight = size.height
+                val textAreaH = 28f
+                val chartAreaH = canvasHeight - textAreaH
+                val leftPad = 4f
+                val rightPad = 4f
+                val topPad = 8f
+                val bottomPad = 4f
+
+                val chartW = canvasWidth - leftPad - rightPad
+                val chartH = chartAreaH - topPad - bottomPad
+
+                val minPrice = candles.minOf { min(it.lowPrice, it.openPrice) }
+                val maxPrice = candles.maxOf { max(it.highPrice, it.closePrice) }
+                val range = if (maxPrice - minPrice < 0.00001) 1.0 else maxPrice - minPrice
+
+                val candleCount = candles.size
+                val candleSpacing = 1.5f
+                val totalSpacing = (candleCount - 1) * candleSpacing
+                val candleWidth = ((chartW - totalSpacing) / candleCount).coerceIn(1f, 16f)
+                val stepX = candleWidth + candleSpacing
+
+                // grid lines
+                val gridCount = 4
+                for (i in 0..gridCount) {
+                    val y = topPad + chartH * i / gridCount
+                    drawLine(
+                        color = gridColor.copy(alpha = 0.3f),
+                        start = Offset(leftPad, y),
+                        end = Offset(leftPad + chartW, y),
+                        strokeWidth = 0.5f,
+                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(4f, 4f))
+                    )
+                }
+
+                // candles
+                candles.forEachIndexed { index, candle ->
+                    val x = leftPad + index * stepX
+                    val openY = topPad + chartH - ((candle.openPrice - minPrice) / range * chartH).toFloat()
+                    val closeY = topPad + chartH - ((candle.closePrice - minPrice) / range * chartH).toFloat()
+                    val highY = topPad + chartH - ((candle.highPrice - minPrice) / range * chartH).toFloat()
+                    val lowY = topPad + chartH - ((candle.lowPrice - minPrice) / range * chartH).toFloat()
+
+                    val isBullish = candle.closePrice >= candle.openPrice
+                    val color = if (isBullish) greenColor else redColor
+                    val bodyTop = min(openY, closeY)
+                    val bodyBottom = max(openY, closeY)
+                    val bodyHeight = (bodyBottom - bodyTop).coerceAtLeast(1f)
+
+                    val centerX = x + candleWidth / 2f
+
+                    // wick
+                    drawLine(
+                        color = color,
+                        start = Offset(centerX, highY),
+                        end = Offset(centerX, lowY),
+                        strokeWidth = 1f
+                    )
+
+                    // body
+                    drawRect(
+                        color = color,
+                        topLeft = Offset(x, bodyTop),
+                        size = Size(candleWidth, bodyHeight)
+                    )
+                }
+
+                // price labels
+                val labelPaint = android.graphics.Paint().apply {
+                    textSize = 9.sp.toPx()
+                    color = 0xFF888888.toInt()
+                    textAlign = android.graphics.Paint.Align.LEFT
+                    isAntiAlias = true
+                }
+
+                for (i in 0..gridCount) {
+                    val price = maxPrice - range * i / gridCount
+                    val y = topPad + chartH * i / gridCount + 4f
+                    drawContext.canvas.nativeCanvas.drawText(
+                        "$${formatPrice(price)}",
+                        leftPad,
+                        y,
+                        labelPaint
+                    )
+                }
+            }
         }
     }
 }

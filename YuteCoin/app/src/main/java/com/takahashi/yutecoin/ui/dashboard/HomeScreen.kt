@@ -38,7 +38,6 @@ import org.koin.androidx.compose.koinViewModel
 
 @Composable
 fun HomeScreen(
-    onLogout: () -> Unit,
     viewModel: HomeViewModel = koinViewModel()
 ) {
     val uiState by viewModel.state.collectAsStateWithLifecycle()
@@ -53,11 +52,7 @@ fun HomeScreen(
         ) {
             TopBar(
                 name = uiState.name,
-                onRefresh = { viewModel.loadMarket(); viewModel.loadBalance() },
-                onLogout = {
-                    viewModel.logout()
-                    onLogout()
-                }
+                onRefresh = { viewModel.loadMarket(); viewModel.loadBalance() }
             )
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -170,8 +165,7 @@ fun HomeScreen(
 @Composable
 private fun TopBar(
     name: String,
-    onRefresh: () -> Unit,
-    onLogout: () -> Unit
+    onRefresh: () -> Unit
 ) {
     Row(
         modifier = Modifier
@@ -179,21 +173,19 @@ private fun TopBar(
             .padding(horizontal = 20.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        IconButton(onClick = onLogout) {
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = name.firstOrNull()?.uppercase() ?: "?",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = name.firstOrNull()?.uppercase() ?: "?",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
         }
 
         Spacer(modifier = Modifier.width(12.dp))

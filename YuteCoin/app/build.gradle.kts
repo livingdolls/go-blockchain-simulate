@@ -91,6 +91,9 @@ dependencies {
     // Coroutines
     implementation(libs.coroutines)
 
+    // Chart
+    implementation(libs.mpandroidchart)
+
     // Test
     testImplementation(libs.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))

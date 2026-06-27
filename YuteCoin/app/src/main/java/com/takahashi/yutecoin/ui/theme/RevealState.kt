@@ -53,9 +53,9 @@ fun ThemeRevealBox(
         if (controller.triggerCount > 0) {
             isDone = false
             animRadius.snapTo(0f)
-            animRadius.animateTo(controller.maxRadius * 0.5f, tween(200))
+            animRadius.animateTo(controller.maxRadius * 0.5f, tween(400))
             onMidpoint()
-            animRadius.animateTo(controller.maxRadius, tween(300))
+            animRadius.animateTo(controller.maxRadius, tween(600))
             isDone = true
         }
     }

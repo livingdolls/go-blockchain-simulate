@@ -1,29 +1,25 @@
 package com.takahashi.yutecoin.data.local
 
 import android.content.Context
-import androidx.datastore.core.DataStore
-import androidx.datastore.preferences.core.Preferences
-import androidx.datastore.preferences.core.booleanPreferencesKey
-import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.preferencesDataStore
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.map
+import android.content.SharedPreferences
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
-private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "theme")
-
-class ThemeManager(private val context: Context) {
+class ThemeManager(context: Context) {
 
     companion object {
-        private val KEY_DARK_MODE = booleanPreferencesKey("dark_mode")
+        private const val PREFS_NAME = "yutecoin_theme"
+        private const val KEY_DARK_MODE = "dark_mode"
     }
 
-    val isDarkMode: Flow<Boolean> = context.dataStore.data.map { prefs ->
-        prefs[KEY_DARK_MODE] ?: false
-    }
+    private val prefs: SharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    private val _isDarkMode = MutableStateFlow(prefs.getBoolean(KEY_DARK_MODE, false))
+    val isDarkMode: StateFlow<Boolean> = _isDarkMode.asStateFlow()
 
-    suspend fun setDarkMode(enabled: Boolean) {
-        context.dataStore.edit { prefs ->
-            prefs[KEY_DARK_MODE] = enabled
-        }
+    fun toggle() {
+        val newValue = !_isDarkMode.value
+        _isDarkMode.value = newValue
+        prefs.edit().putBoolean(KEY_DARK_MODE, newValue).apply()
     }
 }

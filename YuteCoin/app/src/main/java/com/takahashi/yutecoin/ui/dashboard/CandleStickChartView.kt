@@ -97,16 +97,20 @@ fun CandleStickChartView(
                     setDrawIcons(false)
                     axisDependency = YAxis.AxisDependency.LEFT
                     shadowColor = AndroidColor.DKGRAY
-                    shadowWidth = 0.7f
+                    shadowWidth = 1.2f
+                    barSpace = 0.3f
                     decreasingColor = redColor
                     decreasingPaintStyle = Paint.Style.FILL
                     increasingColor = greenColor
-                    increasingPaintStyle = Paint.Style.FILL
-                    neutralColor = AndroidColor.DKGRAY
+                    increasingPaintStyle = Paint.Style.FILL_AND_STROKE
+                    neutralColor = AndroidColor.GRAY
                     setDrawValues(false)
                 }
 
                 chart.data = CandleData(dataSet)
+                chart.notifyDataSetChanged()
+                chart.setVisibleXRangeMaximum(30f)
+                chart.moveViewToX(candles.size.toFloat())
                 chart.invalidate()
             },
             modifier = Modifier

@@ -56,10 +56,28 @@ class SendViewModel(
         }
 
         val fromAddress = sessionManager.getAddress()?.lowercase()
-        val privateKeyHex = sessionManager.getPrivateKeyHex()
+        var privateKeyHex = sessionManager.getPrivateKeyHex()
 
-        if (fromAddress == null || privateKeyHex == null) {
+        if (fromAddress == null) {
             _state.value = _state.value.copy(error = "Wallet not found. Please login again.")
+            return
+        }
+
+        if (privateKeyHex == null) {
+            val mnemonic = sessionManager.getMnemonic()
+            if (mnemonic != null) {
+                try {
+                    val wallet = WalletGenerator.walletFromMnemonic(mnemonic)
+                    privateKeyHex = wallet.privateKeyHex
+                    sessionManager.savePrivateKey(privateKeyHex!!)
+                } catch (e: Exception) {
+                    Log.e("SendVM", "Failed to derive key from mnemonic", e)
+                }
+            }
+        }
+
+        if (privateKeyHex == null) {
+            _state.value = _state.value.copy(error = "Wallet key not found. Please login again.")
             return
         }
 

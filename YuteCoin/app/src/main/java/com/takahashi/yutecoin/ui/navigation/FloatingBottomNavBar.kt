@@ -5,7 +5,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -14,8 +13,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -56,67 +55,32 @@ fun FloatingBottomNavBar(
 ) {
     var showMenu by remember { mutableStateOf(false) }
 
-    Box(modifier = modifier.fillMaxWidth()) {
+    Column(modifier = modifier.fillMaxWidth(), horizontalAlignment = Alignment.End) {
         if (showMenu) {
             Column(
                 modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(end = 24.dp, bottom = 48.dp)
+                    .padding(end = 24.dp, bottom = 2.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.95f))
+                    .border(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f), RoundedCornerShape(14.dp))
+                    .padding(horizontal = 14.dp, vertical = 8.dp)
             ) {
-                Surface(
-                    shape = RoundedCornerShape(16.dp),
-                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
-                    shadowElevation = 8.dp,
-                    tonalElevation = 4.dp
-                ) {
-                    Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(vertical = 2.dp)
-                        ) {
-                            Text(
-                                text = "Theme",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(modifier = Modifier.width(10.dp))
-                            ThemeToggle(
-                                themeManager = themeManager,
-                                revealController = revealController,
-                                rootSize = rootSize,
-                                modifier = Modifier.padding(4.dp)
-                            )
-                        }
-
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .clickable {
-                                    showMenu = false
-                                    onLogout()
-                                }
-                                .padding(vertical = 6.dp)
-                        ) {
-                            Text(
-                                text = "Logout",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.error,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
-                    }
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
+                    Text("Theme", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.width(10.dp))
+                    ThemeToggle(themeManager, revealController, rootSize, Modifier.padding(4.dp))
                 }
-
-                Text(
-                    text = "\u25BC",
-                    fontSize = 10.sp,
-                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f), thickness = 0.5.dp)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
-                        .align(Alignment.End)
-                        .padding(end = 12.dp)
-                )
+                        .clickable { showMenu = false; onLogout() }
+                        .padding(vertical = 6.dp)
+                ) {
+                    Text("Logout", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.SemiBold)
+                }
             }
+            Text("\u25BC", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f), modifier = Modifier.padding(end = 30.dp))
         }
 
         Row(
@@ -124,87 +88,30 @@ fun FloatingBottomNavBar(
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 8.dp)
                 .clip(RoundedCornerShape(20.dp))
-                .background(
-                    MaterialTheme.colorScheme.surface.copy(alpha = 0.75f)
-                )
-                .border(
-                    width = 0.5.dp,
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
-                    shape = RoundedCornerShape(20.dp)
-                )
+                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.75f))
+                .border(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f), RoundedCornerShape(20.dp))
                 .padding(horizontal = 4.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
         ) {
             BottomTab.entries.forEach { tab ->
-                val isSelected = tab == currentTab
-                val fgColor by animateColorAsState(
-                    targetValue = if (isSelected)
-                        MaterialTheme.colorScheme.onPrimary
-                    else
-                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                    label = "tabFg"
-                )
-                val bgColor by animateColorAsState(
-                    targetValue = if (isSelected)
-                        MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
-                    else
-                        Color.Transparent,
-                    label = "tabBg"
-                )
-
+                val sel = tab == currentTab
+                val fg by animateColorAsState(if (sel) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f), label = "fg")
+                val bg by animateColorAsState(if (sel) MaterialTheme.colorScheme.primary.copy(alpha = 0.9f) else Color.Transparent, label = "bg")
                 Row(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(18.dp))
-                        .background(bgColor)
-                        .selectable(
-                            selected = isSelected,
-                            onClick = { onTabSelected(tab) }
-                        )
-                        .padding(
-                            horizontal = if (isSelected) 12.dp else 10.dp,
-                            vertical = 8.dp
-                        ),
-                    verticalAlignment = Alignment.CenterVertically
+                    Modifier.clip(RoundedCornerShape(18.dp)).background(bg).selectable(sel) { onTabSelected(tab) }.padding(horizontal = if (sel) 12.dp else 10.dp, vertical = 8.dp),
+                    Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = tab.unicodeIcon,
-                        fontSize = if (isSelected) 14.sp else 18.sp,
-                        color = fgColor
-                    )
-                    if (isSelected) {
-                        Spacer(modifier = Modifier.width(5.dp))
-                        Text(
-                            text = tab.label,
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = fgColor,
-                            fontSize = 11.sp
-                        )
-                    }
+                    Text(tab.unicodeIcon, fontSize = if (sel) 14.sp else 18.sp, color = fg)
+                    if (sel) { Spacer(Modifier.width(5.dp)); Text(tab.label, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = fg, fontSize = 11.sp) }
                 }
             }
 
-            val menuFg = if (showMenu)
-                MaterialTheme.colorScheme.primary
-            else
-                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-
             Row(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(18.dp))
-                    .selectable(
-                        selected = showMenu,
-                        onClick = { showMenu = !showMenu }
-                    )
-                    .padding(horizontal = 10.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
+                Modifier.clip(RoundedCornerShape(18.dp)).selectable(showMenu) { showMenu = !showMenu }.padding(horizontal = 10.dp, vertical = 8.dp),
+                Alignment.CenterVertically
             ) {
-                Text(
-                    text = "\u22EE",
-                    fontSize = 18.sp,
-                    color = menuFg
-                )
+                Text("\u22EE", fontSize = 18.sp, color = if (showMenu) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
             }
         }
     }

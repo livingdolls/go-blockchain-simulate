@@ -84,6 +84,7 @@ fun HomeScreen(
                 if (uiState.candles.isNotEmpty()) {
                     CandleChart(
                         candles = uiState.candles,
+                        isLiveConnected = uiState.isLiveConnected,
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp)
@@ -279,6 +280,7 @@ private fun PriceBadge(price: Double) {
 @Composable
 private fun CandleChart(
     candles: List<CandleResponse>,
+    isLiveConnected: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val closes = candles.map { it.closePrice }
@@ -294,11 +296,32 @@ private fun CandleChart(
         colors = CardDefaults.cardColors(containerColor = Color.Transparent)
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
-            Text(
-                text = "Price Chart",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Price Chart",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f)
+                )
+                if (isLiveConnected) {
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFF4CAF50))
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "LIVE",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color(0xFF4CAF50),
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
             Spacer(modifier = Modifier.height(8.dp))
             Canvas(
                 modifier = Modifier

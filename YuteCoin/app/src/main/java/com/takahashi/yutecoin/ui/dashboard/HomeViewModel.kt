@@ -9,9 +9,12 @@ import com.takahashi.yutecoin.data.dto.NetworkResult
 import com.takahashi.yutecoin.data.local.SessionManager
 import com.takahashi.yutecoin.data.repository.BalanceRepository
 import com.takahashi.yutecoin.data.repository.MarketRepository
+import com.takahashi.yutecoin.data.service.CandleStreamService
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
 
 data class HomeUiState(
@@ -23,6 +26,7 @@ data class HomeUiState(
     val liquidity: Double = 0.0,
     val lastBlock: Long = 0,
     val candles: List<CandleResponse> = emptyList(),
+    val isLiveConnected: Boolean = false,
     val isLoadingBalance: Boolean = false,
     val isLoadingMarket: Boolean = false,
     val error: String? = null
@@ -32,11 +36,14 @@ class HomeViewModel(
     application: Application,
     private val balanceRepository: BalanceRepository,
     private val marketRepository: MarketRepository,
+    private val candleStreamService: CandleStreamService,
     private val sessionManager: SessionManager
 ) : AndroidViewModel(application) {
 
     private val _state = MutableStateFlow(HomeUiState())
     val state: StateFlow<HomeUiState> = _state.asStateFlow()
+
+    private var candleStreamJob: Job? = null
 
     init {
         loadBalance()
@@ -116,15 +123,55 @@ class HomeViewModel(
                 isLoadingMarket = false,
                 error = if (hasError && _state.value.error == null) errorMsg else _state.value.error
             )
+
+            if (_state.value.candles.isNotEmpty()) {
+                startLiveCandles()
+            }
+        }
+    }
+
+    private fun startLiveCandles() {
+        candleStreamJob?.cancel()
+        candleStreamJob = viewModelScope.launch {
+            candleStreamService.streamCandles("1m")
+                .catch { e ->
+                    _state.value = _state.value.copy(isLiveConnected = false)
+                }
+                .collect { newCandle ->
+                    _state.value = _state.value.copy(isLiveConnected = true)
+
+                    val current = _state.value.candles.toMutableList()
+                    val index = current.indexOfFirst {
+                        it.startTime == newCandle.startTime && it.intervalType == newCandle.intervalType
+                    }
+
+                    if (index != -1) {
+                        current[index] = newCandle
+                    } else {
+                        current.add(newCandle)
+                        current.sortBy { it.startTime }
+                        if (current.size > 50) {
+                            current.removeAt(0)
+                        }
+                    }
+
+                    _state.value = _state.value.copy(candles = current.toList())
+                }
         }
     }
 
     fun logout() {
+        candleStreamJob?.cancel()
         sessionManager.clearAll()
         RetrofitClient.clearSession()
     }
 
     fun clearError() {
         _state.value = _state.value.copy(error = null)
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        candleStreamJob?.cancel()
     }
 }

@@ -63,7 +63,7 @@ fun CandleStickChartView(
                         setDrawAxisLine(true)
                         textColor = AndroidColor.GRAY
                         textSize = 9f
-                        granularity = 1f
+                        granularity = 60f
                         valueFormatter = TimeValueFormatter()
                     }
 
@@ -83,9 +83,9 @@ fun CandleStickChartView(
                 }
             },
             update = { chart ->
-                val entries = candles.mapIndexed { index, candle ->
+                val entries = candles.map { candle ->
                     CandleEntry(
-                        index.toFloat(),
+                        candle.startTime.toFloat(),
                         candle.highPrice.toFloat(),
                         candle.lowPrice.toFloat(),
                         candle.openPrice.toFloat(),
@@ -136,6 +136,6 @@ private class TimeValueFormatter : com.github.mikephil.charting.formatter.ValueF
     private val dateFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
 
     override fun getFormattedValue(value: Float): String {
-        return dateFormat.format(Date(value.toLong()))
+        return dateFormat.format(Date(value.toLong() * 1000))
     }
 }

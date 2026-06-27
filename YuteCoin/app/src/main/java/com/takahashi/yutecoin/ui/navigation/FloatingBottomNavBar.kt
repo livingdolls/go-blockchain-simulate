@@ -5,11 +5,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.selectable
@@ -56,16 +56,12 @@ fun FloatingBottomNavBar(
 ) {
     var showMenu by remember { mutableStateOf(false) }
 
-    Column(
-        modifier = modifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
+    Box(modifier = modifier.fillMaxWidth()) {
         if (showMenu) {
             Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(end = 24.dp),
-                horizontalAlignment = Alignment.End
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 24.dp, bottom = 48.dp)
             ) {
                 Surface(
                     shape = RoundedCornerShape(16.dp),
@@ -73,9 +69,7 @@ fun FloatingBottomNavBar(
                     shadowElevation = 8.dp,
                     tonalElevation = 4.dp
                 ) {
-                    Column(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
-                    ) {
+                    Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.padding(vertical = 2.dp)
@@ -114,12 +108,13 @@ fun FloatingBottomNavBar(
                     }
                 }
 
-                // Arrow pointing down
                 Text(
                     text = "\u25BC",
                     fontSize = 10.sp,
                     color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
-                    modifier = Modifier.padding(end = 14.dp)
+                    modifier = Modifier
+                        .align(Alignment.End)
+                        .padding(end = 12.dp)
                 )
             }
         }

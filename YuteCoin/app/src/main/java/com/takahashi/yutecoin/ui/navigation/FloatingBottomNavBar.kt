@@ -81,22 +81,27 @@ fun FloatingBottomNavBar(
                         selected = isSelected,
                         onClick = { onTabSelected(tab) }
                     )
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                    .padding(
+                        horizontal = if (isSelected) 12.dp else 10.dp,
+                        vertical = 8.dp
+                    ),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
                     text = tab.unicodeIcon,
-                    fontSize = 14.sp,
+                    fontSize = if (isSelected) 14.sp else 18.sp,
                     color = fgColor
                 )
-                Spacer(modifier = Modifier.width(5.dp))
-                Text(
-                    text = tab.label,
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                    color = fgColor,
-                    fontSize = 11.sp
-                )
+                if (isSelected) {
+                    Spacer(modifier = Modifier.width(5.dp))
+                    Text(
+                        text = tab.label,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = fgColor,
+                        fontSize = 11.sp
+                    )
+                }
             }
         }
     }

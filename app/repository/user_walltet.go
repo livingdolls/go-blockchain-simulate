@@ -85,6 +85,7 @@ func (u *userWalletRepository) GetMultipleByAddressWithTx(tx *sqlx.Tx, addresses
 		SELECT user_address, yte_balance, locked_balance, total_received, total_sent, last_transaction_at
 		FROM user_wallets
 		WHERE user_address IN (?)
+		FOR UPDATE
 	`, addresses)
 
 	if err != nil {

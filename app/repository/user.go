@@ -167,7 +167,7 @@ func (r *userRepository) GetUserWithWallet(address string) (models.User, models.
 	// sementara sampai schema berkembang.
 	const query = `
 		SELECT
-			us.id, us.name, us.address, us.public_key, us.role,
+			us.id, us.name, us.address, us.public_key,
 			uw.user_address, uw.yte_balance, uw.locked_balance,
 			uw.available_balance, uw.total_received, uw.total_sent,
 			uw.last_transaction_at

@@ -12,10 +12,8 @@ import (
 	"github.com/livingdolls/go-blockchain-simulate/app/models"
 	"github.com/livingdolls/go-blockchain-simulate/app/publisher"
 	"github.com/livingdolls/go-blockchain-simulate/app/repository"
-	"github.com/livingdolls/go-blockchain-simulate/logger"
 	"github.com/livingdolls/go-blockchain-simulate/redis"
 	"github.com/livingdolls/go-blockchain-simulate/utils"
-	"go.uber.org/zap"
 )
 
 type TransactionService interface {
@@ -191,25 +189,13 @@ func (s *transactionService) Buy(ctx context.Context, address, signature, nonce 
 	sellerAddress := entity.MinerAccountAddress
 
 	// ensure buyer wallet exists
-	user, buyerWallet, err := s.users.GetUserWithWallet(buyerAddress)
+	_, buyerWallet, err := s.users.GetUserWithWallet(buyerAddress)
 	if err != nil {
-		logger.LogWarn("Buy: GetUserWithWallet failed",
-			zap.String("address", buyerAddress),
-			zap.Error(err),
-		)
 		return models.Transaction{}, fmt.Errorf("buyer wallet not found for address %s", buyerAddress)
 	}
-	logger.LogWarn("Buy: GetUserWithWallet success",
-		zap.String("address", buyerAddress),
-		zap.Int("userID", user.ID),
-		zap.String("walletAddress", buyerWallet.UserAddress),
-	)
 
 	// create wallet if not exists
 	if buyerWallet.UserAddress == "" {
-		logger.LogWarn("Buy: wallet UserAddress empty, calling ensureWallet",
-			zap.String("address", buyerAddress),
-		)
 		_, err = s.ensureWallet(buyerAddress)
 		if err != nil {
 			return models.Transaction{}, fmt.Errorf("buyer wallet not found for address %s", buyerAddress)

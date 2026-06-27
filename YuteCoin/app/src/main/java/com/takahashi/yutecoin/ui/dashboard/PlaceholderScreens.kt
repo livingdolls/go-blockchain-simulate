@@ -132,6 +132,10 @@ private fun BuySellPlaceholder(type: String) {
         )
         Spacer(Modifier.height(8.dp))
         Text(
+            text = "Coming soon",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 

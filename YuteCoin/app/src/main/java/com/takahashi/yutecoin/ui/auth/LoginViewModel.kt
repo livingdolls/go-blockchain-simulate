@@ -139,7 +139,9 @@ class LoginViewModel(
                     val address = result.data as String
                     if (!isKeystore) {
                         val mnemonicWords = _state.value.mnemonicInput.trim().split("\\s+".toRegex())
+                        val wallet = WalletGenerator.walletFromMnemonic(mnemonicWords)
                         sessionManager.saveMnemonic(mnemonicWords, username)
+                        sessionManager.savePrivateKey(wallet.privateKeyHex)
                     }
                     sessionManager.saveAddress(address)
                     sessionManager.setLoggedIn(true)
@@ -172,6 +174,8 @@ class LoginViewModel(
 
             when (result) {
                 is NetworkResult.Success -> {
+                    val wallet = WalletGenerator.walletFromMnemonic(mnemonic)
+                    sessionManager.savePrivateKey(wallet.privateKeyHex)
                     sessionManager.saveAddress(result.data)
                     sessionManager.setLoggedIn(true)
                     _state.value = _state.value.copy(isLoggedIn = true)

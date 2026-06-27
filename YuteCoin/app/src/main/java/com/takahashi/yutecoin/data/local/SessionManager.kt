@@ -64,6 +64,10 @@ class SessionManager(context: Context) {
         securePrefs.edit().putString(KEY_ADDRESS, address).apply()
     }
 
+    fun savePrivateKey(privateKeyHex: String) {
+        securePrefs.edit().putString(KEY_PRIVATE_KEY, privateKeyHex).apply()
+    }
+
     fun setLoggedIn(loggedIn: Boolean) {
         securePrefs.edit().putBoolean(KEY_IS_LOGGED_IN, loggedIn).apply()
     }

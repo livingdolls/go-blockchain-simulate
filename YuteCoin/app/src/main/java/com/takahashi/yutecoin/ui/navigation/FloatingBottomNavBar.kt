@@ -61,57 +61,67 @@ fun FloatingBottomNavBar(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         if (showMenu) {
-            Surface(
+            Column(
                 modifier = Modifier
-                    .padding(horizontal = 32.dp),
-                shape = RoundedCornerShape(16.dp),
-                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
-                shadowElevation = 8.dp,
-                tonalElevation = 4.dp
+                    .fillMaxWidth()
+                    .padding(end = 24.dp),
+                horizontalAlignment = Alignment.End
             ) {
-                Column(
-                    modifier = Modifier.padding(12.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+                    shadowElevation = 8.dp,
+                    tonalElevation = 4.dp
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = "Theme",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        ThemeToggle(
-                            themeManager = themeManager,
-                            revealController = revealController,
-                            rootSize = rootSize,
-                            modifier = Modifier.padding(4.dp)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(4.dp))
-
-                    Surface(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                showMenu = false
-                                onLogout()
-                            },
-                        shape = RoundedCornerShape(10.dp),
-                        color = Color.Transparent
+                    Column(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
                     ) {
-                        Text(
-                            text = "Logout",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.error,
-                            fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = "Theme",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            ThemeToggle(
+                                themeManager = themeManager,
+                                revealController = revealController,
+                                rootSize = rootSize,
+                                modifier = Modifier.padding(4.dp)
+                            )
+                        }
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable {
+                                    showMenu = false
+                                    onLogout()
+                                }
+                                .padding(vertical = 6.dp)
+                        ) {
+                            Text(
+                                text = "Logout",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.error,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
                     }
                 }
-            }
 
-            Spacer(modifier = Modifier.height(4.dp))
+                // Arrow pointing down
+                Text(
+                    text = "\u25BC",
+                    fontSize = 10.sp,
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+                    modifier = Modifier.padding(end = 14.dp)
+                )
+            }
         }
 
         Row(

@@ -69,7 +69,7 @@ fun ThemeRevealOverlay(
         ) {
             drawRect(
                 color = targetColor,
-                size = size
+                size = this.size
             )
             drawCircle(
                 color = targetColor.copy(alpha = 0f),

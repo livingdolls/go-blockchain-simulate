@@ -112,11 +112,11 @@ func (r *userRepository) GetByAddressWithBalance(address string) (models.UserWit
 		us.name,
 		us.address,
 		us.public_key,
-		us.role,
-		COALESCE(ub.yte_balance, 0)  AS yte_balance,
+		COALESCE(uw.yte_balance, 0)  AS yte_balance,
 		COALESCE(ub.usd_balance, 0)  AS usd_balance
 	FROM users us
-	LEFT JOIN user_balances ub ON ub.user_id = us.id
+	LEFT JOIN user_wallets uw ON uw.user_address = us.address
+	LEFT JOIN user_balances ub ON ub.user_address = us.address
 	WHERE us.address = ?
 	LIMIT 1
 	`

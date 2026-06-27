@@ -136,10 +136,12 @@ class LoginViewModel(
 
             when (result) {
                 is NetworkResult.Success<*> -> {
+                    val address = result.data as String
                     if (!isKeystore) {
                         val mnemonicWords = _state.value.mnemonicInput.trim().split("\\s+".toRegex())
                         sessionManager.saveMnemonic(mnemonicWords, username)
                     }
+                    sessionManager.saveAddress(address)
                     sessionManager.setLoggedIn(true)
                     _state.value = _state.value.copy(isLoggedIn = true)
                     _events.send(LoginEvent.NavigateHome)
@@ -170,6 +172,7 @@ class LoginViewModel(
 
             when (result) {
                 is NetworkResult.Success -> {
+                    sessionManager.saveAddress(result.data)
                     sessionManager.setLoggedIn(true)
                     _state.value = _state.value.copy(isLoggedIn = true)
                     _events.send(LoginEvent.NavigateHome)

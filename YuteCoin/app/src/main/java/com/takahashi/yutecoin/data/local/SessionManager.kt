@@ -60,6 +60,10 @@ class SessionManager(context: Context) {
 
     fun isLoggedIn(): Boolean = securePrefs.getBoolean(KEY_IS_LOGGED_IN, false)
 
+    fun saveAddress(address: String) {
+        securePrefs.edit().putString(KEY_ADDRESS, address).apply()
+    }
+
     fun setLoggedIn(loggedIn: Boolean) {
         securePrefs.edit().putBoolean(KEY_IS_LOGGED_IN, loggedIn).apply()
     }

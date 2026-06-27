@@ -31,6 +31,7 @@ object RetrofitClient {
         .build()
 
     val authApi: AuthApi = retrofit.create(AuthApi::class.java)
+    val balanceApi: BalanceApi = retrofit.create(BalanceApi::class.java)
 
     fun clearSession() {
         cookieJar.clear()

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/livingdolls/go-blockchain-simulate/app/dto"
 	"github.com/livingdolls/go-blockchain-simulate/app/entity"
@@ -40,7 +41,7 @@ func NewBalanceService(users repository.UserRepository, tx repository.Transactio
 }
 
 func (s *balanceService) GetBalance(address string) (models.User, error) {
-	user, err := s.users.GetByAddress(address)
+	user, err := s.users.GetByAddress(strings.ToLower(address))
 	if err != nil {
 		return models.User{}, errors.New("address not found")
 	}
@@ -48,6 +49,7 @@ func (s *balanceService) GetBalance(address string) (models.User, error) {
 }
 
 func (s *balanceService) GetWalletBalance(filter models.TransactionFilter) (models.WalletResponse, error) {
+	filter.Address = strings.ToLower(filter.Address)
 	user, err := s.users.GetByAddress(filter.Address)
 	if err != nil {
 		return models.WalletResponse{}, errors.New("address not found")
@@ -68,6 +70,7 @@ func (s *balanceService) GetWalletBalance(filter models.TransactionFilter) (mode
 }
 
 func (s *balanceService) TopUpUSDBalance(address string, amount float64, referenceID, description string) (dto.TopUpResultDTO, error) {
+	address = strings.ToLower(address)
 	if address == "" {
 		return dto.TopUpResultDTO{}, entity.ErrAddressNotFound
 	}
@@ -186,13 +189,18 @@ func (s *balanceService) TopUpUSDBalance(address string, amount float64, referen
 }
 
 func (s *balanceService) GetUserWithUSDBalance(address string) (dto.DTOUserWithBalance, error) {
+	original := address
+	address = strings.ToLower(address)
 	if address == "" {
 		return dto.DTOUserWithBalance{}, entity.ErrAddressNotFound
 	}
 
+	logger.LogInfo("GetUserWithUSDBalance", zap.String("original", original), zap.String("lowered", address))
+
 	user, err := s.users.GetByAddressWithBalance(address)
 
 	if err != nil {
+		logger.LogWarn("GetUserWithUSDBalance: user not found", zap.String("address", address), zap.Error(err))
 		return dto.DTOUserWithBalance{}, entity.ErrAddressNotFound
 	}
 

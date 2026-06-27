@@ -1,6 +1,5 @@
 package com.takahashi.yutecoin.ui.dashboard
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -26,19 +25,23 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.patrykandpatrick.vico.compose.cartesian.CartesianChartHost
+import com.patrykandpatrick.vico.compose.cartesian.axis.rememberBottomAxis
+import com.patrykandpatrick.vico.compose.cartesian.axis.rememberStartAxis
+import com.patrykandpatrick.vico.compose.cartesian.layer.rememberCandlestickCartesianLayer
+import com.patrykandpatrick.vico.compose.cartesian.rememberCartesianChart
+import com.patrykandpatrick.vico.core.cartesian.data.CartesianChartModelProducer
+import com.patrykandpatrick.vico.core.cartesian.data.candlestickSeries
 import com.takahashi.yutecoin.data.dto.CandleResponse
 import org.koin.androidx.compose.koinViewModel
 
@@ -88,7 +91,7 @@ fun HomeScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp)
-                            .height(160.dp)
+                            .height(220.dp)
                     )
                 } else if (uiState.isLoadingMarket) {
                     Box(
@@ -306,25 +309,36 @@ private fun CandleChart(
     isLiveConnected: Boolean = false,
     modifier: Modifier = Modifier
 ) {
-    val closes = candles.map { it.closePrice }
-    val minPrice = closes.minOrNull() ?: 0.0
-    val maxPrice = closes.maxOrNull() ?: 1.0
-    val range = if (maxPrice - minPrice < 0.0001) 1.0 else maxPrice - minPrice
-    val lineColor = if (closes.lastOrNull() ?: 0.0 >= (closes.firstOrNull() ?: 0.0))
-        Color(0xFF4CAF50) else Color(0xFFFF5722)
+    val modelProducer = remember { CartesianChartModelProducer() }
+
+    LaunchedEffect(candles) {
+        modelProducer.runTransaction {
+            candlestickSeries {
+                candles.forEach { candle ->
+                    candle(
+                        x = candle.startTime.toFloat(),
+                        open = candle.openPrice.toFloat(),
+                        low = candle.lowPrice.toFloat(),
+                        high = candle.highPrice.toFloat(),
+                        close = candle.closePrice.toFloat()
+                    )
+                }
+            }
+        }
+    }
 
     Card(
         modifier = modifier,
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = Color.Transparent)
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
+        Column(modifier = Modifier.padding(8.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Price Chart",
+                    text = "YTE Price",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.weight(1f)
@@ -345,71 +359,18 @@ private fun CandleChart(
                     )
                 }
             }
-            Spacer(modifier = Modifier.height(8.dp))
-            Canvas(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(120.dp)
-            ) {
-                val canvasWidth = size.width
-                val canvasHeight = size.height
-                val padding = 8f
-                val chartWidth = canvasWidth - padding * 2
-                val chartHeight = canvasHeight - padding * 2
-                val stepX = if (candles.size > 1) chartWidth / (candles.size - 1) else chartWidth
 
-                val points = candles.mapIndexed { index, candle ->
-                    val x = padding + index * stepX
-                    val y = padding + chartHeight - ((candle.closePrice - minPrice) / range * chartHeight).toFloat()
-                    Offset(x, y)
-                }
+            Spacer(modifier = Modifier.height(4.dp))
 
-                if (points.size >= 2) {
-                    val fillPath = Path().apply {
-                        moveTo(points.first().x, canvasHeight)
-                        points.forEach { lineTo(it.x, it.y) }
-                        lineTo(points.last().x, canvasHeight)
-                        close()
-                    }
-
-                    drawPath(
-                        path = fillPath,
-                        brush = Brush.verticalGradient(
-                            colors = listOf(lineColor.copy(alpha = 0.25f), lineColor.copy(alpha = 0.0f))
-                        )
-                    )
-
-                    for (i in 0 until points.size - 1) {
-                        drawLine(
-                            color = lineColor,
-                            start = points[i],
-                            end = points[i + 1],
-                            strokeWidth = 2.5f,
-                            cap = StrokeCap.Round
-                        )
-                    }
-                }
-            }
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = "$${formatPrice(minPrice)}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 9.sp
-                )
-                Text(
-                    text = "$${formatPrice(maxPrice)}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 9.sp
-                )
-            }
+            CartesianChartHost(
+                chart = rememberCartesianChart(
+                    rememberCandlestickCartesianLayer(),
+                    startAxis = rememberStartAxis(),
+                    bottomAxis = rememberBottomAxis()
+                ),
+                modelProducer = modelProducer,
+                modifier = Modifier.fillMaxSize()
+            )
         }
     }
 }

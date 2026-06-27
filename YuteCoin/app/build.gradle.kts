@@ -91,6 +91,9 @@ dependencies {
     // Coroutines
     implementation(libs.coroutines)
 
+    // Chart (Vico)
+    implementation(libs.vico.compose.m3)
+
     // Test
     testImplementation(libs.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))

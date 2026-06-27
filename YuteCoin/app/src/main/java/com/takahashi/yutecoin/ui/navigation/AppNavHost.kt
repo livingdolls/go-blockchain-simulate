@@ -19,7 +19,6 @@ fun AppNavHost(
     themeManager: ThemeManager,
     revealController: RevealController,
     rootSize: IntSize,
-    isDarkMode: Boolean,
     navController: NavHostController = rememberNavController()
 ) {
     val startDestination = if (sessionManager.isLoggedIn()) {

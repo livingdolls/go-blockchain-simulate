@@ -20,8 +20,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.takahashi.yutecoin.data.local.ThemeManager
+import com.takahashi.yutecoin.ui.theme.RevealController
+import com.takahashi.yutecoin.ui.theme.ThemeToggle
 
 enum class BottomTab(
     val label: String,
@@ -37,6 +41,9 @@ enum class BottomTab(
 fun FloatingBottomNavBar(
     currentTab: BottomTab,
     onTabSelected: (BottomTab) -> Unit,
+    themeManager: ThemeManager,
+    revealController: RevealController,
+    rootSize: IntSize,
     modifier: Modifier = Modifier
 ) {
     Row(
@@ -104,5 +111,11 @@ fun FloatingBottomNavBar(
                 }
             }
         }
+
+        ThemeToggle(
+            themeManager = themeManager,
+            revealController = revealController,
+            rootSize = rootSize
+        )
     }
 }

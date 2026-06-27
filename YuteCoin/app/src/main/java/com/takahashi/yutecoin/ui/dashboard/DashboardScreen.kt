@@ -30,7 +30,10 @@ fun DashboardScreen(
         bottomBar = {
             FloatingBottomNavBar(
                 currentTab = currentTab,
-                onTabSelected = { currentTab = it }
+                onTabSelected = { currentTab = it },
+                themeManager = themeManager,
+                revealController = revealController,
+                rootSize = rootSize
             )
         }
     ) { padding ->
@@ -40,12 +43,7 @@ fun DashboardScreen(
                 .padding(padding)
         ) {
             when (currentTab) {
-                BottomTab.HOME -> HomeScreen(
-                    themeManager = themeManager,
-                    revealController = revealController,
-                    rootSize = rootSize,
-                    onLogout = onLogout
-                )
+                BottomTab.HOME -> HomeScreen(onLogout = onLogout)
                 BottomTab.TRADE -> TradeScreen()
                 BottomTab.STAKING -> StakingScreen()
                 BottomTab.PORTFOLIO -> PortfolioScreen()

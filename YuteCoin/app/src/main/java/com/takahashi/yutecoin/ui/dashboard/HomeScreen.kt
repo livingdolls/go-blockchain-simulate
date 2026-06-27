@@ -33,17 +33,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.takahashi.yutecoin.data.local.ThemeManager
-import com.takahashi.yutecoin.ui.theme.RevealController
-import com.takahashi.yutecoin.ui.theme.ThemeToggle
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.koin.androidx.compose.koinViewModel
-import androidx.compose.ui.unit.IntSize
 
 @Composable
 fun HomeScreen(
-    themeManager: ThemeManager,
-    revealController: RevealController,
-    rootSize: IntSize,
     onLogout: () -> Unit,
     viewModel: HomeViewModel = koinViewModel()
 ) {
@@ -63,10 +57,7 @@ fun HomeScreen(
                 onLogout = {
                     viewModel.logout()
                     onLogout()
-                },
-                themeManager = themeManager,
-                revealController = revealController,
-                rootSize = rootSize
+                }
             )
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -180,10 +171,7 @@ fun HomeScreen(
 private fun TopBar(
     name: String,
     onRefresh: () -> Unit,
-    onLogout: () -> Unit,
-    themeManager: ThemeManager,
-    revealController: RevealController,
-    rootSize: IntSize
+    onLogout: () -> Unit
 ) {
     Row(
         modifier = Modifier
@@ -191,19 +179,21 @@ private fun TopBar(
             .padding(horizontal = 20.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(
-            modifier = Modifier
-                .size(40.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = name.firstOrNull()?.uppercase() ?: "?",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
-            )
+        IconButton(onClick = onLogout) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = name.firstOrNull()?.uppercase() ?: "?",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
         }
 
         Spacer(modifier = Modifier.width(12.dp))
@@ -227,20 +217,6 @@ private fun TopBar(
                 text = "\u27F3",
                 style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-
-        ThemeToggle(
-            themeManager = themeManager,
-            revealController = revealController,
-            rootSize = rootSize
-        )
-
-        IconButton(onClick = onLogout) {
-            Text(
-                text = "Exit",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.error
             )
         }
     }

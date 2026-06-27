@@ -50,8 +50,7 @@ class MainActivity : ComponentActivity() {
                             sessionManager = sessionManager,
                             themeManager = themeManager,
                             revealController = revealController,
-                            rootSize = rootSize,
-                            isDarkMode = isDarkMode
+                            rootSize = rootSize
                         )
                     }
                 }

@@ -9,13 +9,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.takahashi.yutecoin.data.local.ThemeManager
 import com.takahashi.yutecoin.ui.navigation.BottomTab
 import com.takahashi.yutecoin.ui.navigation.FloatingBottomNavBar
 
 @Composable
 fun DashboardScreen(
+    themeManager: ThemeManager,
     onLogout: () -> Unit
 ) {
     var currentTab by remember { mutableStateOf(BottomTab.HOME) }
@@ -35,7 +36,10 @@ fun DashboardScreen(
                 .padding(padding)
         ) {
             when (currentTab) {
-                BottomTab.HOME -> HomeScreen(onLogout = onLogout)
+                BottomTab.HOME -> HomeScreen(
+                    themeManager = themeManager,
+                    onLogout = onLogout
+                )
                 BottomTab.TRADE -> TradeScreen()
                 BottomTab.STAKING -> StakingScreen()
                 BottomTab.PORTFOLIO -> PortfolioScreen()

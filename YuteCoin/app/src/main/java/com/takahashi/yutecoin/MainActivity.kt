@@ -22,7 +22,10 @@ class MainActivity : ComponentActivity() {
             val isDarkMode by themeManager.isDarkMode.collectAsState(initial = false)
 
             YuteCoinTheme(darkTheme = isDarkMode) {
-                AppNavHost(sessionManager = sessionManager)
+                AppNavHost(
+                    sessionManager = sessionManager,
+                    themeManager = themeManager
+                )
             }
         }
     }

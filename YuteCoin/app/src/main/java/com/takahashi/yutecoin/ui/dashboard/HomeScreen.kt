@@ -33,11 +33,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.takahashi.yutecoin.data.local.ThemeManager
 import com.takahashi.yutecoin.ui.theme.ThemeToggle
 import org.koin.androidx.compose.koinViewModel
 
 @Composable
 fun HomeScreen(
+    themeManager: ThemeManager,
     onLogout: () -> Unit,
     viewModel: HomeViewModel = koinViewModel()
 ) {
@@ -57,7 +59,8 @@ fun HomeScreen(
                 onLogout = {
                     viewModel.logout()
                     onLogout()
-                }
+                },
+                themeManager = themeManager
             )
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -171,7 +174,8 @@ fun HomeScreen(
 private fun TopBar(
     name: String,
     onRefresh: () -> Unit,
-    onLogout: () -> Unit
+    onLogout: () -> Unit,
+    themeManager: ThemeManager
 ) {
     Row(
         modifier = Modifier
@@ -218,7 +222,7 @@ private fun TopBar(
             )
         }
 
-        ThemeToggle()
+        ThemeToggle(themeManager = themeManager)
 
         IconButton(onClick = onLogout) {
             Text(

@@ -361,19 +361,18 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 		return models.Block{}, fmt.Errorf("bulk mark confirmed: %w", err)
 	}
 
-	// Bulk update user balances (1 query instead of N)
-	// Miner TIDAK di-exclude: miner juga menerima YTE fee dari setiap
-	// transaksi. Sebelumnya miner di-skip dengan alasan "miner menerima
-	// reward via RabbitMQ", tapi itu hanya untuk block reward (YTE).
-	// YTE fee yang terakumulasi di currentBalances perlu di-flush ke DB.
-	walletUpdates := make(map[string]float64)
+	// Bulk update user balances using individual UPDATEs
+	// Sebelumnya pakai CASE WHEN yang bisa gagal di edge case
+	// (sqlx.In expansion dengan args kompleks).
 	for addr, bal := range currentBalances {
-		walletUpdates[addr] = bal
-	}
-
-	err = s.walletRepo.BulkUpdateBalancesWithTx(tx, walletUpdates)
-	if err != nil {
-		return models.Block{}, fmt.Errorf("bulk update balances: %w", err)
+		logger.LogWarn("Block: updating wallet balance",
+			zap.String("address", addr),
+			zap.Float64("new_balance", bal),
+		)
+		err = s.walletRepo.UpdateWalletWithTx(tx, addr, bal)
+		if err != nil {
+			return models.Block{}, fmt.Errorf("update wallet %s: %w", addr, err)
+		}
 	}
 
 	// Process USD Balance Updates For BUY and SELL tx

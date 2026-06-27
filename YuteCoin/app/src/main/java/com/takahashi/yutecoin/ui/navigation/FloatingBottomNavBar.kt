@@ -59,28 +59,27 @@ fun FloatingBottomNavBar(
         if (showMenu) {
             Column(
                 modifier = Modifier
-                    .padding(end = 24.dp, bottom = 2.dp)
-                    .clip(RoundedCornerShape(14.dp))
+                    .padding(end = 24.dp, bottom = 4.dp)
+                    .clip(RoundedCornerShape(12.dp))
                     .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.95f))
-                    .border(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f), RoundedCornerShape(14.dp))
-                    .padding(horizontal = 14.dp, vertical = 8.dp)
+                    .border(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
+                    .padding(horizontal = 10.dp, vertical = 6.dp)
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 2.dp)) {
                     Text("Theme", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Spacer(Modifier.width(10.dp))
-                    ThemeToggle(themeManager, revealController, rootSize, Modifier.padding(4.dp))
+                    Spacer(Modifier.width(8.dp))
+                    ThemeToggle(themeManager, revealController, rootSize)
                 }
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f), thickness = 0.5.dp)
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
                         .clickable { showMenu = false; onLogout() }
-                        .padding(vertical = 6.dp)
+                        .padding(vertical = 4.dp)
                 ) {
-                    Text("Logout", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.SemiBold)
+                    Text("Logout", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.SemiBold)
                 }
             }
-            Text("\u25BC", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f), modifier = Modifier.padding(end = 30.dp))
         }
 
         Row(

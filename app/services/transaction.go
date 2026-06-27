@@ -78,34 +78,37 @@ func (s *transactionService) SendWithSignature(ctx context.Context, fromAddress,
 		return models.Transaction{}, fmt.Errorf("amount must be greater than zero")
 	}
 
-	if fromAddress == toAddress {
+	from := strings.ToLower(strings.TrimSpace(fromAddress))
+	to := strings.ToLower(strings.TrimSpace(toAddress))
+
+	if from == to {
 		return models.Transaction{}, fmt.Errorf("cannot send to the same address")
 	}
 
 	// verify signature
-	if err := s.txVerify.VerifyTransactionSignature(ctx, fromAddress, toAddress, amount, nonce, signature); err != nil {
+	if err := s.txVerify.VerifyTransactionSignature(ctx, from, to, amount, nonce, signature); err != nil {
 		return models.Transaction{}, fmt.Errorf("signature verification failed: %w", err)
 	}
 
 	// get sender and receiver
-	senderWallet, err := s.ensureWallet(fromAddress)
+	senderWallet, err := s.ensureWallet(from)
 	if err != nil {
-		return models.Transaction{}, fmt.Errorf("sender wallet not found for address %s", fromAddress)
+		return models.Transaction{}, fmt.Errorf("sender wallet not found for address %s", from)
 	}
 
 	// ensure user and wallet exists for receiver
-	_, receiverWallet, err := s.users.GetUserWithWallet(toAddress)
+	_, receiverWallet, err := s.users.GetUserWithWallet(to)
 	if err != nil {
 		return models.Transaction{}, fmt.Errorf("receiver not found")
 	}
 
 	if receiverWallet.UserAddress == "" {
-		_, err = s.ensureWallet(toAddress)
+		_, err = s.ensureWallet(to)
 		if err != nil {
 			return models.Transaction{}, fmt.Errorf("failed to create receiver wallet: %w", err)
 		}
 		// Refetch receiver wallet after creation to validate
-		_, receiverWallet, err = s.users.GetUserWithWallet(toAddress)
+		_, receiverWallet, err = s.users.GetUserWithWallet(to)
 		if err != nil {
 			return models.Transaction{}, fmt.Errorf("failed to retrieve receiver wallet: %w", err)
 		}
@@ -124,7 +127,7 @@ func (s *transactionService) SendWithSignature(ctx context.Context, fromAddress,
 	}
 
 	// check pending transactions from sender to prevent double spending
-	pendingAmount, err := s.txs.GetPendingTransactionsByAddress(fromAddress)
+	pendingAmount, err := s.txs.GetPendingTransactionsByAddress(from)
 	if err == nil && pendingAmount > 0 {
 		availableBalance := senderWallet.YTEBalance - pendingAmount
 		if availableBalance < totalRequired {
@@ -133,8 +136,8 @@ func (s *transactionService) SendWithSignature(ctx context.Context, fromAddress,
 	}
 
 	tx := models.Transaction{
-		FromAddress: fromAddress,
-		ToAddress:   toAddress,
+		FromAddress: from,
+		ToAddress:   to,
 		Amount:      amount,
 		Fee:         fee,
 		Type:        "TRANSFER",
@@ -182,7 +185,7 @@ func (s *transactionService) Buy(ctx context.Context, address, signature, nonce 
 	}
 
 	//sistem sebagai penjual adalah address MinerAccountAddress
-	buyerAddress := address
+	buyerAddress := strings.ToLower(address)
 	sellerAddress := entity.MinerAccountAddress
 
 	// ensure buyer wallet exists
@@ -266,7 +269,7 @@ func (s *transactionService) Sell(ctx context.Context, address, nonce, signature
 	}
 
 	//sistem sebagai pembeli adalah address MinerAccountAddress
-	sellerAddress := address
+	sellerAddress := strings.ToLower(address)
 	buyerAddress := entity.MinerAccountAddress
 
 	// verify user exists

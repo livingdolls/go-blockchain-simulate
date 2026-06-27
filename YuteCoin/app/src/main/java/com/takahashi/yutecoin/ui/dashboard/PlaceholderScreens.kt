@@ -18,7 +18,7 @@ import androidx.compose.ui.unit.dp
 
 @Composable
 fun TradeScreen() {
-    PlaceholderScreen("Trade", "Buy & Sell YTE")
+    SendScreen()
 }
 
 @Composable

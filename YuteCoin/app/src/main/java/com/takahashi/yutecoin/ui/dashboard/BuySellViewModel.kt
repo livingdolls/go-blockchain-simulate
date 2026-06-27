@@ -155,6 +155,7 @@ class BuySellViewModel(
                             successMessage = "$type submitted!",
                             amount = ""
                         )
+                        loadBalances()
                     }
                     is NetworkResult.Error -> {
                         _state.value = _state.value.copy(isSubmitting = false, error = result.message)

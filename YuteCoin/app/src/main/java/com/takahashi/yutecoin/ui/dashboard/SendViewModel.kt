@@ -160,6 +160,7 @@ class SendViewModel(
                             amount = "",
                             yteBalance = balance - totalRequired
                         )
+                        loadBalance()
                     }
                     is NetworkResult.Error -> {
                         _state.value = _state.value.copy(isSubmitting = false, error = sendResult.message)

@@ -53,7 +53,7 @@ fun CandleStickChartView(
                     setDrawBorders(false)
                     setMaxVisibleValueCount(0)
                     setPinchZoom(true)
-                    isAutoScaleMinMaxEnabled = true
+                    isAutoScaleMinMaxEnabled = false
                     setScaleEnabled(true)
                     setExtraOffsets(4f, 0f, 4f, 12f)
 
@@ -93,6 +93,8 @@ fun CandleStickChartView(
                     )
                 }
 
+                if (entries.isEmpty()) return@AndroidView
+
                 val dataSet = CandleDataSet(entries, "YTE").apply {
                     setDrawIcons(false)
                     axisDependency = YAxis.AxisDependency.LEFT
@@ -109,6 +111,16 @@ fun CandleStickChartView(
 
                 chart.data = CandleData(dataSet)
                 chart.notifyDataSetChanged()
+
+                val minPrice = candles.minOf { it.lowPrice }
+                val maxPrice = candles.maxOf { it.highPrice }
+                val range = (maxPrice - minPrice).coerceAtLeast(0.004)
+                val padding = range * 0.2
+                chart.axisLeft.apply {
+                    axisMinimum = (minPrice - padding).toFloat()
+                    axisMaximum = (maxPrice + padding).toFloat()
+                }
+
                 chart.setVisibleXRangeMaximum(30f)
                 chart.moveViewToX(candles.size.toFloat())
                 chart.invalidate()

@@ -260,6 +260,10 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 	currentWallets := make(map[string]models.UserWallet)
 	for _, w := range lockedWallets {
 		currentWallets[w.UserAddress] = w
+		logger.LogWarn("Block: locked wallet",
+			zap.String("address", w.UserAddress),
+			zap.Float64("yte_balance", w.YTEBalance),
+		)
 	}
 
 	currentBalances := make(map[string]float64)
@@ -270,6 +274,7 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 			currentBalances[addr] = 0
 		}
 	}
+	logger.LogWarn("Block: initial balances", zap.Any("balances", currentBalances))
 
 	// verify miner address
 	if _, exists := currentBalances[entity.MinerAccountAddress]; !exists {

@@ -99,8 +99,8 @@ fun FloatingBottomNavBar(
                 val fg by animateColorAsState(if (sel) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f), label = "fg")
                 val bg by animateColorAsState(if (sel) MaterialTheme.colorScheme.primary.copy(alpha = 0.9f) else Color.Transparent, label = "bg")
                 Row(
-                    Modifier.clip(RoundedCornerShape(18.dp)).background(bg).selectable(sel) { onTabSelected(tab) }.padding(horizontal = if (sel) 12.dp else 10.dp, vertical = 8.dp),
-                    Alignment.CenterVertically
+                    modifier = Modifier.clip(RoundedCornerShape(18.dp)).background(bg).selectable(sel) { onTabSelected(tab) }.padding(horizontal = if (sel) 12.dp else 10.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(tab.unicodeIcon, fontSize = if (sel) 14.sp else 18.sp, color = fg)
                     if (sel) { Spacer(Modifier.width(5.dp)); Text(tab.label, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = fg, fontSize = 11.sp) }
@@ -108,8 +108,8 @@ fun FloatingBottomNavBar(
             }
 
             Row(
-                Modifier.clip(RoundedCornerShape(18.dp)).selectable(showMenu) { showMenu = !showMenu }.padding(horizontal = 10.dp, vertical = 8.dp),
-                Alignment.CenterVertically
+                modifier = Modifier.clip(RoundedCornerShape(18.dp)).selectable(showMenu) { showMenu = !showMenu }.padding(horizontal = 10.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Text("\u22EE", fontSize = 18.sp, color = if (showMenu) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
             }

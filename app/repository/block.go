@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"time"
 
@@ -39,15 +40,7 @@ func NewBlockRepository(db *sqlx.DB) BlockRepository {
 }
 
 func (b *blockRepository) BeginTx() (*sqlx.Tx, error) {
-	tx, err := b.db.Beginx()
-	if err != nil {
-		return nil, err
-	}
-	if _, err := tx.Exec("SET TRANSACTION ISOLATION LEVEL READ COMMITTED"); err != nil {
-		tx.Rollback()
-		return nil, fmt.Errorf("set isolation level: %w", err)
-	}
-	return tx, nil
+	return b.db.BeginTxx(context.Background(), &sql.TxOptions{Isolation: sql.LevelReadCommitted})
 }
 
 // CreateWithTx implements BlockRepository.

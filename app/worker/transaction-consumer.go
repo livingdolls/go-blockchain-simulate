@@ -149,8 +149,8 @@ func (tc *TransactionConsumer) Start(ctx context.Context) error {
 			_, err = tc.txService.Sell(
 				ctx,
 				msg.Address,
-				msg.Signature,
 				msg.Nonce,
+				msg.Signature,
 				msg.Amount,
 			)
 		default:

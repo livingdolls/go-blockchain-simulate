@@ -129,6 +129,9 @@ class BuySellViewModel(
 
         _state.value = _state.value.copy(isSubmitting = true, error = null)
 
+        val preBuyYte = _state.value.yteBalance
+        val preBuyUsd = _state.value.usdBalance
+
         viewModelScope.launch {
             try {
                 val nonceResult = sendRepository.generateNonce(address)
@@ -153,8 +156,11 @@ class BuySellViewModel(
                         _state.value = _state.value.copy(
                             isSubmitting = false,
                             successMessage = "$type submitted!",
-                            amount = ""
+                            amount = "",
+                            yteBalance = if (type == "BUY") preBuyYte + amount else preBuyYte - totalRequired,
+                            usdBalance = if (type == "BUY") preBuyUsd - totalRequired else preBuyUsd + amount
                         )
+                        kotlinx.coroutines.delay(3000)
                         loadBalances()
                     }
                     is NetworkResult.Error -> {

@@ -111,31 +111,9 @@ fun TradeScreen() {
 
         when (activeTab) {
             TradeTab.SEND -> SendScreen()
-            TradeTab.BUY -> BuySellPlaceholder("Buy")
-            TradeTab.SELL -> BuySellPlaceholder("Sell")
+            TradeTab.BUY -> BuyScreen()
+            TradeTab.SELL -> SellScreen()
         }
-    }
-}
-
-@Composable
-private fun BuySellPlaceholder(type: String) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(
-            text = "$type YTE",
-            style = MaterialTheme.typography.headlineSmall,
-            color = MaterialTheme.colorScheme.primary
-        )
-        Spacer(Modifier.height(8.dp))
-        Text(
-            text = "Coming soon",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
     }
 }
 

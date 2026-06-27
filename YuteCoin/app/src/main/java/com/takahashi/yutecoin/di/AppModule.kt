@@ -11,6 +11,7 @@ import com.takahashi.yutecoin.data.service.CandleStreamService
 import com.takahashi.yutecoin.ui.auth.LoginViewModel
 import com.takahashi.yutecoin.ui.auth.RegisterViewModel
 import com.takahashi.yutecoin.ui.dashboard.HomeViewModel
+import com.takahashi.yutecoin.ui.dashboard.BuySellViewModel
 import com.takahashi.yutecoin.ui.dashboard.SendViewModel
 import org.koin.android.ext.koin.androidApplication
 import org.koin.android.ext.koin.androidContext
@@ -30,4 +31,5 @@ val appModule = module {
     viewModel { RegisterViewModel(androidApplication(), get(), get()) }
     viewModel { HomeViewModel(androidApplication(), get(), get(), get(), get()) }
     viewModel { SendViewModel(get(), get(), get()) }
+    viewModel { BuySellViewModel(get(), get(), get()) }
 }

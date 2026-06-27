@@ -17,3 +17,10 @@ data class SendRequest(
 data class SendResponse(
     @SerializedName("message") val message: String
 )
+
+data class BuySellRequest(
+    @SerializedName("address") val address: String,
+    @SerializedName("amount") val amount: Double,
+    @SerializedName("nonce") val nonce: String,
+    @SerializedName("signature") val signature: String
+)

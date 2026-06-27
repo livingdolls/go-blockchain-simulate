@@ -118,7 +118,7 @@ class SendViewModel(
                     is NetworkResult.Success -> {
                         _state.value = _state.value.copy(
                             isSubmitting = false,
-                            successMessage = "Sent ${"%.4f".format(amount)} YTE!",
+                            successMessage = "Transaction submitted!",
                             toAddress = "",
                             amount = ""
                         )

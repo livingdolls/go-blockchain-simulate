@@ -24,7 +24,7 @@ android {
         //   Emulator: "http://10.0.2.2:3010/"
         //   Physical device + adb reverse: "http://127.0.0.1:3010/"
         //   Physical device + LAN: "http://<LAN_IP>:3010/"
-        buildConfigField("String", "API_BASE_URL", "\"http://127.0.0.1:3010/\"")
+        buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:3010/\"")
     }
 
     buildTypes {

@@ -14,6 +14,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.IntSize
@@ -58,15 +60,22 @@ fun ThemeRevealOverlay(
 
     val r = animRadius.value
     if (!isDone && r > 1f) {
+        val targetColor = if (controller.targetDark) Color(0xFF1C1B1F) else Color(0xFFFFFBFE)
+
         Canvas(
             modifier = Modifier
                 .fillMaxSize()
                 .onSizeChanged { size = it }
         ) {
+            drawRect(
+                color = targetColor,
+                size = size
+            )
             drawCircle(
-                color = if (controller.targetDark) Color(0xFF1C1B1F) else Color(0xFFFFFBFE),
+                color = targetColor.copy(alpha = 0f),
                 radius = r,
-                center = controller.center
+                center = controller.center,
+                blendMode = BlendMode.Clear
             )
         }
     }

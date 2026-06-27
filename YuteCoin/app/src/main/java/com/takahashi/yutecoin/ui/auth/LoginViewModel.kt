@@ -4,6 +4,7 @@ import android.app.Application
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.takahashi.yutecoin.crypto.KeystoreUtil
 import com.takahashi.yutecoin.crypto.WalletGenerator
 import com.takahashi.yutecoin.data.dto.NetworkResult
 import com.takahashi.yutecoin.data.local.SessionManager
@@ -114,6 +115,7 @@ class LoginViewModel(
         val isKeystore = _state.value.useKeystore
         val password = _state.value.keystorePassword
         val uri = _state.value.keystoreFileUri
+        var keystoreContent: String? = null
 
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.Default) {
             val result: NetworkResult<String> = if (isKeystore) {
@@ -126,6 +128,7 @@ class LoginViewModel(
                     _state.value = _state.value.copy(isLoading = false, error = "Cannot read file: ${e.message}")
                     return@launch
                 }
+                keystoreContent = content
                 authRepository.loginWithKeystoreContent(content, password, username)
             } else {
                 val mnemonicWords = _state.value.mnemonicInput.trim().split("\\s+".toRegex())
@@ -141,6 +144,10 @@ class LoginViewModel(
                         val mnemonicWords = _state.value.mnemonicInput.trim().split("\\s+".toRegex())
                         val wallet = WalletGenerator.walletFromMnemonic(mnemonicWords)
                         sessionManager.saveMnemonic(mnemonicWords, username)
+                        sessionManager.savePrivateKey(wallet.privateKeyHex)
+                    } else {
+                        val content = keystoreContent ?: return@launch
+                        val wallet = KeystoreUtil.decryptKeystore(content, password)
                         sessionManager.savePrivateKey(wallet.privateKeyHex)
                     }
                     sessionManager.saveAddress(address)

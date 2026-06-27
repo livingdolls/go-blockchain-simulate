@@ -29,7 +29,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-private enum class TradeTab(val label: String) { SEND, BUY, SELL }
+private enum class TradeTab(val label: String) { SEND("Send"), BUY("Buy"), SELL("Sell") }
 
 @Composable
 fun TradeScreen() {

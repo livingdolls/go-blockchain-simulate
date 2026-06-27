@@ -8,7 +8,7 @@ data class WalletResponse(
 )
 
 data class TransactionListResponse(
-    @SerializedName("transactions") val transactions: List<TransactionItem>,
+    @SerializedName("transactions") val transactions: List<TransactionItem>?,
     @SerializedName("total") val total: Long,
     @SerializedName("page") val page: Int,
     @SerializedName("limit") val limit: Int,

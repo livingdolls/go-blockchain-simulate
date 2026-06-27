@@ -259,7 +259,7 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 	// build current wallet cache
 	currentWallets := make(map[string]models.UserWallet)
 	for _, w := range lockedWallets {
-		currentWallets[w.UserAddress] = w
+		currentWallets[strings.ToLower(w.UserAddress)] = w
 		logger.LogWarn("Block: locked wallet",
 			zap.String("address", w.UserAddress),
 			zap.Float64("yte_balance", w.YTEBalance),
@@ -268,10 +268,11 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 
 	currentBalances := make(map[string]float64)
 	for _, addr := range addresses {
-		if wallet, exists := currentWallets[addr]; exists {
-			currentBalances[addr] = wallet.YTEBalance
+		lookupAddr := strings.ToLower(addr)
+		if wallet, exists := currentWallets[lookupAddr]; exists {
+			currentBalances[lookupAddr] = wallet.YTEBalance
 		} else {
-			currentBalances[addr] = 0
+			currentBalances[lookupAddr] = 0
 		}
 	}
 	logger.LogWarn("Block: initial balances", zap.Any("balances", currentBalances))
@@ -294,8 +295,10 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 	// Fix: update currentBalances langsung (running balance).
 	for _, t := range pendingTxs {
 		totalDeduction := t.Amount + t.Fee
-		currentBalances[t.FromAddress] -= totalDeduction
-		currentBalances[t.ToAddress] += t.Amount
+		from := strings.ToLower(t.FromAddress)
+		to := strings.ToLower(t.ToAddress)
+		currentBalances[from] -= totalDeduction
+		currentBalances[to] += t.Amount
 		currentBalances[entity.MinerAccountAddress] += t.Fee
 
 		totalFees += t.Fee
@@ -335,14 +338,14 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 				TxID:         txIDPtr,
 				Address:      t.FromAddress,
 				Amount:       -totalDeduction,
-				BalanceAfter: currentBalances[t.FromAddress],
+				BalanceAfter: currentBalances[strings.ToLower(t.FromAddress)],
 			},
 			repository.LedgerEntry{
 				BlockID:      blockID,
 				TxID:         txIDPtr,
 				Address:      t.ToAddress,
 				Amount:       t.Amount,
-				BalanceAfter: currentBalances[t.ToAddress],
+				BalanceAfter: currentBalances[strings.ToLower(t.ToAddress)],
 			},
 			repository.LedgerEntry{
 				BlockID:      blockID,
@@ -429,7 +432,7 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 
 	for _, t := range pendingTxs {
 		if strings.EqualFold(t.Type, "BUY") {
-			buyerAddr := t.ToAddress
+			buyerAddr := strings.ToLower(t.ToAddress)
 
 			// BUY: user membeli YTE dari sistem, membayar dalam USD.
 			// Harga = amount * market price (konsisten dengan SELL).
@@ -458,7 +461,7 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 			usdBalances[entity.MinerAccountAddress] = minerBalance
 
 		} else if strings.EqualFold(t.Type, "SELL") {
-			sellerAddr := t.FromAddress
+			sellerAddr := strings.ToLower(t.FromAddress)
 
 			// use market price to calculate USD received
 			usdAmount := t.Amount * currentMarket.Price

@@ -7,6 +7,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -52,9 +53,16 @@ class SseClient {
         val reader = BufferedReader(InputStreamReader(body.byteStream()))
         val currentData = StringBuilder()
 
+        awaitClose {
+            Log.d("SseClient", "SSE connection closed, cancelling call")
+            call.cancel()
+            try { reader.close() } catch (_: Exception) {}
+            try { response.close() } catch (_: Exception) {}
+        }
+
         try {
             var line: String?
-            while (reader.readLine().also { line = it } != null) {
+            while (isActive && reader.readLine().also { line = it } != null) {
                 val l = line ?: break
 
                 if (l.startsWith("data: ")) {
@@ -66,22 +74,23 @@ class SseClient {
                     if (json.isNotEmpty()) {
                         try {
                             val parsed = gson.fromJson(json, type)
-                            trySend(parsed)
+                            val result = trySend(parsed)
+                            if (result.isFailure) {
+                                Log.w("SseClient", "trySend failed, channel closed")
+                                return@callbackFlow
+                            }
                         } catch (e: Exception) {
                             Log.w("SseClient", "Failed to parse SSE data: $json", e)
                         }
                     }
                 }
             }
+            Log.d("SseClient", "SSE stream ended (eof)")
         } catch (e: Exception) {
             Log.e("SseClient", "SSE stream error", e)
-            close(e)
-            return@callbackFlow
         } finally {
-            reader.close()
-            response.close()
+            try { reader.close() } catch (_: Exception) {}
+            try { response.close() } catch (_: Exception) {}
         }
-
-        close()
     }
 }

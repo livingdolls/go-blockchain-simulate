@@ -1,6 +1,7 @@
 package com.takahashi.yutecoin.ui.dashboard
 
 import android.app.Application
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.takahashi.yutecoin.data.api.RetrofitClient
@@ -15,6 +16,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.retry
 import kotlinx.coroutines.launch
 
 data class HomeUiState(
@@ -108,9 +110,12 @@ class HomeViewModel(
             val candlesResult = marketRepository.getCandles("1m", 50)
             when (candlesResult) {
                 is NetworkResult.Success -> {
-                    _state.value = _state.value.copy(candles = candlesResult.data)
+                    val list = candlesResult.data
+                    Log.d("HomeVM", "REST candles loaded: ${list.size} items")
+                    _state.value = _state.value.copy(candles = list)
                 }
                 is NetworkResult.Error -> {
+                    Log.w("HomeVM", "REST candles failed: ${candlesResult.message}")
                     if (!hasError) {
                         hasError = true
                         errorMsg = candlesResult.message
@@ -124,9 +129,8 @@ class HomeViewModel(
                 error = if (hasError && _state.value.error == null) errorMsg else _state.value.error
             )
 
-            if (_state.value.candles.isNotEmpty()) {
-                startLiveCandles()
-            }
+            Log.d("HomeVM", "Market load done, candles=${_state.value.candles.size}, starting SSE")
+            startLiveCandles()
         }
     }
 
@@ -134,28 +138,38 @@ class HomeViewModel(
         candleStreamJob?.cancel()
         candleStreamJob = viewModelScope.launch {
             candleStreamService.streamCandles("1m")
+                .retry(3) { e ->
+                    Log.w("HomeVM", "SSE stream error, retrying: ${e.message}")
+                    _state.value = _state.value.copy(isLiveConnected = false)
+                    true
+                }
                 .catch { e ->
+                    Log.e("HomeVM", "SSE stream failed after retries: ${e.message}")
                     _state.value = _state.value.copy(isLiveConnected = false)
                 }
                 .collect { newCandle ->
-                    _state.value = _state.value.copy(isLiveConnected = true)
+                    try {
+                        _state.value = _state.value.copy(isLiveConnected = true)
 
-                    val current = _state.value.candles.toMutableList()
-                    val index = current.indexOfFirst {
-                        it.startTime == newCandle.startTime && it.intervalType == newCandle.intervalType
-                    }
-
-                    if (index != -1) {
-                        current[index] = newCandle
-                    } else {
-                        current.add(newCandle)
-                        current.sortBy { it.startTime }
-                        if (current.size > 50) {
-                            current.removeAt(0)
+                        val current = _state.value.candles.toMutableList()
+                        val index = current.indexOfFirst {
+                            it.startTime == newCandle.startTime && it.intervalType == newCandle.intervalType
                         }
-                    }
 
-                    _state.value = _state.value.copy(candles = current.toList())
+                        if (index != -1) {
+                            current[index] = newCandle
+                        } else {
+                            current.add(newCandle)
+                            current.sortBy { it.startTime }
+                            if (current.size > 50) {
+                                current.removeAt(0)
+                            }
+                        }
+
+                        _state.value = _state.value.copy(candles = current.toList())
+                    } catch (e: Exception) {
+                        Log.e("HomeVM", "Error merging SSE candle", e)
+                    }
                 }
         }
     }

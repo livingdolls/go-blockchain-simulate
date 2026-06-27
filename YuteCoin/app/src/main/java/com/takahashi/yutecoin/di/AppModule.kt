@@ -29,5 +29,5 @@ val appModule = module {
     viewModel { LoginViewModel(androidApplication(), get(), get()) }
     viewModel { RegisterViewModel(androidApplication(), get(), get()) }
     viewModel { HomeViewModel(androidApplication(), get(), get(), get(), get()) }
-    viewModel { SendViewModel(get(), get()) }
+    viewModel { SendViewModel(get(), get(), get()) }
 }

@@ -1,6 +1,8 @@
 package com.takahashi.yutecoin.ui.dashboard
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -19,6 +21,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -67,6 +70,25 @@ fun SendScreen(
             shape = RoundedCornerShape(12.dp),
             enabled = !uiState.isSubmitting
         )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = "Balance: ${"%.4f".format(uiState.yteBalance)} YTE",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            TextButton(
+                onClick = { viewModel.onAmountChange(uiState.yteBalance.toString()) },
+                enabled = !uiState.isSubmitting
+            ) {
+                Text("MAX", style = MaterialTheme.typography.labelSmall)
+            }
+        }
 
         Spacer(modifier = Modifier.height(12.dp))
 

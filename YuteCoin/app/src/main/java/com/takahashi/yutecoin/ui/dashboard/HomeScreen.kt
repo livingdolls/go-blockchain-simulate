@@ -33,6 +33,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.takahashi.yutecoin.ui.theme.ThemeToggle
 import org.koin.androidx.compose.koinViewModel
 
 @Composable
@@ -216,6 +217,8 @@ private fun TopBar(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
+
+        ThemeToggle()
 
         IconButton(onClick = onLogout) {
             Text(

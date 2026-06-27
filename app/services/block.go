@@ -145,7 +145,7 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 	// Build user cache
 	userCache := make(map[string]models.User)
 	for _, u := range users {
-		userCache[u.Address] = u
+		userCache[strings.ToLower(u.Address)] = u
 	}
 
 	// get all wallets
@@ -157,23 +157,24 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 	// build wallet cache
 	walletCache := make(map[string]models.UserWallet)
 	for _, w := range wallets {
-		walletCache[w.UserAddress] = w
+		walletCache[strings.ToLower(w.UserAddress)] = w
 	}
 
 	// Pre-validate in-memory (no DB)
 	balances := make(map[string]float64)
 	for _, addr := range addresses {
-		wallet, exists := walletCache[addr]
+		lookupAddr := strings.ToLower(addr)
+		wallet, exists := walletCache[lookupAddr]
 
 		if exists {
-			balances[addr] = wallet.YTEBalance
+			balances[lookupAddr] = wallet.YTEBalance
 		} else {
-			balances[addr] = 0
+			balances[lookupAddr] = 0
 		}
 	}
 
 	for _, t := range pendingTxs {
-		sender, exists := userCache[t.FromAddress]
+		sender, exists := userCache[strings.ToLower(t.FromAddress)]
 		if !exists {
 			return models.Block{}, fmt.Errorf("sender not found: %s", t.FromAddress)
 		}
@@ -181,13 +182,15 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 		// calculato total deduction amount + fee
 		totalDeduction := t.Amount + t.Fee
 
-		if balances[sender.Address] < totalDeduction {
+		if balances[strings.ToLower(sender.Address)] < totalDeduction {
 			return models.Block{}, fmt.Errorf("insufficient balance for address %s: need %.8f (amount: %.8f + fee: %.8f), have %.8f",
-				sender.Address, totalDeduction, t.Amount, t.Fee, balances[sender.Address])
+				sender.Address, totalDeduction, t.Amount, t.Fee, balances[strings.ToLower(sender.Address)])
 		}
 
-		balances[t.FromAddress] -= totalDeduction // - amount + fee
-		balances[t.ToAddress] += t.Amount
+		from := strings.ToLower(t.FromAddress)
+		to := strings.ToLower(t.ToAddress)
+		balances[from] -= totalDeduction // - amount + fee
+		balances[to] += t.Amount
 	}
 
 	// MINING PHASE : Prof of Work
@@ -391,10 +394,10 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 	for _, t := range pendingTxs {
 		if strings.EqualFold(t.Type, "BUY") {
 			// Buyer to_address receives YTE Pays USD
-			buyerAddresses = append(buyerAddresses, t.ToAddress)
+			buyerAddresses = append(buyerAddresses, strings.ToLower(t.ToAddress))
 		} else if strings.EqualFold(t.Type, "SELL") {
 			// seller : from_address selss YTE receives USD
-			sellerAddresses = append(sellerAddresses, t.FromAddress)
+			sellerAddresses = append(sellerAddresses, strings.ToLower(t.FromAddress))
 		}
 	}
 
@@ -410,7 +413,7 @@ func (s *blockService) GenerateBlock() (models.Block, error) {
 		}
 
 		for _, ub := range lockedUSDBalances {
-			usdBalances[ub.UserAddress] = ub
+			usdBalances[strings.ToLower(ub.UserAddress)] = ub
 		}
 
 		// ensure all address have USD balance record

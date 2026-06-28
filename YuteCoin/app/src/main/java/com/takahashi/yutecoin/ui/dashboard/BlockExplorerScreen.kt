@@ -1,5 +1,6 @@
 package com.takahashi.yutecoin.ui.dashboard
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -46,7 +47,12 @@ fun BlockExplorerScreen(
 
     LaunchedEffect(Unit) { viewModel.load() }
 
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .padding(16.dp)
+    ) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Text("Block Explorer", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             if (onDismiss != {}) TextButton(onClick = onDismiss) { Text("Close", style = MaterialTheme.typography.labelSmall) }

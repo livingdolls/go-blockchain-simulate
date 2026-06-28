@@ -87,11 +87,17 @@ fun CandleStickChartView(
                 val sorted = candles.sortedBy { it.startTime }
 
                 val entries = sorted.mapIndexed { index, candle ->
+                    val prevClose = if (index > 0) sorted[index - 1].closePrice else candle.openPrice
+                    val trend = candle.closePrice >= prevClose
+                    val adjOpen = if (candle.openPrice != candle.closePrice) candle.openPrice.toFloat()
+                        else if (trend) (candle.openPrice - 0.000001).toFloat()
+                        else (candle.openPrice + 0.000001).toFloat()
+
                     CandleEntry(
                         index.toFloat(),
                         candle.highPrice.toFloat(),
                         candle.lowPrice.toFloat(),
-                        candle.openPrice.toFloat(),
+                        adjOpen,
                         candle.closePrice.toFloat()
                     )
                 }
@@ -100,13 +106,13 @@ fun CandleStickChartView(
                     setDrawIcons(false)
                     axisDependency = YAxis.AxisDependency.LEFT
                     shadowColor = AndroidColor.DKGRAY
-                    shadowWidth = 1.2f
-                    barSpace = 0.3f
+                    shadowWidth = 1.8f
+                    barSpace = 0.2f
                     decreasingColor = redColor
                     decreasingPaintStyle = Paint.Style.FILL
                     increasingColor = greenColor
-                    increasingPaintStyle = Paint.Style.FILL_AND_STROKE
-                    neutralColor = AndroidColor.GRAY
+                    increasingPaintStyle = Paint.Style.FILL
+                    neutralColor = AndroidColor.LTGRAY
                     setDrawValues(false)
                 }
 

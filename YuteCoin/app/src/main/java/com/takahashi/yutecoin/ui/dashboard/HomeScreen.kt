@@ -82,7 +82,7 @@ fun HomeScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp)
-                            .height(220.dp)
+                            .height(260.dp)
                     )
                 } else if (uiState.isLoadingMarket) {
                     Box(

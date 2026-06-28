@@ -24,30 +24,36 @@ fun DashboardScreen(
     onLogout: () -> Unit
 ) {
     var currentTab by remember { mutableStateOf(BottomTab.HOME) }
+    var showBlocks by remember { mutableStateOf(false) }
 
-    Scaffold(
-        modifier = Modifier.fillMaxSize(),
-        bottomBar = {
-            FloatingBottomNavBar(
-                currentTab = currentTab,
-                onTabSelected = { currentTab = it },
-                themeManager = themeManager,
-                revealController = revealController,
-                rootSize = rootSize,
-                onLogout = onLogout
-            )
-        }
-    ) { padding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-        ) {
-            when (currentTab) {
-                BottomTab.HOME -> HomeScreen()
-                BottomTab.TRADE -> TradeScreen()
-                BottomTab.STAKING -> StakingScreen()
-                BottomTab.PORTFOLIO -> PortfolioScreen()
+    if (showBlocks) {
+        BlockExplorerScreen(onDismiss = { showBlocks = false })
+    } else {
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
+            bottomBar = {
+                FloatingBottomNavBar(
+                    currentTab = currentTab,
+                    onTabSelected = { currentTab = it },
+                    themeManager = themeManager,
+                    revealController = revealController,
+                    rootSize = rootSize,
+                    onLogout = onLogout,
+                    onOpenBlocks = { showBlocks = true }
+                )
+            }
+        ) { padding ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+            ) {
+                when (currentTab) {
+                    BottomTab.HOME -> HomeScreen()
+                    BottomTab.TRADE -> TradeScreen()
+                    BottomTab.STAKING -> StakingScreen()
+                    BottomTab.PORTFOLIO -> PortfolioScreen()
+                }
             }
         }
     }

@@ -52,6 +52,7 @@ fun FloatingBottomNavBar(
     revealController: RevealController,
     rootSize: IntSize,
     onLogout: () -> Unit,
+    onOpenBlocks: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var showMenu by remember { mutableStateOf(false) }
@@ -71,6 +72,15 @@ fun FloatingBottomNavBar(
                     Text("Theme", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Spacer(Modifier.width(8.dp))
                     ThemeToggle(themeManager, revealController, rootSize)
+                }
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f), thickness = 0.5.dp)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .clickable { showMenu = false; onOpenBlocks() }
+                        .padding(vertical = 4.dp)
+                ) {
+                    Text("Blocks", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f), thickness = 0.5.dp)
                 Row(

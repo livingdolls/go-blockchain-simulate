@@ -63,8 +63,7 @@ fun CandleStickChartView(
                         setDrawAxisLine(true)
                         textColor = AndroidColor.GRAY
                         textSize = 9f
-                        granularity = 60f
-                        valueFormatter = TimeValueFormatter()
+                        granularity = 5f
                     }
 
                     axisLeft.apply {
@@ -83,17 +82,17 @@ fun CandleStickChartView(
                 }
             },
             update = { chart ->
-                val entries = candles.map { candle ->
+                if (candles.isEmpty()) return@AndroidView
+
+                val entries = candles.mapIndexed { index, candle ->
                     CandleEntry(
-                        candle.startTime.toFloat(),
+                        index.toFloat(),
                         candle.highPrice.toFloat(),
                         candle.lowPrice.toFloat(),
                         candle.openPrice.toFloat(),
                         candle.closePrice.toFloat()
                     )
                 }
-
-                if (entries.isEmpty()) return@AndroidView
 
                 val dataSet = CandleDataSet(entries, "YTE").apply {
                     setDrawIcons(false)
@@ -121,10 +120,9 @@ fun CandleStickChartView(
                     axisMaximum = (maxPrice + padding).toFloat()
                 }
 
-                chart.setVisibleXRangeMaximum(300f)
-                if (candles.isNotEmpty()) {
-                    chart.moveViewToX(candles.last().startTime.toFloat())
-                }
+                chart.xAxis.valueFormatter = TimeValueFormatter(candles)
+                chart.setVisibleXRangeMaximum(30f)
+                chart.moveViewToX(candles.size.toFloat())
                 chart.invalidate()
             },
             modifier = Modifier
@@ -134,10 +132,15 @@ fun CandleStickChartView(
     }
 }
 
-private class TimeValueFormatter : com.github.mikephil.charting.formatter.ValueFormatter() {
+private class TimeValueFormatter(
+    private val candles: List<CandleResponse>
+) : com.github.mikephil.charting.formatter.ValueFormatter() {
     private val dateFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
 
     override fun getFormattedValue(value: Float): String {
-        return dateFormat.format(Date(value.toLong() * 1000))
+        val index = value.toInt()
+        if (index < 0 || index >= candles.size) return ""
+        val timestamp = candles[index].startTime * 1000L
+        return dateFormat.format(Date(timestamp))
     }
 }

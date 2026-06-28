@@ -116,8 +116,3 @@ fun TradeScreen() {
         }
     }
 }
-
-@Composable
-fun PortfolioScreen() {
-    com.takahashi.yutecoin.ui.dashboard.PortfolioScreen()
-}

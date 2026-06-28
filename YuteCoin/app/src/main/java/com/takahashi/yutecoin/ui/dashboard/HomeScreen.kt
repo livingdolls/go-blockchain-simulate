@@ -46,6 +46,8 @@ fun HomeScreen(
 ) {
     val uiState by viewModel.state.collectAsStateWithLifecycle()
     var showNotifications by remember { mutableStateOf(false) }
+    val notifVm = koinViewModel<NotificationViewModel>()
+    val notifState by notifVm.state.collectAsStateWithLifecycle()
 
     LaunchedEffect(Unit) {
         viewModel.loadBalance()
@@ -68,7 +70,8 @@ fun HomeScreen(
             TopBar(
                 name = uiState.name,
                 onRefresh = { viewModel.loadMarket(); viewModel.loadBalance() },
-                onNotifications = { showNotifications = true }
+                onNotifications = { showNotifications = true },
+                unreadCount = notifState.unreadCount
             )
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -182,7 +185,8 @@ fun HomeScreen(
 private fun TopBar(
     name: String,
     onRefresh: () -> Unit,
-    onNotifications: () -> Unit
+    onNotifications: () -> Unit,
+    unreadCount: Int
 ) {
     Row(
         modifier = Modifier
@@ -221,12 +225,10 @@ private fun TopBar(
             )
         }
 
-        IconButton(onClick = onNotifications) {
-            Text(
-                text = "\uD83D\uDD14",
-                style = MaterialTheme.typography.titleLarge
-            )
-        }
+        NotificationBadge(
+            unreadCount = unreadCount,
+            onClick = onNotifications
+        )
 
         IconButton(onClick = onRefresh) {
             Text(

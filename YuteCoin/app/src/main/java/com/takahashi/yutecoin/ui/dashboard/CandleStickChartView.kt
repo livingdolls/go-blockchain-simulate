@@ -84,7 +84,9 @@ fun CandleStickChartView(
             update = { chart ->
                 if (candles.isEmpty()) return@AndroidView
 
-                val entries = candles.mapIndexed { index, candle ->
+                val sorted = candles.sortedBy { it.startTime }
+
+                val entries = sorted.mapIndexed { index, candle ->
                     CandleEntry(
                         index.toFloat(),
                         candle.highPrice.toFloat(),
@@ -111,8 +113,8 @@ fun CandleStickChartView(
                 chart.data = CandleData(dataSet)
                 chart.notifyDataSetChanged()
 
-                val minPrice = candles.minOf { it.lowPrice }
-                val maxPrice = candles.maxOf { it.highPrice }
+                val minPrice = sorted.minOf { it.lowPrice }
+                val maxPrice = sorted.maxOf { it.highPrice }
                 val range = (maxPrice - minPrice).coerceAtLeast(0.004)
                 val padding = range * 0.2
                 chart.axisLeft.apply {
@@ -120,9 +122,9 @@ fun CandleStickChartView(
                     axisMaximum = (maxPrice + padding).toFloat()
                 }
 
-                chart.xAxis.valueFormatter = TimeValueFormatter(candles)
+                chart.xAxis.valueFormatter = TimeValueFormatter(sorted)
                 chart.setVisibleXRangeMaximum(30f)
-                chart.moveViewToX(candles.size.toFloat())
+                chart.moveViewToX(sorted.size.toFloat())
                 chart.invalidate()
             },
             modifier = Modifier

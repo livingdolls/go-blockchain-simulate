@@ -155,7 +155,13 @@ func (u *userWalletRepository) LockMultipleWalletsWithTx(tx *sqlx.Tx, addresses 
 
 // UpdateWalletWithTx implements [UserWalletRepository].
 func (u *userWalletRepository) UpdateWalletWithTx(tx *sqlx.Tx, address string, newBalance float64) error {
-	_, err := tx.Exec(`
+	exec := func(query string, args ...interface{}) (sql.Result, error) {
+		if tx != nil {
+			return tx.Exec(query, args...)
+		}
+		return u.db.Exec(query, args...)
+	}
+	_, err := exec(`
 		UPDATE user_wallets
 		SET yte_balance = ?, last_transaction_at = NOW()
 		WHERE user_address = ?`,

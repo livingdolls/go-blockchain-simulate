@@ -6,6 +6,7 @@ import com.takahashi.yutecoin.data.local.ThemeManager
 import com.takahashi.yutecoin.data.repository.AuthRepository
 import com.takahashi.yutecoin.data.repository.BalanceRepository
 import com.takahashi.yutecoin.data.repository.MarketRepository
+import com.takahashi.yutecoin.data.repository.PortfolioRepository
 import com.takahashi.yutecoin.data.repository.SendRepository
 import com.takahashi.yutecoin.data.repository.StakingRepository
 import com.takahashi.yutecoin.data.repository.WalletRepository
@@ -14,6 +15,7 @@ import com.takahashi.yutecoin.ui.auth.LoginViewModel
 import com.takahashi.yutecoin.ui.auth.RegisterViewModel
 import com.takahashi.yutecoin.ui.dashboard.HomeViewModel
 import com.takahashi.yutecoin.ui.dashboard.BuySellViewModel
+import com.takahashi.yutecoin.ui.dashboard.PortfolioViewModel
 import com.takahashi.yutecoin.ui.dashboard.SendViewModel
 import com.takahashi.yutecoin.ui.dashboard.StakingViewModel
 import com.takahashi.yutecoin.ui.dashboard.TransactionHistoryViewModel
@@ -29,6 +31,7 @@ val appModule = module {
     single { SendRepository() }
     single { WalletRepository() }
     single { StakingRepository() }
+    single { PortfolioRepository() }
     single { SseClient() }
     single { CandleStreamService(get()) }
     single { SessionManager(androidContext()) }
@@ -40,4 +43,5 @@ val appModule = module {
     viewModel { BuySellViewModel(get(), get(), get()) }
     viewModel { TransactionHistoryViewModel(get(), get()) }
     viewModel { StakingViewModel(get(), get()) }
+    viewModel { PortfolioViewModel(get(), get()) }
 }

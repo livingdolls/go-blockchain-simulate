@@ -119,5 +119,5 @@ fun TradeScreen() {
 
 @Composable
 fun PortfolioScreen() {
-    TransactionHistoryScreen()
+    com.takahashi.yutecoin.ui.dashboard.PortfolioScreen()
 }

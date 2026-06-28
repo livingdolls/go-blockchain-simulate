@@ -41,7 +41,7 @@ enum class BottomTab(
     HOME("Home", "\u2302"),
     TRADE("Trade", "\u2194"),
     STAKING("Earn", "\u25C8"),
-    PORTFOLIO("Tx", "\u25B3")
+    PORTFOLIO("Port", "\u25B3")
 }
 
 @Composable

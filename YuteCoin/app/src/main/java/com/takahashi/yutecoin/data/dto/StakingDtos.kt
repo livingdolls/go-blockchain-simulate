@@ -30,7 +30,7 @@ data class StakingStatusResponse(
     @SerializedName("total_staked") val totalStaked: Double,
     @SerializedName("total_rewards") val totalRewards: Double,
     @SerializedName("active_stakes") val activeStakes: Int,
-    @SerializedName("records") val records: List<StakingRecordItem>
+    @SerializedName("records") val records: List<StakingRecordItem>?
 )
 
 data class StakingRecordItem(

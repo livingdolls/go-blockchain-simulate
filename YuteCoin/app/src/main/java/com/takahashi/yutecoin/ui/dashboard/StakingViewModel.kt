@@ -56,7 +56,7 @@ class StakingViewModel(
                 is NetworkResult.Success -> {
                     _state.value = _state.value.copy(
                         isLoading = false,
-                        records = statusResult.data.records,
+                        records = statusResult.data.records ?: emptyList(),
                         totalStaked = statusResult.data.totalStaked,
                         totalRewards = statusResult.data.totalRewards
                     )

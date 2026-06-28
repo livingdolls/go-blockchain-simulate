@@ -121,8 +121,10 @@ fun CandleStickChartView(
                     axisMaximum = (maxPrice + padding).toFloat()
                 }
 
-                chart.setVisibleXRangeMaximum(30f)
-                chart.moveViewToX(candles.size.toFloat())
+                chart.setVisibleXRangeMaximum(300f)
+                if (candles.isNotEmpty()) {
+                    chart.moveViewToX(candles.last().startTime.toFloat())
+                }
                 chart.invalidate()
             },
             modifier = Modifier

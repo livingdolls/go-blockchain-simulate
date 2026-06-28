@@ -27,6 +27,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -42,10 +45,16 @@ fun HomeScreen(
     viewModel: HomeViewModel = koinViewModel()
 ) {
     val uiState by viewModel.state.collectAsStateWithLifecycle()
+    var showNotifications by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         viewModel.loadBalance()
         viewModel.loadMarket()
+    }
+
+    if (showNotifications) {
+        NotificationScreen(onDismiss = { showNotifications = false })
+        return
     }
 
     Scaffold(modifier = Modifier.fillMaxSize()) { padding ->
@@ -58,7 +67,8 @@ fun HomeScreen(
         ) {
             TopBar(
                 name = uiState.name,
-                onRefresh = { viewModel.loadMarket(); viewModel.loadBalance() }
+                onRefresh = { viewModel.loadMarket(); viewModel.loadBalance() },
+                onNotifications = { showNotifications = true }
             )
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -171,7 +181,8 @@ fun HomeScreen(
 @Composable
 private fun TopBar(
     name: String,
-    onRefresh: () -> Unit
+    onRefresh: () -> Unit,
+    onNotifications: () -> Unit
 ) {
     Row(
         modifier = Modifier
@@ -207,6 +218,13 @@ private fun TopBar(
                 text = "Welcome back",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        IconButton(onClick = onNotifications) {
+            Text(
+                text = "\uD83D\uDD14",
+                style = MaterialTheme.typography.titleLarge
             )
         }
 

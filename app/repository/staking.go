@@ -35,7 +35,7 @@ func (r *stakingRepository) Create(ctx context.Context, record models.StakingRec
 		VALUES (?, ?, ?, ?, ?, ?)`
 	result, err := r.db.ExecContext(ctx, query,
 		record.UserAddress, record.Amount, record.LockUntil,
-		record.RewardEarned, record.Status, time.Now().Unix())
+		record.RewardEarned, record.Status, time.Now())
 	if err != nil {
 		return 0, err
 	}
